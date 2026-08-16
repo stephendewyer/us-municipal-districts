@@ -5,206 +5,18 @@
     "state": "AZ",
     "candidateUrl": "https://utility.arcgis.com/usrsvcs/servers/0657741d9e4a4289912330077707ad39/rest/services/PublicMaps/Boundaries/MapServer/15",
     "title": "City of Tucson Ward Boundaries",
-    "score": 85,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/CityTucson_Wards/FeatureServer",
-    "title": "Tucson City Council Wards",
-    "score": 70,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Section_8_Housing_per_Ward/FeatureServer",
-    "title": "Section 8 Housing per Ward",
-    "score": 85,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards_SubsidizedHousing/FeatureServer",
-    "title": "Wards_SubsidizedHousing",
-    "score": 85,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/LowIncomeHousingAll/FeatureServer",
-    "title": "LowIncomeHousingAll",
-    "score": 85,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/HCD_SubsidizedHousingWards/FeatureServer",
-    "title": "HCD_SubsidizedHousingWards",
-    "score": 85,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards_SubsidizedHousingAll/FeatureServer",
-    "title": "Wards_SubsidizedHousingAll",
-    "score": 85,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://storymaps.arcgis.com/stories/5be6fb8b58714e3aa76f7d90983904e9",
-    "title": "GSI Capital Projects",
-    "score": 70,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards/FeatureServer",
-    "title": "Wards",
-    "score": 85,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/WARD_COT_AGOVW/FeatureServer",
-    "title": "Wards Boundaries H",
-    "score": 85,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://utility.arcgis.com/usrsvcs/servers/a6cab62139d442c0841e36a31c656dc0/rest/services/PublicMaps/Zoning/MapServer/20",
-    "title": "Airport Environs Height Zone Boundary",
-    "score": 60,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://utility.arcgis.com/usrsvcs/servers/afebf706f1444f56a3a0305bd2d50867/rest/services/PublicMaps/Zoning/MapServer/1",
-    "title": "Airport Environs Height Zone - Pima County",
-    "score": 50,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward2BlkGrps_20250131/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 2 Census Block Groups",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward3BlkGrps_20250131/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 3 Census Block Groups",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward6BlkGrps_20250203/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 6 Census Block Groups",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward1BlkGrps_20250130/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 1 Census Block Groups",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward4BlkGrps_20250203/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 4 Census Block Groups",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward2_TEPI_CensusTracts_20250506/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 2 Census Tracts",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward5_CensusTracts_20250506/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 5 Census Tracts",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward4_CensusTracts_20250506/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 4 Census Tracts",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward1_TEPI_CensusTracts_20250506/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 1 Census Tracts",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward3_CensusTracts_20250506/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 3 Census Tracts",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward6_CensusTracts_20250506/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 6 Census Tracts",
-    "score": 45,
-    "requiresReview": true
+    "score": 100,
+    "requiresReview": false,
+    "reasons": [
+      "contains ward",
+      "contains council district",
+      "contains city council",
+      "polygon geometry",
+      "MapServer",
+      "likely boundary layer",
+      "district field",
+      "name field"
+    ]
   },
   {
     "placeFips": "0477000",
@@ -212,71 +24,16 @@
     "state": "AZ",
     "candidateUrl": "https://gisdata.pima.gov/arcgis1/rest/services/GISOpenData/Boundaries2/MapServer/3",
     "title": "Wards - City of Tucson",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Boundaries_2000/FeatureServer",
-    "title": "Ward Boundaries 2000",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward3BlkGrps_20250205/FeatureServer",
-    "title": "Tucson Equity Tree Index (TETI): Ward 3 Census Tracts",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward6BlkGrps_20250205/FeatureServer",
-    "title": "TETI_Ward6BlkGrps_20250205",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward2BlkGrps_20250205/FeatureServer",
-    "title": "TETI_Ward2BlkGrps_20250205",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward5BlkGrps_20250205/FeatureServer",
-    "title": "TETI_Ward5BlkGrps_20250205",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward4BlkGrps_20250205/FeatureServer",
-    "title": "TETI_Ward4BlkGrps_20250205",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward1BlkGrps_20250205/FeatureServer",
-    "title": "TETI_Ward1BlkGrps_20250205",
-    "score": 45,
-    "requiresReview": true
+    "score": 100,
+    "requiresReview": false,
+    "reasons": [
+      "contains ward",
+      "polygon geometry",
+      "MapServer",
+      "likely boundary layer",
+      "district field",
+      "name field"
+    ]
   },
   {
     "placeFips": "0477000",
@@ -284,26 +41,242 @@
     "state": "AZ",
     "candidateUrl": "https://mapdata.tucsonaz.gov/arcgis/rest/services/IT/ZoomTucson/MapServer/13",
     "title": "City of Tucson Wards",
-    "score": 45,
-    "requiresReview": true
+    "score": 100,
+    "requiresReview": false,
+    "reasons": [
+      "contains ward",
+      "polygon geometry",
+      "MapServer",
+      "likely boundary layer",
+      "district field",
+      "name field"
+    ]
   },
   {
     "placeFips": "0477000",
     "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://gis.tucsonaz.gov/arcgis/rest/services/PublicMaps/OpenData_PublicSafety/MapServer/35",
-    "title": "Tucson Police Hate and Bias Crimes - Open Data",
-    "score": 45,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards/FeatureServer",
+    "title": "Wards",
+    "score": 90,
+    "requiresReview": false,
+    "reasons": [
+      "contains ward",
+      "contains council district",
+      "contains city council",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
     "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Housing/FeatureServer",
-    "title": "Ward_Housing",
-    "score": 45,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/CityTucson_Wards/FeatureServer",
+    "title": "Tucson City Council Wards",
+    "score": 60,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "contains city council",
+      "FeatureServer"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Section_8_Housing_per_Ward/FeatureServer",
+    "title": "Section 8 Housing per Ward",
+    "score": 60,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "contains council district",
+      "contains city council",
+      "FeatureServer",
+      "housing dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards_SubsidizedHousing/FeatureServer",
+    "title": "Wards_SubsidizedHousing",
+    "score": 60,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "contains council district",
+      "contains city council",
+      "FeatureServer",
+      "housing dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/LowIncomeHousingAll/FeatureServer",
+    "title": "LowIncomeHousingAll",
+    "score": 60,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "contains council district",
+      "contains city council",
+      "FeatureServer",
+      "housing dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/HCD_SubsidizedHousingWards/FeatureServer",
+    "title": "HCD_SubsidizedHousingWards",
+    "score": 60,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "contains council district",
+      "contains city council",
+      "FeatureServer",
+      "housing dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards_SubsidizedHousingAll/FeatureServer",
+    "title": "Wards_SubsidizedHousingAll",
+    "score": 60,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "contains council district",
+      "contains city council",
+      "FeatureServer",
+      "housing dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/HCD_Ward_Income_WFL1/FeatureServer",
+    "title": "HCD_Ward_Income_WFL1",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/WARD_COT_AGOVW/FeatureServer",
+    "title": "Wards Boundaries H",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward5_CensusTracts_20250506/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 5 Census Tracts",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward4_CensusTracts_20250506/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 4 Census Tracts",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward2_TEPI_CensusTracts_20250506/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 2 Census Tracts",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward1_TEPI_CensusTracts_20250506/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 1 Census Tracts",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward3_CensusTracts_20250506/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 3 Census Tracts",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward6_CensusTracts_20250506/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 6 Census Tracts",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Boundaries_2000/FeatureServer",
+    "title": "Ward Boundaries 2000",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
@@ -311,8 +284,12 @@
     "state": "AZ",
     "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/City_of_Tucson_Wards/FeatureServer",
     "title": "City of Tucson Wards",
-    "score": 45,
-    "requiresReview": true
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
@@ -320,44 +297,12 @@
     "state": "AZ",
     "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Enriched_City_of_Tucson_Wards___Open_Data___WARD_COT/FeatureServer",
     "title": "ESRI Enriched Wards",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhoods_Thrive/FeatureServer",
-    "title": "Neighborhoods_Thrive",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/HCD_Neighborhoods_All/FeatureServer",
-    "title": "HCD Neighborhoods All",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhoods_NotThrive/FeatureServer",
-    "title": "Neighborhoods_NotThrive",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Lot_Splits_HFL/FeatureServer",
-    "title": "Land Splits HFL",
-    "score": 55,
-    "requiresReview": true
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
@@ -365,35 +310,38 @@
     "state": "AZ",
     "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer",
     "title": "Tucson Wards 2022",
-    "score": 45,
-    "requiresReview": true
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
     "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Background_Mask/FeatureServer",
-    "title": "COT Background Mask",
-    "score": 55,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/a15804/FeatureServer",
+    "title": "Wards_enriched",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
     "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Thrive_29th_Area_Neighborhoods/FeatureServer",
-    "title": "Thrive 29th Area Neighborhoods",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://uagis.maps.arcgis.com/apps/webappviewer/index.html?id=bdb50108bacd4146b3420392c2aae9a6",
-    "title": "Tucson Wards",
-    "score": 45,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards_x_HVI/FeatureServer",
+    "title": "Wards_x_HVI",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
@@ -401,35 +349,12 @@
     "state": "AZ",
     "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/COTWards_HFL/FeatureServer",
     "title": "City of Tucson Wards - HFL",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Ward3_Parcels/FeatureServer",
-    "title": "Ward3_Parcels",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward5BlkGrps_20250203/FeatureServer",
-    "title": "Tucson Equity Priority Index (TEPI): Ward 5 Census Block Groups",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Tucson_UserFC_NeighbWards/FeatureServer",
-    "title": "Tucson_UserFC_NeighbWards",
-    "score": 45,
-    "requiresReview": true
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
@@ -437,26 +362,12 @@
     "state": "AZ",
     "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Tucson_City_Golf_Course_HFL/FeatureServer",
     "title": "Tucson City Golf Course_HFL",
-    "score": 70,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://www.tucsonaz.gov/PRO/pdsd/",
-    "title": "Property Research Online (PRO)",
-    "score": 45,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://storymaps.arcgis.com/stories/66a78c336f1d438f91b93be7459e343c",
-    "title": "Tree Equity in Tucson, AZ ",
-    "score": 45,
-    "requiresReview": true
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
@@ -464,17 +375,12 @@
     "state": "AZ",
     "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Tucson_Ward_Boundary/FeatureServer",
     "title": "Tucson Ward Boundary",
-    "score": 55,
-    "requiresReview": true
-  },
-  {
-    "placeFips": "0477000",
-    "city": "Tucson",
-    "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhoods_ward3_intersect/FeatureServer",
-    "title": "Neighborhoods_ward3_intersect",
-    "score": 45,
-    "requiresReview": true
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
@@ -482,448 +388,804 @@
     "state": "AZ",
     "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TFD_MVA_010121_101223_Ward3_SideStreets/FeatureServer",
     "title": "TFD_MVA_010121_101223_Ward3_SideStreets",
-    "score": 45,
-    "requiresReview": true
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
     "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://storymaps.arcgis.com/collections/e286548e6a124774848614c41be2ec18",
-    "title": "Tucson Poverty, Income, and Growth by Ward",
-    "score": 45,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Street_Maintenance_Areas_HFL/FeatureServer",
+    "title": "Street Maintenance Areas_HFL",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
     "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/e233f95f77e5446ca09402dab5b46dbf",
-    "title": "ZoomTucson",
-    "score": 60,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/CityofTucson_Wards/FeatureServer",
+    "title": "CityofTucson_Wards",
+    "score": 35,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer"
+    ]
   },
   {
     "placeFips": "0477000",
     "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://storymaps.arcgis.com/stories/eae960006fd54d84a6f68937a1e1c588",
-    "title": "City of Tucson Ward and Zip Code Finder",
-    "score": 45,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/ClimateSurveyResults/FeatureServer",
+    "title": "ClimateSurveyResults",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://maps.phoenix.gov/pub/rest/services/Public/Villages/MapServer/0",
-    "title": "Villages",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/IMPACTFEES_AGOVW/FeatureServer",
+    "title": "Impact Fees H",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://maps.phoenix.gov/pub/rest/services/Public/GeneralPlan/MapServer/0",
-    "title": "General Plan",
-    "score": 50,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Airport_Environment_Zone/FeatureServer",
+    "title": "Airport Environment Zone",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services.arcgis.com/ykpntM6e3tHvzKRJ/arcgis/rest/services/Maricopa_County_City_Council_Districts/FeatureServer",
-    "title": "Maricopa County City Council Districts",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/RTA_Projects_localcopy/FeatureServer",
+    "title": "City of Tucson RTA One Projects",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/cb64f9a28bd44b7a853a72ea7523f8d4",
-    "title": "Village Planning Committees - embed app",
-    "score": 50,
-    "requiresReview": true
+    "candidateUrl": "https://services9.arcgis.com/EGheeB0VDT6EarZv/arcgis/rest/services/Tucson_Birding_by_Bus_Route/FeatureServer",
+    "title": "Tucson Birding by Bus Route",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://maricopa.maps.arcgis.com/apps/instant/basic/index.html?appid=2371836447de4547b39e08dc9959dddc",
-    "title": "Fatal overdoses by council district within City of Phoenix_InstantApps",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhoods_NotThrive/FeatureServer",
+    "title": "Neighborhoods_NotThrive",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://maps.phoenix.gov/pub/rest/services/Public/Planning_Permit/MapServer/2",
-    "title": "Proposed Zoning",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhoods_Thrive/FeatureServer",
+    "title": "Neighborhoods_Thrive",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/92eae4c1d0514fa79df69dcca26815cd",
-    "title": "Village Planning Committees - standalone app",
-    "score": 50,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/HCD_Neighborhoods_All/FeatureServer",
+    "title": "HCD Neighborhoods All",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/ab012d869aea41f4b993ae718da395dd",
-    "title": "Council District 4 - app - standalone",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Lot_Splits_HFL/FeatureServer",
+    "title": "Land Splits HFL",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/e15111201052475c9929ffb1dba4c4f8",
-    "title": "Council District 6 - app - standalone",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services9.arcgis.com/EGheeB0VDT6EarZv/arcgis/rest/services/Tucson_Birding_by_Bus/FeatureServer",
+    "title": "Tucson Birding by Bus",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/83b8640e816b4ae1a03e932a0dc24700",
-    "title": "Council District 8 - app - standalone",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Background_Mask/FeatureServer",
+    "title": "COT Background Mask",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/980db249874942f789824a9e8c719551",
-    "title": "Council District 1 - app - standalone",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Buffer_of_City_of_Tucson_Parks___Open_Data___TPRD_PARKS/FeatureServer",
+    "title": "Buffer_of_City_of_Tucson_Parks___Open_Data___TPRD_PARKS",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services8.arcgis.com/x0l81el0LN7X67MM/arcgis/rest/services/LDF052/FeatureServer",
-    "title": "LDF052",
-    "score": 85,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Thrive_29th_Area_Neighborhoods/FeatureServer",
+    "title": "Thrive 29th Area Neighborhoods",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/8c5fef2d7a604dbdbc77144f5e4d88ec",
-    "title": "Council District 5 - app - standalone",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Ward3_Parcels/FeatureServer",
+    "title": "Ward3_Parcels",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "parcel dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/1d1a27a2794b4a259eae001d82d36034",
-    "title": "Council District 3 - app - standalone",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Tucson_UserFC_NeighbWards/FeatureServer",
+    "title": "Tucson_UserFC_NeighbWards",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/4235c5d9a88446a6b6346ed79642c718",
-    "title": "Council District 8 - app - embed",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Prop_407_Connectivity_Projects__City_of_Tucson_2022_/FeatureServer",
+    "title": "Prop 407 Connectivity Projects City of Tucson 2022",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/c6a5ec37bc8042f68207e9b91e9c6fcb",
-    "title": "Council District 4 - app - embed",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/AllSolarSites_New_View/FeatureServer",
+    "title": "AllSolarSites New View",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/6c72479d79be4a729d37430367d6581e",
-    "title": "Council District 3 - app - embed",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Tree_Equity_Scores_–_Tucson_(2023)/FeatureServer",
+    "title": "Tree Equity Scores – Tucson (2023)",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/802a432485894effb314b095053919e1",
-    "title": "Council District 2 - app - standalone",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/City_of_Tucson_Parks_with_Prop_407_Projects/FeatureServer",
+    "title": "Parks with Prop 407 Projects (City of Tucson 2019)",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/ee2193efdc4345daa17da789e76b7892",
-    "title": "Council District 7 - app - standalone",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Future_Solar_Sites/FeatureServer",
+    "title": "Future Solar Sites",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/8ef537cfa5544cae87d9b65082bb4273",
-    "title": "Council District 1 - app - embed",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Newly_Completed_Solar_Sites/FeatureServer",
+    "title": "Newly Completed Solar Sites",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/5b2ec37fc1dc4bfba623a360fe9719b3",
-    "title": "Council District 5 - app - embed",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Pre_Existing_Solar_Sites/FeatureServer",
+    "title": "Pre Existing Solar Sites",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/eb03dd7702904bb39684cafd840954f1",
-    "title": "Council District 7 - app - embed",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/CityTucson_ParkPts/FeatureServer",
+    "title": "Park Points (City of Tucson 2019)",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/3c1f4e2b52ba43fba71d4ce5cdc58ee2",
-    "title": "Council District 2 - app - embed",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhoods_ward3_intersect/FeatureServer",
+    "title": "Neighborhoods_ward3_intersect",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/3cfe168dcd474b8b8e50eb9b7532dd02",
-    "title": "Council District 6 - app - embed",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/master/FeatureServer",
+    "title": "master",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://maricopa.maps.arcgis.com/apps/instant/basic/index.html?appid=d6aafb3dd49e4d4b8fcc76102155b2bd",
-    "title": "Non-fatal overdoses by Phoenix city council district_InstantApps",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services2.arcgis.com/HQc1pFcZLNmWhjxW/arcgis/rest/services/Tucson_Bike3_WFL1/FeatureServer",
+    "title": "Tucson Bike3_WFL1",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://esgdev-phoenix.hub.arcgis.com",
-    "title": "ESG Development",
-    "score": 50,
-    "requiresReview": true
+    "candidateUrl": "https://services2.arcgis.com/HQc1pFcZLNmWhjxW/arcgis/rest/services/Tucson_Bike_WFL1/FeatureServer",
+    "title": "Tucson Bike_WFL1",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://esg-phoenix.hub.arcgis.com",
-    "title": "ESG",
-    "score": 50,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Redistricting_Map_WFL1/FeatureServer",
+    "title": "Redistricting Map_WFL1",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://storymaps.arcgis.com/stories/078fa630891b40deb820e97d3e9c1e90",
-    "title": "Gotcha Bike mobility ",
-    "score": 50,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Pima_washnetwork/FeatureServer",
+    "title": "Pima_washnetwork",
+    "score": 10,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://storymaps.arcgis.com/stories/5448508365e1498286245ba7c193f809",
-    "title": "Cycle route of Dublin ",
-    "score": 50,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Housing/FeatureServer",
+    "title": "Ward_Housing",
+    "score": 5,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "housing dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services.arcgis.com/ykpntM6e3tHvzKRJ/arcgis/rest/services/PhoenixCityCouncilDistricts/FeatureServer",
-    "title": "PhoenixCityCouncilDistricts",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://utility.arcgis.com/usrsvcs/servers/a6cab62139d442c0841e36a31c656dc0/rest/services/PublicMaps/Zoning/MapServer/20",
+    "title": "Airport Environs Height Zone Boundary",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "polygon geometry",
+      "MapServer",
+      "zoning dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/0OPQIK59PJJqLK0A/arcgis/rest/services/Phoenix_City_Council_Districts/FeatureServer",
-    "title": "Phoenix City Council Districts",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://utility.arcgis.com/usrsvcs/servers/afebf706f1444f56a3a0305bd2d50867/rest/services/PublicMaps/Zoning/MapServer/1",
+    "title": "Airport Environs Height Zone - Pima County",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "polygon geometry",
+      "MapServer",
+      "zoning dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services.arcgis.com/ykpntM6e3tHvzKRJ/arcgis/rest/services/Maricopa_County_High_School_Wards/FeatureServer",
-    "title": "Maricopa County High School Wards",
-    "score": 85,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward2BlkGrps_20250131/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 2 Census Block Groups",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://storymaps.arcgis.com/stories/ddf2dc70924e4b2f84a6fa49de6ae4b6",
-    "title": "\"If It Ain't Gone Yet, It's Going Soon\"",
-    "score": 45,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward3BlkGrps_20250131/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 3 Census Block Groups",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://maps.phoenix.gov/pub/rest/services/Public/Eviction_Filings_HSD/MapServer/1",
-    "title": "Eviction Filings by Council Districts",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward1BlkGrps_20250130/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 1 Census Block Groups",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0",
-    "title": "Council District",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward6BlkGrps_20250203/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 6 Census Block Groups",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/0OPQIK59PJJqLK0A/arcgis/rest/services/Council_Districts_and_Members/FeatureServer",
-    "title": "Council_Districts_and_Members",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward4BlkGrps_20250203/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 4 Census Block Groups",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/0d614545e4054473b638f85323133aa8",
-    "title": "Find My Council District - App (Embed)",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward3BlkGrps_20250205/FeatureServer",
+    "title": "Tucson Equity Tree Index (TETI): Ward 3 Census Tracts",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://maps.phoenix.gov/pub/rest/services/Public/Eviction_Filings_HSD/MapServer/0",
-    "title": "Eviction Filings",
-    "score": 75,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_PilotIndex_Neighborhoods_20240904/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): City of Tucson Neighborhoods",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "housing dataset",
+      "neighborhood dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://experience.arcgis.com/experience/f6dc85e6e2294a0fb84dde9be8e983eb",
-    "title": "NTS StoryMap - Mobile Operable",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward6BlkGrps_20250205/FeatureServer",
+    "title": "TETI_Ward6BlkGrps_20250205",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services.arcgis.com/ykpntM6e3tHvzKRJ/arcgis/rest/services/Fataloverdosesbycouncildistrict_Phoenix/FeatureServer",
-    "title": "Fataloverdosesbycouncildistrict_Phoenix",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward2BlkGrps_20250205/FeatureServer",
+    "title": "TETI_Ward2BlkGrps_20250205",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services.arcgis.com/ykpntM6e3tHvzKRJ/arcgis/rest/services/Nonfataloverdosesbycouncildistrict_Phoenix/FeatureServer",
-    "title": "Nonfataloverdosesbycouncildistrict_Phoenix",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward5BlkGrps_20250205/FeatureServer",
+    "title": "TETI_Ward5BlkGrps_20250205",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://maps.phoenix.gov/pub/rest/services/Public/CD/MapServer/0",
-    "title": "Phoenix Council Districts",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward4BlkGrps_20250205/FeatureServer",
+    "title": "TETI_Ward4BlkGrps_20250205",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://government.maps.arcgis.com/apps/instant/sidebar/index.html?appid=a19e288c48774925892b3c2204ac9f92",
-    "title": "Phoenix Council Districts",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TETI_Ward1BlkGrps_20250205/FeatureServer",
+    "title": "TETI_Ward1BlkGrps_20250205",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services1.arcgis.com/VVapzOPgBae5joyC/arcgis/rest/services/Phoenix_Light_District_Demo/FeatureServer",
-    "title": "Phoenix_Light_District_Demo",
-    "score": 40,
-    "requiresReview": true
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Lab8_9_neighborhoods/FeatureServer",
+    "title": "Lab8_9_neighborhoods",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/0OPQIK59PJJqLK0A/arcgis/rest/services/CCPI_council_sept21_top10_perdistrict/FeatureServer",
-    "title": "CCPI_council_sept21_top10_perdistrict",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://gis.tucsonaz.gov/arcgis/rest/services/PublicMaps/OpenData_PublicSafety/MapServer/35",
+    "title": "Tucson Police Hate and Bias Crimes - Open Data",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "MapServer",
+      "crime dataset"
+    ]
   },
   {
-    "placeFips": "0455000",
-    "city": "Phoenix",
+    "placeFips": "0477000",
+    "city": "Tucson",
     "state": "AZ",
-    "candidateUrl": "https://services3.arcgis.com/0OPQIK59PJJqLK0A/arcgis/rest/services/AZ_Phoenix_Council_District/FeatureServer",
-    "title": "AZ_Phoenix_Council_District",
-    "score": 65,
-    "requiresReview": true
+    "candidateUrl": "https://tiles.arcgis.com/tiles/Ezk9fcjSUkeadg6u/arcgis/rest/services/Lab8_9_neighborhoods/MapServer",
+    "title": "Lab8_9_neighborhoods",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "MapServer",
+      "neighborhood dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Tree_Equity_Scores_Tucson/FeatureServer",
+    "title": "Tree Equity Scores Tucson",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/LaDoceBusinesses/FeatureServer",
+    "title": "LaDoceBusinesses",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "parcel dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Tree_Equity_Score__City_of_Tucson_2020_/FeatureServer",
+    "title": "Tree Equity Score City of Tucson 2020",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/TEPI_Ward5BlkGrps_20250203/FeatureServer",
+    "title": "Tucson Equity Priority Index (TEPI): Ward 5 Census Block Groups",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "contains ward",
+      "FeatureServer",
+      "census block dataset",
+      "census block group dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Grow_Tucson_Boundaries/FeatureServer",
+    "title": "Grow_Tucson_Boundaries",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhood_Race_Demographics/FeatureServer",
+    "title": "Neighborhood Race Demographics",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Enriched_Neighborhood_Income/FeatureServer",
+    "title": "Neighborhood Income",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhood_Population_Counts/FeatureServer",
+    "title": "Neighborhood Population Statistics",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhood_Age_Demographics/FeatureServer",
+    "title": "Neighborhood Age Demographics",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhood_Educational_Attainment/FeatureServer",
+    "title": "Neighborhood Educational Attainment",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
+  },
+  {
+    "placeFips": "0477000",
+    "city": "Tucson",
+    "state": "AZ",
+    "candidateUrl": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Neighborhood_Employment_Demographics/FeatureServer",
+    "title": "Neighborhood Employment Demographics",
+    "score": 0,
+    "requiresReview": true,
+    "reasons": [
+      "FeatureServer",
+      "neighborhood dataset"
+    ]
   }
 ]

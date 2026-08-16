@@ -1,3 +1,5 @@
+a nation-wide search for municipal districts in the U.S. using geocoordinates
+
 # Build npm package
 npm run build
 
