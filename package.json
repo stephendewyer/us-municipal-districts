@@ -1,0 +1,48 @@
+{
+  "name": "@stephendewyer/us-municipal-districts",
+  "version": "0.1.0",
+  "description": "U.S. municipal wards and city council district boundaries.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "data",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "tsx --test tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+
+    "places": "tsx generator/src/cli.ts places",
+    "discover": "tsx generator/src/cli.ts discover",
+    "generate": "tsx generator/src/cli.ts build",
+    "validate": "tsx generator/src/cli.ts validate",
+
+    "check": "npm run build && npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@turf/boolean-point-in-polygon": "^7.2.0",
+    "@turf/helpers": "^7.2.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^22.20.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
