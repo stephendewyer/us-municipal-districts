@@ -1,49 +1,4 @@
-import type { GeometryType } from "./types.js";
-
-
-// -----------------------------------------------------------------------------
-// Types
-// -----------------------------------------------------------------------------
-
-export interface ArcGISInspection {
-    url: string;
-
-    isArcGIS: boolean;
-
-    serviceType:
-        | "FeatureServer"
-        | "MapServer"
-        | "unknown";
-
-    isLayer: boolean;
-
-    title?: string;
-
-    serviceName?: string;
-
-    layerName?: string;
-
-    description?: string;
-
-    geometryType?: GeometryType;
-
-    fields: string[];
-
-    districtFields: string[];
-
-    nameField?: string;
-
-    objectIdField?: string;
-
-    featureCount?: number;
-
-    supportsGeoJSON: boolean;
-
-    isPolygonLayer: boolean;
-
-    isLikelyBoundaryLayer: boolean;
-}
-
+import type { GeometryType, ArcGISInspection } from "./types.js";
 
 // -----------------------------------------------------------------------------
 // Main
@@ -80,7 +35,17 @@ export async function inspectArcGIS(
 
             districtFields: [],
 
+            supportsQuery: false,
+
+            supportsGeometryQuery: false,
+
+            supportsPagination: false,
+
             supportsGeoJSON: false,
+
+            isFeatureServer: false,
+
+            isMapServer: false,
 
             isPolygonLayer: false,
 
@@ -183,14 +148,18 @@ export async function inspectArcGIS(
                 "name",
                 "NAME",
                 "Name",
+
                 "district_name",
                 "DISTRICT_NAME",
                 "DistrictName",
+
                 "ward_name",
                 "WARD_NAME",
                 "WardName",
+
                 "council_district_name",
                 "COUNCIL_DISTRICT_NAME",
+
                 "aldermanic_district_name",
                 "ALDERMANIC_DISTRICT_NAME"
             ]
@@ -208,13 +177,41 @@ export async function inspectArcGIS(
                 "OBJECTID",
                 "ObjectID",
                 "objectid",
+
                 "FID",
                 "fid",
+
                 "ID",
                 "Id",
                 "id"
             ]
         );
+
+
+    // -------------------------------------------------------------------------
+    // ArcGIS capabilities
+    // -------------------------------------------------------------------------
+
+    const capabilities =
+        getString(
+            metadata.capabilities
+        ) ?? "";
+
+
+    const supportsQuery =
+        capabilities
+            .toLowerCase()
+            .includes("query");
+
+
+    const supportsGeometryQuery =
+        metadata.supportsAdvancedQueries === true ||
+        metadata.supportsCoordinatesQuantization === true ||
+        metadata.supportsTrueCurve === true;
+
+
+    const supportsPagination =
+        metadata.supportsPagination === true;
 
 
     // -------------------------------------------------------------------------
@@ -224,8 +221,8 @@ export async function inspectArcGIS(
     const supportedQueryFormats =
         getString(
             metadata.supportedQueryFormats
-        ) ??
-        "";
+        ) ?? "";
+
 
     const supportsGeoJSON =
         supportedQueryFormats
@@ -234,13 +231,14 @@ export async function inspectArcGIS(
 
 
     // -------------------------------------------------------------------------
-    // Feature count
+    // Actual feature count
     // -------------------------------------------------------------------------
 
     const featureCount =
-        typeof metadata.maxRecordCount === "number"
-            ? metadata.maxRecordCount
-            : undefined;
+        await getFeatureCount(
+            endpoint,
+            fetchFunction
+        );
 
 
     // -------------------------------------------------------------------------
@@ -255,6 +253,7 @@ export async function inspectArcGIS(
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
+
 
     const isLikelyBoundaryLayer =
         isPolygonLayer &&
@@ -303,7 +302,19 @@ export async function inspectArcGIS(
 
         featureCount,
 
+        supportsQuery,
+
+        supportsGeometryQuery,
+
+        supportsPagination,
+
         supportsGeoJSON,
+
+        isFeatureServer:
+            serviceType === "FeatureServer",
+
+        isMapServer:
+            serviceType === "MapServer",
 
         isPolygonLayer,
 
@@ -419,7 +430,7 @@ function extractServiceName(
 
 
 // -----------------------------------------------------------------------------
-// Fetch
+// Fetch metadata
 // -----------------------------------------------------------------------------
 
 async function fetchArcGISJson(
@@ -487,6 +498,103 @@ async function fetchArcGISJson(
 
 
 // -----------------------------------------------------------------------------
+// Feature count
+// -----------------------------------------------------------------------------
+
+async function getFeatureCount(
+    endpoint: ArcGISEndpoint,
+    fetchFunction: typeof fetch
+): Promise<number | undefined> {
+
+    /*
+     * A service endpoint such as:
+     *
+     *   .../FeatureServer
+     *
+     * does not represent an individual layer.
+     *
+     * We only perform the count request when we have:
+     *
+     *   .../FeatureServer/0
+     *
+     * or:
+     *
+     *   .../MapServer/0
+     */
+
+    if (
+        endpoint.layerId === undefined
+    ) {
+        return undefined;
+    }
+
+
+    const queryUrl =
+        `${endpoint.metadataUrl}/query` +
+        `?where=1%3D1` +
+        `&returnCountOnly=true` +
+        `&f=json`;
+
+
+    try {
+
+        const response =
+            await fetchFunction(
+                queryUrl,
+                {
+                    headers: {
+                        "User-Agent":
+                            "us-municipal-districts-generator"
+                    }
+                }
+            );
+
+
+        if (!response.ok) {
+            return undefined;
+        }
+
+
+        const json =
+            await response.json() as unknown;
+
+
+        if (
+            typeof json !== "object" ||
+            json === null ||
+            Array.isArray(json)
+        ) {
+            return undefined;
+        }
+
+
+        const data =
+            json as Record<string, unknown>;
+
+
+        if (
+            typeof data.count === "number"
+        ) {
+            return data.count;
+        }
+
+    } catch {
+
+        /*
+         * Feature count is an enhancement.
+         *
+         * If an ArcGIS server does not allow the
+         * count request, discovery should continue.
+         */
+
+    }
+
+
+    return undefined;
+}
+
+
+// -----------------------------------------------------------------------------
 // URL helpers
 // -----------------------------------------------------------------------------
 
@@ -498,10 +606,21 @@ function normalizeArcGISUrl(
         new URL(inputUrl);
 
 
-    url.searchParams.delete("token");
-    url.searchParams.delete("f");
-    url.searchParams.delete("popup");
-    url.searchParams.delete("appid");
+    url.searchParams.delete(
+        "token"
+    );
+
+    url.searchParams.delete(
+        "f"
+    );
+
+    url.searchParams.delete(
+        "popup"
+    );
+
+    url.searchParams.delete(
+        "appid"
+    );
 
 
     return removeTrailingSlash(
@@ -539,6 +658,7 @@ function removeQueryAndFragment(
 
 
     copy.search = "";
+
     copy.hash = "";
 
 
