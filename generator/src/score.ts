@@ -1,31 +1,24 @@
-import type {
-    ArcGISServiceType
-} from "./types.js";
-
-
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Types
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 export interface ScoreCandidateInput {
-
-    city?: string;
-
-    state?: string;
-
     placeFips: string;
+
+    city: string;
+
+    state: string;
 
     title?: string;
 
-    url?: string;
+    url: string;
 
-    serviceName?: string;
+    serviceType?:
+        | "FeatureServer"
+        | "MapServer"
+        | "unknown";
 
-    serviceType?: ArcGISServiceType;
-
-    layerName?: string;
-
-    description?: string;
+    geometryType?: string;
 
     fields?: string[];
 
@@ -41,272 +34,58 @@ export interface ScoreCandidateInput {
 
     isLikelyBoundaryLayer?: boolean;
 
-    supportsQuery?: boolean;
+    isHousingDataset?: boolean;
 
-    supportsGeometryQuery?: boolean;
+    isCensusDataset?: boolean;
 
-    supportsPagination?: boolean;
+    isThematicDataset?: boolean;
 
-    supportsGeoJSON?: boolean;
-
-    maxRecordCount?: number;
-
-    geometryType?: string;
+    isOfficial?: boolean;
 }
 
 
-export interface ScoreCandidateResult {
-
+export interface CandidateScore {
     score: number;
-
-    requiresReview: boolean;
 
     reasons: string[];
 }
 
 
-// -----------------------------------------------------------------------------
-// Main
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Public API
+// =============================================================================
 
 export function scoreCandidate(
     candidate: ScoreCandidateInput
-): ScoreCandidateResult {
-
-    // -------------------------------------------------------------------------
-    // Searchable text
-    // -------------------------------------------------------------------------
-
-    const searchableText = [
-        candidate.title,
-        candidate.url,
-        candidate.serviceName,
-        candidate.layerName,
-        candidate.description
-    ]
-        .filter(
-            (value): value is string =>
-                typeof value === "string" &&
-                value.trim().length > 0
-        )
-        .join(" ")
-        .toLowerCase();
-
-
-    // -------------------------------------------------------------------------
-    // Normalized fields
-    // -------------------------------------------------------------------------
-
-    const fields =
-        (candidate.fields ?? [])
-            .filter(
-                (field): field is string =>
-                    typeof field === "string"
-            )
-            .map(
-                field =>
-                    normalizeField(field)
-            );
-
-
-    // -------------------------------------------------------------------------
-    // Score
-    // -------------------------------------------------------------------------
+): CandidateScore {
 
     let score = 0;
 
     const reasons: string[] = [];
 
-
-    // -------------------------------------------------------------------------
-    // Boundary terminology
-    // -------------------------------------------------------------------------
-
-    /*
-     * These are intentionally NOT all equivalent.
-     *
-     * "ward boundary" is much stronger than simply "ward".
-     */
-
-    if (
-        containsAny(
-            searchableText,
-            [
-                "ward boundary",
-                "ward boundaries",
-                "ward district",
-                "ward districts"
-            ]
-        )
-    ) {
-
-        score += 35;
-
-        reasons.push(
-            "ward boundary terminology"
-        );
-    }
-
-
-    if (
-        containsAny(
-            searchableText,
-            [
-                "council district boundary",
-                "council district boundaries",
-                "city council district boundary",
-                "city council district boundaries"
-            ]
-        )
-    ) {
-
-        score += 40;
-
-        reasons.push(
-            "council district boundary terminology"
-        );
-    }
-
-
-    if (
-        containsAny(
-            searchableText,
-            [
-                "aldermanic district boundary",
-                "aldermanic district boundaries"
-            ]
-        )
-    ) {
-
-        score += 40;
-
-        reasons.push(
-            "aldermanic district boundary terminology"
-        );
-    }
-
-
-    if (
-        containsAny(
-            searchableText,
-            [
-                "municipal district boundary",
-                "municipal district boundaries"
-            ]
-        )
-    ) {
-
-        score += 40;
-
-        reasons.push(
-            "municipal district boundary terminology"
-        );
-    }
+    const title =
+        normalize(candidate.title);
 
 
     // -------------------------------------------------------------------------
-    // Standalone ward / district terminology
+    // Strong positive signals
     // -------------------------------------------------------------------------
 
     if (
-        containsWord(
-            searchableText,
-            "ward"
-        )
+        candidate.isLikelyBoundaryLayer
     ) {
-
-        score += 20;
-
-        reasons.push(
-            "contains ward"
-        );
-    }
-
-
-    if (
-        containsWord(
-            searchableText,
-            "district"
-        )
-    ) {
-
-        score += 15;
-
-        reasons.push(
-            "contains district"
-        );
-    }
-
-
-    if (
-        containsWord(
-            searchableText,
-            "council"
-        )
-    ) {
-
-        score += 10;
-
-        reasons.push(
-            "contains council"
-        );
-    }
-
-
-    if (
-        containsWord(
-            searchableText,
-            "alderman"
-        )
-    ) {
-
-        score += 15;
-
-        reasons.push(
-            "contains alderman"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Explicit city council terminology
-    // -------------------------------------------------------------------------
-
-    if (
-        containsAny(
-            searchableText,
-            [
-                "city council",
-                "city council ward",
-                "city council wards",
-                "city council district",
-                "city council districts"
-            ]
-        )
-    ) {
-
-        score += 20;
-
-        reasons.push(
-            "city council terminology"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Geometry
-    // -------------------------------------------------------------------------
-
-    const isPolygon =
-        candidate.isPolygonLayer === true ||
-        candidate.geometryType === "Polygon" ||
-        candidate.geometryType === "MultiPolygon" ||
-        candidate.geometryType === "esriGeometryPolygon";
-
-
-    if (isPolygon) {
-
         score += 25;
+
+        reasons.push(
+            "likely political boundary layer"
+        );
+    }
+
+
+    if (
+        candidate.isPolygonLayer
+    ) {
+        score += 20;
 
         reasons.push(
             "polygon geometry"
@@ -314,32 +93,31 @@ export function scoreCandidate(
     }
 
 
-    // -------------------------------------------------------------------------
-    // Non-polygon penalty
-    // -------------------------------------------------------------------------
-
     if (
-        candidate.isPolygonLayer === false &&
-        candidate.geometryType
+        candidate.hasDistrictField
     ) {
-
-        score -= 20;
+        score += 20;
 
         reasons.push(
-            "non-polygon geometry"
+            "district/ward field detected"
         );
     }
 
 
-    // -------------------------------------------------------------------------
-    // ArcGIS service type
-    // -------------------------------------------------------------------------
+    if (
+        candidate.hasNameField
+    ) {
+        score += 10;
+
+        reasons.push(
+            "district/name field detected"
+        );
+    }
+
 
     if (
-        candidate.isFeatureServer === true ||
-        candidate.serviceType === "FeatureServer"
+        candidate.isFeatureServer
     ) {
-
         score += 10;
 
         reasons.push(
@@ -349,11 +127,9 @@ export function scoreCandidate(
 
 
     if (
-        candidate.isMapServer === true ||
-        candidate.serviceType === "MapServer"
+        candidate.isMapServer
     ) {
-
-        score += 10;
+        score += 5;
 
         reasons.push(
             "MapServer"
@@ -361,130 +137,107 @@ export function scoreCandidate(
     }
 
 
-    // -------------------------------------------------------------------------
-    // Boundary inspection signal
-    // -------------------------------------------------------------------------
-
     if (
-        candidate.isLikelyBoundaryLayer === true
+        candidate.isOfficial
     ) {
-
-        score += 25;
+        score += 20;
 
         reasons.push(
-            "likely boundary layer"
+            "official municipal source"
         );
     }
 
 
     // -------------------------------------------------------------------------
-    // District field
+    // Title signals
     // -------------------------------------------------------------------------
 
     if (
-        candidate.hasDistrictField === true ||
-        fields.some(
-            field =>
-                isDistrictField(field)
+        containsAny(
+            title,
+            [
+                "ward",
+                "wards"
+            ]
         )
     ) {
-
-        score += 25;
+        score += 20;
 
         reasons.push(
-            "district field"
+            "title contains ward"
         );
     }
 
 
-    // -------------------------------------------------------------------------
-    // Name field
-    // -------------------------------------------------------------------------
-
     if (
-        candidate.hasNameField === true ||
-        fields.some(
-            field =>
-                isNameField(field)
+        containsAny(
+            title,
+            [
+                "council district",
+                "city council",
+                "council districts"
+            ]
         )
     ) {
+        score += 25;
 
+        reasons.push(
+            "title contains council district"
+        );
+    }
+
+
+    if (
+        containsAny(
+            title,
+            [
+                "boundary",
+                "boundaries"
+            ]
+        )
+    ) {
         score += 15;
 
         reasons.push(
-            "name field"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Query capability
-    // -------------------------------------------------------------------------
-
-    if (
-        candidate.supportsQuery === true
-    ) {
-
-        score += 5;
-
-        reasons.push(
-            "supports query"
+            "title contains boundary terminology"
         );
     }
 
 
     if (
-        candidate.supportsGeometryQuery === true
-    ) {
-
-        score += 5;
-
-        reasons.push(
-            "supports geometry query"
-        );
-    }
-
-
-    if (
-        candidate.supportsPagination === true
-    ) {
-
-        score += 3;
-
-        reasons.push(
-            "supports pagination"
-        );
-    }
-
-
-    if (
-        candidate.supportsGeoJSON === true
-    ) {
-
-        score += 3;
-
-        reasons.push(
-            "supports GeoJSON"
-        );
-    }
-
-
-    // =========================================================================
-    // NEGATIVE SIGNALS
-    // =========================================================================
-
-    // -------------------------------------------------------------------------
-    // Housing
-    // -------------------------------------------------------------------------
-
-    if (
-        containsWord(
-            searchableText,
-            "housing"
+        containsAny(
+            title,
+            [
+                "municipal",
+                "city of"
+            ]
         )
     ) {
+        score += 5;
 
-        score -= 45;
+        reasons.push(
+            "title appears municipal"
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Negative signals
+    // -------------------------------------------------------------------------
+
+    if (
+        candidate.isHousingDataset ||
+        containsAny(
+            title,
+            [
+                "housing",
+                "section 8",
+                "affordable housing",
+                "housing units"
+            ]
+        )
+    ) {
+        score -= 40;
 
         reasons.push(
             "housing dataset"
@@ -492,310 +245,81 @@ export function scoreCandidate(
     }
 
 
-    // -------------------------------------------------------------------------
-    // Census
-    // -------------------------------------------------------------------------
-
     if (
-        containsWord(
-            searchableText,
-            "census"
+        candidate.isCensusDataset ||
+        containsAny(
+            title,
+            [
+                "census block",
+                "block group",
+                "tract",
+                "census geography",
+                "census data"
+            ]
         )
     ) {
+        score -= 45;
 
+        reasons.push(
+            "Census geography/dataset"
+        );
+    }
+
+
+    if (
+        candidate.isThematicDataset
+    ) {
         score -= 35;
 
         reasons.push(
-            "census dataset"
+            "thematic dataset"
         );
     }
 
 
     if (
         containsAny(
-            searchableText,
+            title,
             [
-                "census block",
-                "census blocks",
-                "block group",
-                "block groups"
+                "equity",
+                "index",
+                "priority",
+                "demographic",
+                "population",
+                "income"
             ]
         )
     ) {
-
-        score -= 45;
-
-        reasons.push(
-            "census block dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Neighborhood
-    // -------------------------------------------------------------------------
-
-    if (
-        containsWord(
-            searchableText,
-            "neighborhood"
-        )
-    ) {
-
-        score -= 45;
-
-        reasons.push(
-            "neighborhood dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Parcel
-    // -------------------------------------------------------------------------
-
-    if (
-        containsWord(
-            searchableText,
-            "parcel"
-        )
-    ) {
-
-        score -= 45;
-
-        reasons.push(
-            "parcel dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Crime
-    // -------------------------------------------------------------------------
-
-    if (
-        containsWord(
-            searchableText,
-            "crime"
-        )
-    ) {
-
-        score -= 45;
-
-        reasons.push(
-            "crime dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Zoning
-    // -------------------------------------------------------------------------
-
-    if (
-        containsWord(
-            searchableText,
-            "zoning"
-        )
-    ) {
-
-        score -= 45;
-
-        reasons.push(
-            "zoning dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Transportation / infrastructure
-    // -------------------------------------------------------------------------
-
-    if (
-        containsAny(
-            searchableText,
-            [
-                "street",
-                "road",
-                "traffic",
-                "bike",
-                "bus route",
-                "transit",
-                "sidewalk",
-                "parking"
-            ]
-        )
-    ) {
-
-        score -= 30;
-
-        reasons.push(
-            "transportation dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Parks / recreation
-    // -------------------------------------------------------------------------
-
-    if (
-        containsAny(
-            searchableText,
-            [
-                "park",
-                "parks",
-                "golf course",
-                "recreation"
-            ]
-        )
-    ) {
-
-        score -= 30;
-
-        reasons.push(
-            "parks/recreation dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Environmental / thematic datasets
-    // -------------------------------------------------------------------------
-
-    if (
-        containsAny(
-            searchableText,
-            [
-                "tree equity",
-                "solar",
-                "climate",
-                "environment",
-                "environmental",
-                "air quality"
-            ]
-        )
-    ) {
-
-        score -= 30;
-
-        reasons.push(
-            "thematic environmental dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Historical datasets
-    // -------------------------------------------------------------------------
-
-    if (
-        /\b(19|20)\d{2}\b/.test(
-            searchableText
-        ) &&
-        containsAny(
-            searchableText,
-            [
-                "ward",
-                "district",
-                "redistrict",
-                "boundary"
-            ]
-        )
-    ) {
-
-        score -= 15;
-
-        reasons.push(
-            "possibly historical boundary dataset"
-        );
-    }
-
-
-    // =========================================================================
-    // Strong positive override
-    // =========================================================================
-
-    /*
-     * An actual boundary layer with polygon geometry and a district field
-     * should rank very highly even if the service has a generic title.
-     */
-
-    if (
-        isPolygon &&
-        candidate.isLikelyBoundaryLayer === true &&
-        (
-            candidate.hasDistrictField === true ||
-            fields.some(
-                field =>
-                    isDistrictField(field)
-            )
-        )
-    ) {
-
-        score += 20;
-
-        reasons.push(
-            "polygon boundary with district field"
-        );
-    }
-
-
-    // =========================================================================
-    // Strong negative override
-    // =========================================================================
-
-    /*
-     * A dataset explicitly describing housing, census, parcels, etc. should
-     * not become a top candidate simply because it contains "ward".
-     */
-
-    const thematicDataset =
-        containsAny(
-            searchableText,
-            [
-                "housing",
-                "census",
-                "parcel",
-                "crime",
-                "zoning",
-                "neighborhood",
-                "solar",
-                "climate",
-                "tree equity",
-                "bus route",
-                "bike",
-                "street maintenance"
-            ]
-        );
-
-
-    if (
-        thematicDataset &&
-        !containsAny(
-            searchableText,
-            [
-                "ward boundary",
-                "ward boundaries",
-                "district boundary",
-                "district boundaries",
-                "council district boundary",
-                "council district boundaries"
-            ]
-        )
-    ) {
-
         score -= 20;
 
         reasons.push(
-            "thematic dataset rather than boundary layer"
+            "thematic/non-boundary terminology"
         );
     }
 
 
-    // =========================================================================
-    // Normalize
-    // =========================================================================
+    // -------------------------------------------------------------------------
+    // Geometry fallback
+    // -------------------------------------------------------------------------
+
+    if (
+        candidate.geometryType &&
+        !candidate.isPolygonLayer &&
+        isPolygonGeometry(
+            candidate.geometryType
+        )
+    ) {
+        score += 15;
+
+        reasons.push(
+            "polygon geometry detected"
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Clamp score
+    // -------------------------------------------------------------------------
 
     score =
         Math.max(
@@ -807,127 +331,51 @@ export function scoreCandidate(
         );
 
 
-    // =========================================================================
-    // Review threshold
-    // =========================================================================
-
-    /*
-     * 90+ = strong enough to consider automatic selection.
-     *
-     * Anything below 90 should still be retained for manual review.
-     */
-
-    const requiresReview =
-        score < 90;
-
-
     return {
-
         score,
-
-        requiresReview,
-
         reasons
     };
 }
 
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Helpers
-// -----------------------------------------------------------------------------
+// =============================================================================
 
-function normalizeField(
-    field: string
+function normalize(
+    value?: string
 ): string {
 
-    return field
+    return (value ?? "")
         .toLowerCase()
-        .trim()
-        .replace(
-            /[^a-z0-9]/g,
-            ""
-        );
-}
-
-
-function containsWord(
-    text: string,
-    word: string
-): boolean {
-
-    const escaped =
-        word.replace(
-            /[.*+?^${}()|[\]\\]/g,
-            "\\$&"
-        );
-
-
-    return new RegExp(
-        `\\b${escaped}\\b`,
-        "i"
-    ).test(
-        text
-    );
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
 
 function containsAny(
-    text: string,
-    values: readonly string[]
+    value: string,
+    terms: string[]
 ): boolean {
 
-    return values.some(
-        value =>
-            text.includes(
-                value.toLowerCase()
-            )
+    return terms.some(
+        term =>
+            value.includes(term)
     );
 }
 
 
-function isDistrictField(
-    field: string
+function isPolygonGeometry(
+    geometryType: string
 ): boolean {
 
-    return [
-        "district",
-        "districtid",
-        "districtno",
-        "districtnum",
-        "districtnumber",
+    const normalized =
+        geometryType.toLowerCase();
 
-        "ward",
-        "wardid",
-        "wardno",
-        "wardnum",
-        "wardnumber",
-
-        "councildistrict",
-        "councildistrictid",
-        "councildistrictno",
-        "councildistrictnum",
-
-        "aldermanicdistrict",
-        "aldermanicdistrictid",
-        "aldermanicdistrictno",
-        "aldermanicdistrictnum"
-    ].includes(
-        field
-    );
-}
-
-
-function isNameField(
-    field: string
-): boolean {
-
-    return [
-        "name",
-        "districtname",
-        "wardname",
-        "councildistrictname",
-        "aldermanicdistrictname"
-    ].includes(
-        field
+    return (
+        normalized === "polygon" ||
+        normalized === "esrigeometrypolygon" ||
+        normalized.includes("polygon")
     );
 }

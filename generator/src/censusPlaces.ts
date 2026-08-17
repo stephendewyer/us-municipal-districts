@@ -1,204 +1,507 @@
-import type { Place } from "./types.js";
+// generator/src/censusPlaces.ts
 
-const CENSUS_API =
-    "https://api.census.gov/data/2024/dec/pl";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-interface CensusResponse {
-    [index: number]: string[];
+import type { CensusPlace } from "./types.js";
+
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface CensusPlacesFile {
+    source: string;
+    year: number;
+    generatedAt: string;
+    places: CensusPlace[];
 }
 
-const STATE_FIPS_TO_ABBR: Record<string, string> = {
-    "01": "AL",
-    "02": "AK",
-    "04": "AZ",
-    "05": "AR",
-    "06": "CA",
-    "08": "CO",
-    "09": "CT",
-    "10": "DE",
-    "11": "DC",
-    "12": "FL",
-    "13": "GA",
-    "15": "HI",
-    "16": "ID",
-    "17": "IL",
-    "18": "IN",
-    "19": "IA",
-    "20": "KS",
-    "21": "KY",
-    "22": "LA",
-    "23": "ME",
-    "24": "MD",
-    "25": "MA",
-    "26": "MI",
-    "27": "MN",
-    "28": "MS",
-    "29": "MO",
-    "30": "MT",
-    "31": "NE",
-    "32": "NV",
-    "33": "NH",
-    "34": "NJ",
-    "35": "NM",
-    "36": "NY",
-    "37": "NC",
-    "38": "ND",
-    "39": "OH",
-    "40": "OK",
-    "41": "OR",
-    "42": "PA",
-    "44": "RI",
-    "45": "SC",
-    "46": "SD",
-    "47": "TN",
-    "48": "TX",
-    "49": "UT",
-    "50": "VT",
-    "51": "VA",
-    "53": "WA",
-    "54": "WV",
-    "55": "WI",
-    "56": "WY"
+
+// =============================================================================
+// Paths
+// =============================================================================
+
+const __filename =
+    fileURLToPath(import.meta.url);
+
+const __dirname =
+    path.dirname(__filename);
+
+const DATA_PATH =
+    path.resolve(
+        __dirname,
+        "../data/census-places.json"
+    );
+
+
+// =============================================================================
+// Cached data
+// =============================================================================
+
+let censusPlaces:
+    CensusPlacesFile | undefined;
+
+
+// =============================================================================
+// Load Census places
+// =============================================================================
+
+/**
+ * Load the generated Census place dataset.
+ *
+ * This function does not download or generate data.
+ *
+ * Run `npm run places` to regenerate the dataset.
+ */
+export function loadCensusPlaces(): CensusPlace[] {
+
+    if (censusPlaces) {
+        return censusPlaces.places;
+    }
+
+    censusPlaces =
+        loadCensusPlacesFile();
+
+    return censusPlaces.places;
+}
+
+
+/**
+ * Load the complete generated Census dataset, including metadata.
+ */
+export function loadCensusPlacesFile(): CensusPlacesFile {
+
+    if (!fs.existsSync(DATA_PATH)) {
+        throw new Error(
+            [
+                "Census place dataset not found:",
+                DATA_PATH,
+                "",
+                "Run:",
+                "  npm run places"
+            ].join("\n")
+        );
+    }
+
+    const contents =
+        fs.readFileSync(
+            DATA_PATH,
+            "utf8"
+        );
+
+    let parsed: unknown;
+
+    try {
+        parsed =
+            JSON.parse(contents);
+    } catch (error) {
+        throw new Error(
+            `Invalid Census place JSON: ${error}`
+        );
+    }
+
+    const file =
+        validateCensusPlacesFile(parsed);
+
+    censusPlaces = file;
+
+    return file;
+}
+
+
+// =============================================================================
+// Lookup
+// =============================================================================
+
+/**
+ * Find a Census place by city and state.
+ */
+export function findCensusPlace(
+    city: string,
+    state: string
+): CensusPlace | undefined {
+
+    const normalizedCity =
+        normalizeName(city);
+
+    const normalizedState =
+        normalizeState(state);
+
+    return loadCensusPlaces().find(place =>
+        normalizeName(place.city) === normalizedCity &&
+        normalizeState(place.state) === normalizedState
+    );
+}
+
+
+/**
+ * Find all Census places matching a city name.
+ *
+ * A city name can occur in multiple states.
+ */
+export function findCensusPlacesByName(
+    city: string
+): CensusPlace[] {
+
+    const normalizedCity =
+        normalizeName(city);
+
+    return loadCensusPlaces().filter(place =>
+        normalizeName(place.city) === normalizedCity
+    );
+}
+
+
+/**
+ * Find a Census place by its GEOID/place FIPS.
+ */
+export function findCensusPlaceByFips(
+    placeFips: string
+): CensusPlace | undefined {
+
+    return loadCensusPlaces().find(
+        place =>
+            place.placeFips === placeFips
+    );
+}
+
+
+/**
+ * Return all Census places in a state.
+ */
+export function findCensusPlacesByState(
+    state: string
+): CensusPlace[] {
+
+    const normalizedState =
+        normalizeState(state);
+
+    return loadCensusPlaces().filter(place =>
+        normalizeState(place.state) === normalizedState
+    );
+}
+
+
+// =============================================================================
+// State helpers
+// =============================================================================
+
+const STATE_ABBREVIATIONS:
+    Record<string, string> = {
+
+    AL: "AL",
+    AK: "AK",
+    AZ: "AZ",
+    AR: "AR",
+    CA: "CA",
+    CO: "CO",
+    CT: "CT",
+    DE: "DE",
+    FL: "FL",
+    GA: "GA",
+    HI: "HI",
+    ID: "ID",
+    IL: "IL",
+    IN: "IN",
+    IA: "IA",
+    KS: "KS",
+    KY: "KY",
+    LA: "LA",
+    ME: "ME",
+    MD: "MD",
+    MA: "MA",
+    MI: "MI",
+    MN: "MN",
+    MS: "MS",
+    MO: "MO",
+    MT: "MT",
+    NE: "NE",
+    NV: "NV",
+    NH: "NH",
+    NJ: "NJ",
+    NM: "NM",
+    NY: "NY",
+    NC: "NC",
+    ND: "ND",
+    OH: "OH",
+    OK: "OK",
+    OR: "OR",
+    PA: "PA",
+    RI: "RI",
+    SC: "SC",
+    SD: "SD",
+    TN: "TN",
+    TX: "TX",
+    UT: "UT",
+    VT: "VT",
+    VA: "VA",
+    WA: "WA",
+    WV: "WV",
+    WI: "WI",
+    WY: "WY",
+    DC: "DC"
 };
 
-const STATE_FIPS = Object.keys(STATE_FIPS_TO_ABBR);
+
+const STATE_NAMES:
+    Record<string, string> = {
+
+    ALABAMA: "AL",
+    ALASKA: "AK",
+    ARIZONA: "AZ",
+    ARKANSAS: "AR",
+    CALIFORNIA: "CA",
+    COLORADO: "CO",
+    CONNECTICUT: "CT",
+    DELAWARE: "DE",
+    FLORIDA: "FL",
+    GEORGIA: "GA",
+    HAWAII: "HI",
+    IDAHO: "ID",
+    ILLINOIS: "IL",
+    INDIANA: "IN",
+    IOWA: "IA",
+    KANSAS: "KS",
+    KENTUCKY: "KY",
+    LOUISIANA: "LA",
+    MAINE: "ME",
+    MARYLAND: "MD",
+    MASSACHUSETTS: "MA",
+    MICHIGAN: "MI",
+    MINNESOTA: "MN",
+    MISSISSIPPI: "MS",
+    MISSOURI: "MO",
+    MONTANA: "MT",
+    NEBRASKA: "NE",
+    NEVADA: "NV",
+    "NEW HAMPSHIRE": "NH",
+    "NEW JERSEY": "NJ",
+    "NEW MEXICO": "NM",
+    "NEW YORK": "NY",
+    "NORTH CAROLINA": "NC",
+    "NORTH DAKOTA": "ND",
+    OHIO: "OH",
+    OKLAHOMA: "OK",
+    OREGON: "OR",
+    PENNSYLVANIA: "PA",
+    "RHODE ISLAND": "RI",
+    "SOUTH CAROLINA": "SC",
+    "SOUTH DAKOTA": "SD",
+    TENNESSEE: "TN",
+    TEXAS: "TX",
+    UTAH: "UT",
+    VERMONT: "VT",
+    VIRGINIA: "VA",
+    WASHINGTON: "WA",
+    "WEST VIRGINIA": "WV",
+    WISCONSIN: "WI",
+    WYOMING: "WY",
+    "DISTRICT OF COLUMBIA": "DC"
+};
 
 
-/**
- * Fetch incorporated places / Census places for one state.
- */
-export async function fetchPlacesForState(
-    stateFips: string
-): Promise<Place[]> {
-
-    const stateAbbreviation =
-        STATE_FIPS_TO_ABBR[stateFips];
-
-    if (!stateAbbreviation) {
-        throw new Error(
-            `Unknown state FIPS code: ${stateFips}`
-        );
-    }
-
-    const url =
-        `${CENSUS_API}` +
-        `?get=NAME,PLACE,STATE` +
-        `&for=place:*` +
-        `&in=state:${stateFips}`;
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-        throw new Error(
-            `Census API request failed for ${stateAbbreviation}: ` +
-            `${response.status} ${response.statusText}`
-        );
-    }
-
-    const data =
-        await response.json() as CensusResponse;
-
-    if (!Array.isArray(data) || data.length < 2) {
-        return [];
-    }
-
-    const headers = data[0];
-
-    const nameIndex =
-        headers.indexOf("NAME");
-
-    const placeIndex =
-        headers.indexOf("PLACE");
-
-    const stateIndex =
-        headers.indexOf("STATE");
-
-    if (
-        nameIndex === -1 ||
-        placeIndex === -1 ||
-        stateIndex === -1
-    ) {
-        throw new Error(
-            "Census API response does not contain " +
-            "NAME, PLACE, and STATE columns."
-        );
-    }
-
-    return data
-        .slice(1)
-        .map((row): Place => {
-
-            const placeCode =
-                row[placeIndex];
-
-            const censusStateFips =
-                row[stateIndex];
-
-            const cityName =
-                cleanPlaceName(row[nameIndex]);
-
-            return {
-                placeFips:
-                    `${censusStateFips}${placeCode}`,
-
-                city:
-                    cityName,
-
-                state:
-                    STATE_FIPS_TO_ABBR[censusStateFips]
-            };
-        });
-}
-
-
-/**
- * Fetch places for every U.S. state and D.C.
- */
-export async function fetchPlaces(): Promise<Place[]> {
-
-    const places: Place[] = [];
-
-    for (const stateFips of STATE_FIPS) {
-
-        const stateAbbreviation =
-            STATE_FIPS_TO_ABBR[stateFips];
-
-        console.log(
-            `Fetching Census places for ${stateAbbreviation}...`
-        );
-
-        const statePlaces =
-            await fetchPlacesForState(stateFips);
-
-        places.push(...statePlaces);
-    }
-
-    return places;
-}
-
-
-/**
- * Remove Census geographic-type suffixes from place names.
- *
- * Examples:
- *
- * "Tucson city, Arizona"
- * → "Tucson"
- *
- * "Phoenix city, Arizona"
- * → "Phoenix"
- *
- * "Flagstaff city, Arizona"
- * → "Flagstaff"
- */
-function cleanPlaceName(
-    name: string
+function normalizeState(
+    state: string
 ): string {
 
-    return name
-        .replace(
-            /\s+(city|town|village|borough|municipality|CDP),.*$/i,
-            ""
-        )
+    const normalized =
+        state
+            .trim()
+            .toUpperCase();
+
+    return (
+        STATE_ABBREVIATIONS[normalized] ??
+        STATE_NAMES[normalized] ??
+        normalized
+    );
+}
+
+
+// =============================================================================
+// Name normalization
+// =============================================================================
+
+function normalizeName(
+    value: string
+): string {
+
+    return value
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\./g, "")
+        .replace(/['’]/g, "")
+        .replace(/[-]/g, " ")
+        .replace(/\s+/g, " ")
         .trim();
+}
+
+
+// =============================================================================
+// Validation
+// =============================================================================
+
+function validateCensusPlacesFile(
+    value: unknown
+): CensusPlacesFile {
+
+    if (
+        typeof value !== "object" ||
+        value === null ||
+        Array.isArray(value)
+    ) {
+        throw new Error(
+            "Invalid Census place dataset: expected an object."
+        );
+    }
+
+    const record =
+        value as Record<string, unknown>;
+
+    if (
+        typeof record.source !== "string"
+    ) {
+        throw new Error(
+            "Invalid Census place dataset: missing source."
+        );
+    }
+
+    if (
+        typeof record.year !== "number"
+    ) {
+        throw new Error(
+            "Invalid Census place dataset: missing year."
+        );
+    }
+
+    if (
+        typeof record.generatedAt !== "string"
+    ) {
+        throw new Error(
+            "Invalid Census place dataset: missing generatedAt."
+        );
+    }
+
+    if (
+        !Array.isArray(record.places)
+    ) {
+        throw new Error(
+            "Invalid Census place dataset: missing places array."
+        );
+    }
+
+    const places =
+        record.places.map(
+            validateCensusPlace
+        );
+
+    return {
+        source: record.source,
+        year: record.year,
+        generatedAt: record.generatedAt,
+        places
+    };
+}
+
+
+function validateCensusPlace(
+    value: unknown
+): CensusPlace {
+
+    if (
+        typeof value !== "object" ||
+        value === null ||
+        Array.isArray(value)
+    ) {
+        throw new Error(
+            "Invalid Census place: expected an object."
+        );
+    }
+
+    const record =
+        value as Record<string, unknown>;
+
+    if (
+        typeof record.placeFips !== "string"
+    ) {
+        throw new Error(
+            "Invalid Census place: missing placeFips."
+        );
+    }
+
+    if (
+        typeof record.city !== "string"
+    ) {
+        throw new Error(
+            "Invalid Census place: missing city."
+        );
+    }
+
+    if (
+        typeof record.state !== "string"
+    ) {
+        throw new Error(
+            "Invalid Census place: missing state."
+        );
+    }
+
+    if (
+        record.stateFips !== undefined &&
+        typeof record.stateFips !== "string"
+    ) {
+        throw new Error(
+            `Invalid Census place ${record.placeFips}: ` +
+            "stateFips must be a string."
+        );
+    }
+
+    if (
+        record.placeName !== undefined &&
+        typeof record.placeName !== "string"
+    ) {
+        throw new Error(
+            `Invalid Census place ${record.placeFips}: ` +
+            "placeName must be a string."
+        );
+    }
+
+    if (
+        record.placeType !== undefined &&
+        record.placeType !== "incorporated-place" &&
+        record.placeType !== "census-designated-place"
+    ) {
+        throw new Error(
+            `Invalid Census place ${record.placeFips}: ` +
+            "invalid placeType."
+        );
+    }
+
+    return {
+        placeFips: record.placeFips,
+        city: record.city,
+        state: normalizeState(record.state),
+
+        ...(record.stateFips !== undefined
+            ? {
+                stateFips:
+                    record.stateFips
+            }
+            : {}),
+
+        ...(record.placeName !== undefined
+            ? {
+                placeName:
+                    record.placeName
+            }
+            : {}),
+
+        ...(record.placeType !== undefined
+            ? {
+                placeType:
+                    record.placeType
+            }
+            : {})
+    };
 }

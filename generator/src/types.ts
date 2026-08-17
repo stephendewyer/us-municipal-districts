@@ -1,28 +1,131 @@
-export interface Place {
+// generator/src/types.ts
+
+
+// =============================================================================
+// Basic geographic types
+// =============================================================================
+
+export type StateAbbreviation = string;
+
+
+export type DistrictType =
+    | "ward"
+    | "council-district"
+    | "aldermanic-district"
+    | "municipal-district";
+
+
+// =============================================================================
+// Census place
+// =============================================================================
+
+export type CensusPlaceType =
+    | "incorporated-place"
+    | "census-designated-place" 
+    | "other";
+
+export interface CensusPlace {
+    /**
+     * Census place GEOID.
+     */
     placeFips: string;
 
+    /**
+     * Municipality/census place name.
+     */
     city: string;
 
-    state: string;
+    /**
+     * Two-letter state abbreviation.
+     */
+    state: StateAbbreviation;
+
+    /**
+     * State FIPS code.
+     */
+    stateFips?: string;
+
+    /**
+     * Original Census place name.
+     */
+    placeName?: string;
+
+    /**
+     * Census place type.
+     *
+     * Examples:
+     * - incorporated-place
+     * - census-designated-place
+     */
+    placeType?: CensusPlaceType;
 }
 
 
-export interface ArcGISCandidate {
+// =============================================================================
+// Discovery
+// =============================================================================
+
+export interface DiscoveryCandidate {
+    /**
+     * Census place GEOID.
+     */
     placeFips: string;
 
+    /**
+     * Municipality name.
+     */
     city: string;
 
-    state: string;
+    /**
+     * State abbreviation.
+     */
+    state: StateAbbreviation;
 
+    /**
+     * URL discovered during the search process.
+     */
     candidateUrl: string;
 
-    title: string;
+    /**
+     * Human-readable title, if discovered.
+     */
+    title?: string;
 
+    /**
+     * Initial discovery score.
+     */
     score: number;
 
+    /**
+     * Whether the candidate requires manual review.
+     */
     requiresReview: boolean;
+
+    /**
+     * Reasons contributing to the discovery score.
+     */
+    reasons: string[];
+
+    /**
+     * Source from which the candidate was discovered.
+     *
+     * Examples:
+     * "arcgis"
+     * "search"
+     * "municipal"
+     */
+    source?: string;
+
+    /**
+     * Search query that produced this candidate.
+     */
+    searchQuery?: string;
 }
 
+
+// =============================================================================
+// ArcGIS inspection
+// =============================================================================
 
 export type ArcGISServiceType =
     | "FeatureServer"
@@ -30,104 +133,669 @@ export type ArcGISServiceType =
     | "unknown";
 
 
-export interface ArcGISSpatialReference {
-    wkid?: number;
-
-    latestWkid?: number;
-
-    wkt?: string;
-}
-
-
-export interface ArcGISInspection {
-
-    url: string;
-
-    isArcGIS: boolean;
-
-    serviceType:
-        | "FeatureServer"
-        | "MapServer"
-        | "unknown";
-
-    isLayer: boolean;
-
-    title?: string;
-
-    serviceName?: string;
-
-    layerName?: string;
-
-    description?: string;
-
-    geometryType?: GeometryType;
-
-    fields: string[];
-
-    districtFields: string[];
-
-    nameField?: string;
-
-    objectIdField?: string;
-
-    featureCount?: number;
-
-    supportsQuery: boolean;
-
-    supportsGeometryQuery: boolean;
-
-    supportsPagination: boolean;
-
-    supportsGeoJSON: boolean;
-
-    isPolygonLayer: boolean;
-
-    isLikelyBoundaryLayer: boolean;
-
-    isFeatureServer: boolean;
-
-    isMapServer: boolean;
-}
-
-
-export interface ScoredCandidate
-    extends ArcGISCandidate {
-
-    score: number;
-
-    reasons?: string[];
-}
-
-
-export interface DiscoveryResult {
-    place: Place;
-
-    candidates: ScoredCandidate[];
-}
-
-
-export interface DiscoveryRecord {
-    placeFips: string;
-
-    city: string;
-
-    state: string;
-
-    candidateUrl: string;
-
-    title: string;
-
-    score: number;
-
-    requiresReview: boolean;
-
-    reasons?: string[];
-}
-
-
-export type GeometryType =
+export type ArcGISGeometryType =
     | "esriGeometryPoint"
     | "esriGeometryMultipoint"
     | "esriGeometryPolyline"
     | "esriGeometryPolygon"
-    | "esriGeometryEnvelope";
+    | "esriGeometryEnvelope"
+    | "point"
+    | "multipoint"
+    | "polyline"
+    | "polygon"
+    | "unknown";
+
+
+export interface ArcGISField {
+    /**
+     * ArcGIS field name.
+     */
+    name: string;
+
+    /**
+     * Human-readable field alias.
+     */
+    alias?: string;
+
+    /**
+     * ArcGIS field type.
+     */
+    type?: string;
+
+    /**
+     * Maximum field length.
+     */
+    length?: number;
+
+    /**
+     * ArcGIS domain information.
+     */
+    domain?: unknown;
+}
+
+
+export interface ArcGISInspection {
+    /**
+     * URL inspected.
+     */
+    url: string;
+
+    /**
+     * Whether the URL appears to be an ArcGIS REST service.
+     */
+    isArcGIS: boolean;
+
+    /**
+     * ArcGIS service type.
+     */
+    serviceType: ArcGISServiceType;
+
+    /**
+     * Whether this URL represents a specific layer.
+     */
+    isLayer: boolean;
+
+    /**
+     * Human-readable layer/service title.
+     */
+    title?: string;
+
+    /**
+     * ArcGIS service name.
+     */
+    serviceName?: string;
+
+    /**
+     * ArcGIS layer name.
+     */
+    layerName?: string;
+
+    /**
+     * Description supplied by ArcGIS.
+     */
+    description?: string;
+
+    /**
+     * Geometry type.
+     */
+    geometryType?: ArcGISGeometryType;
+
+    /**
+     * ArcGIS fields.
+     */
+    fields?: ArcGISField[];
+
+    /**
+     * Object ID field.
+     */
+    objectIdField?: string;
+
+    /**
+     * Maximum records returned by the service.
+     */
+    maxRecordCount?: number;
+
+    /**
+     * Spatial reference information.
+     */
+    spatialReference?: {
+        wkid?: number;
+        latestWkid?: number;
+        wkt?: string;
+    };
+
+    /**
+     * Whether the service supports querying.
+     */
+    supportsQuery?: boolean;
+
+    /**
+     * Whether the service supports GeoJSON output.
+     */
+    supportsGeoJSON?: boolean;
+
+    /**
+     * Whether the service supports pagination.
+     */
+    supportsPagination?: boolean;
+
+    /**
+     * ArcGIS service root URL.
+     */
+    serviceUrl?: string;
+
+    /**
+     * Most likely district field.
+     */
+    districtField?: string;
+
+    /**
+     * All fields identified as possible district fields.
+     */
+    districtFields: string[];
+
+    /**
+     * Most likely human-readable name field.
+     */
+    nameField?: string;
+
+    /**
+     * All fields identified as possible name fields.
+     */
+    nameFields: string[];
+
+    /**
+     * Raw ArcGIS response.
+     *
+     * Useful during development, but should not normally be
+     * written into generated registry files.
+     */
+    raw?: unknown;
+}
+
+
+// =============================================================================
+// Classification
+// =============================================================================
+
+export interface ClassificationMatches {
+    thematic: string[];
+
+    census: string[];
+
+    parcel: string[];
+
+    housing: string[];
+
+    political: string[];
+
+    boundary: string[];
+
+    official: string[];
+}
+
+
+export interface CandidateClassification {
+    /**
+     * Whether the candidate represents a polygon boundary.
+     */
+    isBoundaryLayer: boolean;
+
+    /**
+     * Whether the candidate appears to represent an actual
+     * political district.
+     */
+    isPoliticalBoundary: boolean;
+
+    /**
+     * Whether the dataset appears to be thematic rather than
+     * the actual district boundary.
+     */
+    isThematicDataset: boolean;
+
+    /**
+     * Whether the dataset appears to be Census-based.
+     */
+    isCensusDataset: boolean;
+
+    /**
+     * Whether the dataset appears to contain parcels.
+     */
+    isParcelDataset: boolean;
+
+    /**
+     * Whether the dataset appears to concern housing.
+     */
+    isHousingDataset: boolean;
+
+    /**
+     * Whether the source appears to be an official
+     * municipal source.
+     */
+    officialMunicipalSource: boolean;
+
+    /**
+     * Political district type.
+     */
+    districtType?: DistrictType;
+
+    /**
+     * Whether the candidate should be rejected.
+     */
+    shouldReject: boolean;
+
+    /**
+     * Keyword evidence used during classification.
+     */
+    matches: ClassificationMatches;
+}
+
+
+// =============================================================================
+// Inspected candidate
+// =============================================================================
+
+/**
+ * A discovery candidate after ArcGIS inspection and classification.
+ */
+export interface InspectedCandidate {
+    /**
+     * Original discovery candidate.
+     */
+    candidate: DiscoveryCandidate;
+
+    /**
+     * ArcGIS inspection result.
+     */
+    inspection: ArcGISInspection;
+
+    /**
+     * Classification result.
+     */
+    classification: CandidateClassification;
+}
+
+
+// =============================================================================
+// Ranking
+// =============================================================================
+
+export interface CandidateScore {
+    /**
+     * Candidate being scored.
+     */
+    candidate: InspectedCandidate;
+
+    /**
+     * Final score.
+     */
+    score: number;
+
+    /**
+     * Reasons contributing to the score.
+     */
+    reasons: string[];
+}
+
+
+// =============================================================================
+// Layer fingerprints
+// =============================================================================
+
+/**
+ * Normalized representation of an ArcGIS layer used for
+ * duplicate/equivalence detection.
+ */
+export interface LayerFingerprint {
+    /**
+     * Normalized layer title.
+     */
+    title?: string;
+
+    /**
+     * Normalized service name.
+     */
+    serviceName?: string;
+
+    /**
+     * Normalized layer name.
+     */
+    layerName?: string;
+
+    /**
+     * Normalized geometry type.
+     */
+    geometryType?: ArcGISGeometryType;
+
+    /**
+     * Normalized field names.
+     */
+    fields: string[];
+
+    /**
+     * Fields that appear to identify districts.
+     */
+    districtFields: string[];
+
+    /**
+     * Fields that appear to contain human-readable
+     * district names.
+     */
+    nameFields: string[];
+
+    /**
+     * Feature count, if available.
+     */
+    featureCount?: number;
+}
+
+
+// =============================================================================
+// Equivalent layer groups
+// =============================================================================
+
+/**
+ * Group of ArcGIS layers believed to represent the same
+ * underlying municipal political boundary dataset.
+ */
+export interface EquivalentLayerGroup {
+    /**
+     * Candidates in this equivalence group.
+     */
+    candidates: InspectedCandidate[];
+
+    /**
+     * Confidence that the candidates represent the
+     * same underlying dataset.
+     *
+     * 0 = no confidence
+     * 1 = complete confidence
+     */
+    confidence: number;
+
+    /**
+     * Evidence supporting the equivalence.
+     */
+    reasons: string[];
+}
+
+
+// =============================================================================
+// Canonical source
+// =============================================================================
+
+export interface CanonicalSource {
+    /**
+     * Selected canonical ArcGIS layer URL.
+     */
+    url: string;
+
+    /**
+     * Human-readable title.
+     */
+    title: string;
+
+    /**
+     * Municipality.
+     */
+    city: string;
+
+    /**
+     * State.
+     */
+    state: StateAbbreviation;
+
+    /**
+     * Census place FIPS.
+     */
+    placeFips: string;
+
+    /**
+     * Political district type.
+     */
+    districtType: DistrictType;
+
+    /**
+     * ArcGIS service type.
+     */
+    serviceType: ArcGISServiceType;
+
+    /**
+     * Whether the source appears to be maintained by
+     * the municipality.
+     */
+    officialMunicipalSource: boolean;
+
+    /**
+     * District identifier field.
+     */
+    districtField: string;
+
+    /**
+     * Human-readable district name field.
+     */
+    nameField?: string;
+
+    /**
+     * Geometry type.
+     */
+    geometryType: ArcGISGeometryType;
+
+    /**
+     * Canonical selection score.
+     */
+    score: number;
+
+    /**
+     * Other equivalent sources.
+     */
+    alternatives: CanonicalAlternative[];
+
+    /**
+     * Reasons this source was selected.
+     */
+    selectionReasons: string[];
+
+    /**
+     * Whether manual review is required.
+     */
+    requiresReview: boolean;
+}
+
+
+export interface CanonicalAlternative {
+    /**
+     * Alternative source URL.
+     */
+    url: string;
+
+    /**
+     * Alternative title.
+     */
+    title?: string;
+
+    /**
+     * ArcGIS service type.
+     */
+    serviceType?: ArcGISServiceType;
+
+    /**
+     * Whether the source appears official.
+     */
+    officialMunicipalSource?: boolean;
+
+    /**
+     * Selection score.
+     */
+    score?: number;
+}
+
+
+// =============================================================================
+// Registry
+// =============================================================================
+
+export interface RegistryEntry {
+    /**
+     * Census place FIPS.
+     */
+    placeFips: string;
+
+    /**
+     * Municipality.
+     */
+    city: string;
+
+    /**
+     * State abbreviation.
+     */
+    state: StateAbbreviation;
+
+    /**
+     * Political district type.
+     */
+    districtType: DistrictType;
+
+    /**
+     * Canonical boundary source.
+     */
+    source: RegistrySource;
+
+    /**
+     * Fields used to extract district information.
+     */
+    fields: RegistryFields;
+
+    /**
+     * Generator metadata.
+     */
+    metadata: RegistryMetadata;
+}
+
+
+export interface RegistrySource {
+    /**
+     * Canonical ArcGIS layer URL.
+     */
+    url: string;
+
+    /**
+     * ArcGIS service type.
+     */
+    serviceType: ArcGISServiceType;
+
+    /**
+     * Human-readable source title.
+     */
+    title: string;
+
+    /**
+     * Whether the source appears official.
+     */
+    official: boolean;
+}
+
+
+export interface RegistryFields {
+    /**
+     * District identifier field.
+     */
+    district: string;
+
+    /**
+     * Human-readable district name field.
+     */
+    name?: string;
+}
+
+
+export interface RegistryMetadata {
+    /**
+     * Date/time registry entry was generated.
+     */
+    generatedAt: string;
+
+    /**
+     * Generator version.
+     */
+    generatorVersion?: string;
+
+    /**
+     * Other equivalent sources.
+     */
+    alternatives?: CanonicalAlternative[];
+
+    /**
+     * Whether manual review is required.
+     */
+    requiresReview: boolean;
+}
+
+
+// =============================================================================
+// Discovery result
+// =============================================================================
+
+export interface DiscoveryResult {
+    /**
+     * Census municipality being processed.
+     */
+    place: CensusPlace;
+
+    /**
+     * Raw discovered candidates.
+     */
+    candidates: DiscoveryCandidate[];
+
+    /**
+     * Candidates after ArcGIS inspection.
+     */
+    inspectedCandidates: InspectedCandidate[];
+
+    /**
+     * Candidates that survived classification.
+     */
+    validCandidates: InspectedCandidate[];
+
+    /**
+     * Candidates rejected during classification.
+     */
+    rejectedCandidates: InspectedCandidate[];
+
+    /**
+     * Groups of equivalent sources.
+     */
+    equivalentGroups: EquivalentLayerGroup[];
+
+    /**
+     * Selected canonical source.
+     */
+    canonical?: CanonicalSource;
+
+    /**
+     * Generated registry entry.
+     */
+    registryEntry?: RegistryEntry;
+}
+
+
+// =============================================================================
+// Generator options
+// =============================================================================
+
+export interface GeneratorOptions {
+    /**
+     * Process only a specific city.
+     */
+    city?: string;
+
+    /**
+     * Process only a specific state.
+     */
+    state?: string;
+
+    /**
+     * Process a specific Census place FIPS.
+     */
+    placeFips?: string;
+
+    /**
+     * Require manual review before writing registry entries.
+     */
+    review?: boolean;
+
+    /**
+     * Print detailed information.
+     */
+    verbose?: boolean;
+
+    /**
+     * Write intermediate discovery results.
+     */
+    writeDiscovery?: boolean;
+
+    /**
+     * Generator output directory.
+     */
+    outputDir?: string;
+}

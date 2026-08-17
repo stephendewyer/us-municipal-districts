@@ -1,454 +1,1034 @@
-import type { GeometryType, ArcGISInspection } from "./types.js";
+// generator/src/inspectArcGIS.ts
 
-// -----------------------------------------------------------------------------
-// Main
-// -----------------------------------------------------------------------------
+import type {
+    ArcGISField,
+    ArcGISGeometryType,
+    ArcGISInspection,
+    ArcGISServiceType
+} from "./types.js";
 
+
+// =============================================================================
+// Types
+// =============================================================================
+
+type FetchLike = (
+    input: string | URL | Request,
+    init?: RequestInit
+) => Promise<Response>;
+
+interface ArcGISResponse {
+    error?: {
+        code?: number;
+        message?: string;
+        details?: string[];
+    };
+
+    name?: string;
+
+    description?: string;
+
+    type?: string;
+
+    geometryType?: string;
+
+    fields?: Array<{
+        name?: string;
+        alias?: string;
+        type?: string;
+        length?: number;
+        domain?: unknown;
+    }>;
+
+    objectIdField?: string;
+
+    maxRecordCount?: number;
+
+    spatialReference?: {
+        wkid?: number;
+        latestWkid?: number;
+        wkt?: string;
+    };
+
+    capabilities?: string;
+
+    supportsQuery?: boolean;
+
+    supportsPagination?: boolean;
+
+    supportsGeoJSON?: boolean;
+
+    advancedQueryCapabilities?: {
+        supportsPagination?: boolean;
+        supportsQueryWithResultType?: boolean;
+        supportsReturningQueryExtent?: boolean;
+        supportsOrderBy?: boolean;
+        supportsDistinct?: boolean;
+        supportsQueryWithDistance?: boolean;
+    };
+
+    layers?: Array<{
+        id?: number;
+        name?: string;
+        url?: string;
+    }>;
+
+    tables?: Array<{
+        id?: number;
+        name?: string;
+        url?: string;
+    }>;
+
+    supportedQueryFormats?: string;
+}
+
+
+// =============================================================================
+// Public API
+// =============================================================================
+
+/**
+ * Inspect an ArcGIS REST URL.
+ *
+ * Supports:
+ *
+ *   FeatureServer service roots
+ *   FeatureServer layer URLs
+ *   MapServer service roots
+ *   MapServer layer URLs
+ *
+ * For a service root containing multiple layers, the most likely
+ * polygon boundary layer is selected.
+ */
 export async function inspectArcGIS(
-    inputUrl: string,
-    fetchFunction: typeof fetch = fetch
+    url: string,
+    fetchImpl: FetchLike = fetch
 ): Promise<ArcGISInspection> {
 
-    const url =
-        normalizeArcGISUrl(inputUrl);
+    const normalizedUrl =
+        normalizeUrl(url);
 
-    const endpoint =
-        parseArcGISEndpoint(url);
+    const serviceType =
+        detectServiceType(normalizedUrl);
+
+    if (serviceType === "unknown") {
+
+        return createUnknownInspection(
+            normalizedUrl
+        );
+    }
+
+    const isLayer =
+        detectIsLayer(
+            normalizedUrl
+        );
+
+    try {
+
+        /*
+         * ---------------------------------------------------------------------
+         * Individual layer
+         * ---------------------------------------------------------------------
+         *
+         * If the caller supplied:
+         *
+         *   .../FeatureServer/0
+         *
+         * inspect that layer directly.
+         */
+        if (isLayer) {
+
+            return await inspectLayer(
+                normalizedUrl,
+                serviceType,
+                {},
+                fetchImpl
+            );
+        }
 
 
-    // -------------------------------------------------------------------------
-    // Non-ArcGIS URL
-    // -------------------------------------------------------------------------
+        /*
+         * ---------------------------------------------------------------------
+         * Service root
+         * ---------------------------------------------------------------------
+         *
+         * If the caller supplied:
+         *
+         *   .../FeatureServer
+         *
+         * or:
+         *
+         *   .../MapServer
+         *
+         * first inspect the service metadata and then select the most
+         * promising layer.
+         */
+        return await inspectService(
+            normalizedUrl,
+            serviceType,
+            fetchImpl
+        );
 
-    if (!endpoint) {
+    } catch (error) {
+
+        /*
+         * Inspection failures should not terminate discovery for all
+         * municipalities. Return a valid inspection object instead.
+         */
 
         return {
-            url,
+            url: normalizedUrl,
 
-            isArcGIS: false,
+            isArcGIS: true,
 
-            serviceType: "unknown",
+            serviceType,
 
-            isLayer: false,
-
-            fields: [],
+            isLayer,
 
             districtFields: [],
 
-            supportsQuery: false,
+            nameFields: []
+        };
+    }
+}
 
-            supportsGeometryQuery: false,
 
-            supportsPagination: false,
+// =============================================================================
+// Service inspection
+// =============================================================================
 
-            supportsGeoJSON: false,
+async function inspectService(
+    serviceUrl: string,
+    serviceType: ArcGISServiceType,
+    fetchImpl: FetchLike
+): Promise<ArcGISInspection> {
 
-            isFeatureServer: false,
+    const metadata =
+        await fetchArcGISJson(
+            serviceUrl,
+            fetchImpl
+        );
 
-            isMapServer: false,
 
-            isPolygonLayer: false,
+    /*
+     * If ArcGIS explicitly returned an error, return the service as
+     * recognized ArcGIS but without layer information.
+     */
+    if (metadata.error) {
 
-            isLikelyBoundaryLayer: false
+        return {
+            url: serviceUrl,
+
+            isArcGIS: true,
+
+            serviceType,
+
+            isLayer: false,
+
+            title:
+                metadata.name,
+
+            description:
+                metadata.description,
+
+            serviceName:
+                extractServiceName(
+                    serviceUrl
+                ),
+
+            serviceUrl,
+
+            districtFields: [],
+
+            nameFields: []
         };
     }
 
 
-    // -------------------------------------------------------------------------
-    // Fetch metadata
-    // -------------------------------------------------------------------------
+    const layers =
+        getServiceLayers(
+            metadata,
+            serviceUrl
+        );
+
+
+    /*
+     * A service may contain no layers, particularly if it is a
+     * service type that does not expose feature layers in the
+     * expected way.
+     */
+    if (layers.length === 0) {
+
+        return {
+            url: serviceUrl,
+
+            isArcGIS: true,
+
+            serviceType,
+
+            isLayer: false,
+
+            title:
+                metadata.name,
+
+            description:
+                metadata.description,
+
+            serviceName:
+                extractServiceName(
+                    serviceUrl
+                ),
+
+            serviceUrl,
+
+            districtFields: [],
+
+            nameFields: []
+        };
+    }
+
+
+    /*
+     * Select the layer most likely to represent a municipal
+     * political boundary.
+     */
+    const selectedLayer =
+        selectBestLayer(
+            layers
+        );
+
+
+    /*
+     * If we cannot construct a usable layer URL, fall back to the
+     * service itself.
+     */
+    if (!selectedLayer.url) {
+
+        return {
+            url: serviceUrl,
+
+            isArcGIS: true,
+
+            serviceType,
+
+            isLayer: false,
+
+            title:
+                metadata.name,
+
+            description:
+                metadata.description,
+
+            serviceName:
+                extractServiceName(
+                    serviceUrl
+                ),
+
+            serviceUrl,
+
+            districtFields: [],
+
+            nameFields: []
+        };
+    }
+
+
+    return inspectLayer(
+        selectedLayer.url,
+        serviceType,
+        {
+            serviceName:
+                metadata.name ??
+                extractServiceName(
+                    serviceUrl
+                ),
+
+            serviceTitle:
+                metadata.name,
+
+            serviceDescription:
+                metadata.description,
+
+            serviceUrl
+        },
+        fetchImpl
+    );
+    
+}
+
+
+// =============================================================================
+// Layer inspection
+// =============================================================================
+
+interface LayerContext {
+    serviceName?: string;
+
+    serviceTitle?: string;
+
+    serviceDescription?: string;
+
+    serviceUrl?: string;
+}
+
+
+async function inspectLayer(
+    layerUrl: string,
+    serviceType: ArcGISServiceType,
+    context: LayerContext = {},
+    fetchImpl: FetchLike = fetch
+): Promise<ArcGISInspection> {
 
     const metadata =
         await fetchArcGISJson(
-            endpoint.metadataUrl,
-            fetchFunction
+            layerUrl,
+            fetchImpl
         );
 
 
-    const serviceType =
-        endpoint.type;
+    if (metadata.error) {
 
+        return {
+            url: layerUrl,
 
-    // -------------------------------------------------------------------------
-    // Basic information
-    // -------------------------------------------------------------------------
+            isArcGIS: true,
 
-    const title =
-        getString(
-            metadata.name
-        );
+            serviceType,
 
-    const description =
-        getString(
-            metadata.description
-        ) ??
-        getString(
-            metadata.serviceDescription
-        );
+            isLayer: true,
 
+            title:
+                context.serviceTitle ??
+                extractLayerName(
+                    layerUrl
+                ),
 
-    // -------------------------------------------------------------------------
-    // Geometry
-    // -------------------------------------------------------------------------
+            serviceName:
+                context.serviceName,
 
-    const geometryType =
-        getString(
-            metadata.geometryType
-        ) as GeometryType | undefined;
+            layerName:
+                extractLayerName(
+                    layerUrl
+                ),
 
+            description:
+                context.serviceDescription,
 
-    const isPolygonLayer =
-        geometryType ===
-        "esriGeometryPolygon";
+            serviceUrl:
+                context.serviceUrl,
 
+            districtFields: [],
 
-    // -------------------------------------------------------------------------
-    // Fields
-    // -------------------------------------------------------------------------
+            nameFields: []
+        };
+    }
+
 
     const fields =
-        Array.isArray(
+        normalizeFields(
             metadata.fields
-        )
-            ? metadata.fields
-                .map(
-                    field =>
-                        getString(
-                            field?.name
-                        )
-                )
-                .filter(
-                    (
-                        value
-                    ): value is string =>
-                        Boolean(value)
-                )
-            : [];
+        );
 
-
-    // -------------------------------------------------------------------------
-    // District fields
-    // -------------------------------------------------------------------------
 
     const districtFields =
-        fields.filter(
-            field =>
-                isDistrictField(field)
+        detectDistrictFields(
+            fields
         );
 
 
-    // -------------------------------------------------------------------------
-    // Name field
-    // -------------------------------------------------------------------------
-
-    const nameField =
-        findField(
-            fields,
-            [
-                "name",
-                "NAME",
-                "Name",
-
-                "district_name",
-                "DISTRICT_NAME",
-                "DistrictName",
-
-                "ward_name",
-                "WARD_NAME",
-                "WardName",
-
-                "council_district_name",
-                "COUNCIL_DISTRICT_NAME",
-
-                "aldermanic_district_name",
-                "ALDERMANIC_DISTRICT_NAME"
-            ]
+    const nameFields =
+        detectNameFields(
+            fields
         );
 
 
-    // -------------------------------------------------------------------------
-    // Object ID field
-    // -------------------------------------------------------------------------
-
-    const objectIdField =
-        findField(
-            fields,
-            [
-                "OBJECTID",
-                "ObjectID",
-                "objectid",
-
-                "FID",
-                "fid",
-
-                "ID",
-                "Id",
-                "id"
-            ]
+    const geometryType =
+        normalizeGeometryType(
+            metadata.geometryType
         );
 
-
-    // -------------------------------------------------------------------------
-    // ArcGIS capabilities
-    // -------------------------------------------------------------------------
 
     const capabilities =
-        getString(
-            metadata.capabilities
-        ) ?? "";
-
-
-    const supportsQuery =
-        capabilities
-            .toLowerCase()
-            .includes("query");
-
-
-    const supportsGeometryQuery =
-        metadata.supportsAdvancedQueries === true ||
-        metadata.supportsCoordinatesQuantization === true ||
-        metadata.supportsTrueCurve === true;
-
-
-    const supportsPagination =
-        metadata.supportsPagination === true;
-
-
-    // -------------------------------------------------------------------------
-    // GeoJSON support
-    // -------------------------------------------------------------------------
-
-    const supportedQueryFormats =
-        getString(
-            metadata.supportedQueryFormats
-        ) ?? "";
-
-
-    const supportsGeoJSON =
-        supportedQueryFormats
-            .toLowerCase()
-            .includes("geojson");
-
-
-    // -------------------------------------------------------------------------
-    // Actual feature count
-    // -------------------------------------------------------------------------
-
-    const featureCount =
-        await getFeatureCount(
-            endpoint,
-            fetchFunction
+        normalizeCapabilities(
+            metadata
         );
 
 
-    // -------------------------------------------------------------------------
-    // Boundary likelihood
-    // -------------------------------------------------------------------------
-
-    const searchableText = [
-        title,
-        endpoint.serviceName,
-        description
-    ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-
-    const isLikelyBoundaryLayer =
-        isPolygonLayer &&
-        (
-            districtFields.length > 0 ||
-            containsBoundaryKeyword(
-                searchableText
-            )
+    const title =
+        metadata.name ??
+        extractLayerName(
+            layerUrl
         );
 
-
-    // -------------------------------------------------------------------------
-    // Return
-    // -------------------------------------------------------------------------
 
     return {
-
-        url,
+        url: layerUrl,
 
         isArcGIS: true,
 
         serviceType,
 
-        isLayer:
-            endpoint.layerId !== undefined,
+        isLayer: true,
 
         title,
 
         serviceName:
-            endpoint.serviceName,
+            context.serviceName ??
+            extractServiceName(
+                layerUrl
+            ),
 
         layerName:
-            title,
+            metadata.name ??
+            extractLayerName(
+                layerUrl
+            ),
 
-        description,
+        description:
+            metadata.description ??
+            context.serviceDescription,
 
         geometryType,
 
         fields,
 
+        objectIdField:
+            metadata.objectIdField,
+
+        maxRecordCount:
+            metadata.maxRecordCount,
+
+        spatialReference:
+            metadata.spatialReference,
+
+        supportsQuery:
+            capabilities.supportsQuery,
+
+        supportsGeoJSON:
+            capabilities.supportsGeoJSON,
+
+        supportsPagination:
+            capabilities.supportsPagination,
+
+        serviceUrl:
+            context.serviceUrl ??
+            deriveServiceRoot(
+                layerUrl
+            ),
+
+        districtField:
+            districtFields[0],
+
         districtFields,
 
-        nameField,
+        nameField:
+            nameFields[0],
 
-        objectIdField,
-
-        featureCount,
-
-        supportsQuery,
-
-        supportsGeometryQuery,
-
-        supportsPagination,
-
-        supportsGeoJSON,
-
-        isFeatureServer:
-            serviceType === "FeatureServer",
-
-        isMapServer:
-            serviceType === "MapServer",
-
-        isPolygonLayer,
-
-        isLikelyBoundaryLayer
+        nameFields
     };
 }
 
 
-// -----------------------------------------------------------------------------
-// Endpoint
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Layer selection
+// =============================================================================
 
-interface ArcGISEndpoint {
+interface ServiceLayer {
+    id?: number;
 
-    type:
-        | "FeatureServer"
-        | "MapServer";
+    name?: string;
 
-    layerId?: number;
-
-    metadataUrl: string;
-
-    serviceName?: string;
+    url?: string;
 }
 
 
-function parseArcGISEndpoint(
-    inputUrl: string
-): ArcGISEndpoint | null {
+/**
+ * Extract usable layers from ArcGIS service metadata.
+ */
+function getServiceLayers(
+    metadata: ArcGISResponse,
+    serviceUrl: string
+): ServiceLayer[] {
 
-    let url: URL;
+    const layers =
+        Array.isArray(metadata.layers)
+            ? metadata.layers
+            : [];
 
-    try {
 
-        url =
-            new URL(inputUrl);
+    return layers
+        .map(layer => {
 
-    } catch {
+            const id =
+                layer.id;
 
-        return null;
+            const name =
+                layer.name;
+
+
+            let url =
+                layer.url;
+
+
+            /*
+             * Some ArcGIS responses provide an ID but no URL.
+             */
+            if (
+                !url &&
+                id !== undefined
+            ) {
+
+                url =
+                    `${serviceUrl}/${id}`;
+            }
+
+
+            return {
+                id,
+                name,
+                url
+            };
+        })
+        .filter(
+            layer =>
+                Boolean(
+                    layer.url
+                )
+        );
+}
+
+
+/**
+ * Select the layer most likely to be a political boundary.
+ *
+ * We intentionally do not rely solely on names. A polygon layer
+ * with district/ward terminology should beat a generic layer.
+ */
+function selectBestLayer(
+    layers: ServiceLayer[]
+): ServiceLayer {
+
+    let best =
+        layers[0];
+
+    let bestScore =
+        Number.NEGATIVE_INFINITY;
+
+
+    for (const layer of layers) {
+
+        const score =
+            scoreLayer(
+                layer
+            );
+
+
+        if (
+            score >
+            bestScore
+        ) {
+
+            best =
+                layer;
+
+            bestScore =
+                score;
+        }
     }
 
 
-    const match =
-        url.pathname.match(
-            /\/(FeatureServer|MapServer)(?:\/(\d+))?\/?$/i
+    return best;
+}
+
+
+function scoreLayer(
+    layer: ServiceLayer
+): number {
+
+    const name =
+        normalize(
+            layer.name
         );
 
 
-    if (!match) {
-        return null;
+    let score =
+        0;
+
+
+    /*
+     * Political terminology.
+     */
+    if (
+        containsAny(
+            name,
+            [
+                "ward",
+                "wards"
+            ]
+        )
+    ) {
+
+        score += 50;
     }
 
 
-    const type =
-        match[1].toLowerCase() ===
-        "featureserver"
-            ? "FeatureServer"
-            : "MapServer";
+    if (
+        containsAny(
+            name,
+            [
+                "council district",
+                "council districts",
+                "city council"
+            ]
+        )
+    ) {
+
+        score += 60;
+    }
 
 
-    const layerId =
-        match[2] !== undefined
-            ? Number(match[2])
-            : undefined;
+    if (
+        containsAny(
+            name,
+            [
+                "district",
+                "districts"
+            ]
+        )
+    ) {
+
+        score += 35;
+    }
 
 
-    const metadataUrl =
-        removeQueryAndFragment(
-            url
-        );
+    if (
+        containsAny(
+            name,
+            [
+                "boundary",
+                "boundaries"
+            ]
+        )
+    ) {
+
+        score += 30;
+    }
 
 
-    return {
+    /*
+     * Negative thematic signals.
+     */
+    if (
+        containsAny(
+            name,
+            [
+                "transit",
+                "bus",
+                "rail",
+                "park",
+                "parks",
+                "golf",
+                "tree",
+                "groundwater",
+                "housing",
+                "crime",
+                "police",
+                "airport",
+                "road",
+                "roads",
+                "parcel",
+                "parcels"
+            ]
+        )
+    ) {
 
-        type,
+        score -= 50;
+    }
 
-        layerId,
 
-        metadataUrl,
+    return score;
+}
 
-        serviceName:
-            extractServiceName(
-                url.pathname
+
+// =============================================================================
+// Field detection
+// =============================================================================
+
+/**
+ * Detect fields that probably identify a political district.
+ */
+function detectDistrictFields(
+    fields: ArcGISField[]
+): string[] {
+
+    const scored =
+        fields
+            .map(
+                field => ({
+                    field,
+                    score:
+                        scoreDistrictField(
+                            field
+                        )
+                })
             )
-    };
-}
+            .filter(
+                item =>
+                    item.score > 0
+            )
+            .sort(
+                (a, b) =>
+                    b.score -
+                    a.score
+            );
 
 
-// -----------------------------------------------------------------------------
-// Service name
-// -----------------------------------------------------------------------------
-
-function extractServiceName(
-    pathname: string
-): string | undefined {
-
-    const match =
-        pathname.match(
-            /\/rest\/services\/([^/]+)\//i
-        );
-
-
-    if (!match) {
-        return undefined;
-    }
-
-
-    return decodeURIComponent(
-        match[1]
+    return scored.map(
+        item =>
+            item.field.name
     );
 }
 
 
-// -----------------------------------------------------------------------------
-// Fetch metadata
-// -----------------------------------------------------------------------------
+function scoreDistrictField(
+    field: ArcGISField
+): number {
+
+    const name =
+        normalize(
+            field.name
+        );
+
+    const alias =
+        normalize(
+            field.alias
+        );
+
+
+    let score =
+        0;
+
+
+    /*
+     * Strong field names.
+     */
+    if (
+        containsAny(
+            name,
+            [
+                "ward",
+                "wardnum",
+                "wardnumber",
+                "ward_no",
+                "ward_num"
+            ]
+        )
+    ) {
+
+        score += 60;
+    }
+
+
+    if (
+        containsAny(
+            name,
+            [
+                "council_district",
+                "councildistrict",
+                "council district"
+            ]
+        )
+    ) {
+
+        score += 70;
+    }
+
+
+    if (
+        containsAny(
+            name,
+            [
+                "district",
+                "districtid",
+                "district_id",
+                "districtnum",
+                "district_num",
+                "districtnumber",
+                "district_number"
+            ]
+        )
+    ) {
+
+        score += 50;
+    }
+
+
+    /*
+     * Aliases are often more useful than database field names.
+     */
+    if (
+        containsAny(
+            alias,
+            [
+                "ward",
+                "council district",
+                "council",
+                "district"
+            ]
+        )
+    ) {
+
+        score += 30;
+    }
+
+
+    return score;
+}
+
+
+/**
+ * Detect fields that probably contain a human-readable district name.
+ */
+function detectNameFields(
+    fields: ArcGISField[]
+): string[] {
+
+    const scored =
+        fields
+            .map(
+                field => ({
+                    field,
+                    score:
+                        scoreNameField(
+                            field
+                        )
+                })
+            )
+            .filter(
+                item =>
+                    item.score > 0
+            )
+            .sort(
+                (a, b) =>
+                    b.score -
+                    a.score
+            );
+
+
+    return scored.map(
+        item =>
+            item.field.name
+    );
+}
+
+
+function scoreNameField(
+    field: ArcGISField
+): number {
+
+    const name =
+        normalize(
+            field.name
+        );
+
+    const alias =
+        normalize(
+            field.alias
+        );
+
+
+    let score =
+        0;
+
+
+    /*
+     * Very strong naming fields.
+     */
+    if (
+        containsAny(
+            name,
+            [
+                "ward_name",
+                "wardname",
+                "district_name",
+                "districtname",
+                "council_district_name",
+                "councildistrictname"
+            ]
+        )
+    ) {
+
+        score += 70;
+    }
+
+
+    if (
+        containsAny(
+            alias,
+            [
+                "ward name",
+                "district name",
+                "council district name"
+            ]
+        )
+    ) {
+
+        score += 60;
+    }
+
+
+    /*
+     * Generic name fields are useful but weaker.
+     */
+    if (
+        name === "name" ||
+        name.endsWith("_name") ||
+        name.endsWith("name")
+    ) {
+
+        score += 30;
+    }
+
+
+    if (
+        alias === "name" ||
+        alias.endsWith(" name")
+    ) {
+
+        score += 20;
+    }
+
+
+    return score;
+}
+
+
+// =============================================================================
+// ArcGIS metadata
+// =============================================================================
 
 async function fetchArcGISJson(
     url: string,
-    fetchFunction: typeof fetch
-): Promise<Record<string, any>> {
+    fetchImpl: FetchLike = fetch
+): Promise<ArcGISResponse> {
+
+    const separator =
+        url.includes("?")
+            ? "&"
+            : "?";
+
 
     const requestUrl =
-        addJsonParameter(url);
+        `${url}${separator}f=json`;
 
 
     const response =
-        await fetchFunction(
+        await fetchImpl(
             requestUrl,
             {
                 headers: {
-                    "User-Agent":
-                        "us-municipal-districts-generator"
+                    Accept:
+                        "application/json"
                 }
             }
         );
@@ -457,370 +1037,386 @@ async function fetchArcGISJson(
     if (!response.ok) {
 
         throw new Error(
-            `ArcGIS request failed: HTTP ${response.status} ${response.statusText}`
+            [
+                "ArcGIS request failed.",
+                `URL: ${url}`,
+                `Status: ${response.status}`,
+                `Status text: ${response.statusText}`
+            ].join("\n")
         );
     }
 
 
     const json =
-        await response.json() as unknown;
+        await response.json() as ArcGISResponse;
 
 
-    if (
-        typeof json !== "object" ||
-        json === null ||
-        Array.isArray(json)
-    ) {
-
-        throw new Error(
-            "ArcGIS response was not a JSON object."
-        );
-    }
-
-
-    const data =
-        json as Record<string, any>;
-
-
-    if (data.error) {
-
-        throw new Error(
-            `ArcGIS API error: ${
-                data.error.message ??
-                "Unknown error"
-            }`
-        );
-    }
-
-
-    return data;
+    return json;
 }
 
 
-// -----------------------------------------------------------------------------
-// Feature count
-// -----------------------------------------------------------------------------
+// =============================================================================
+// URL handling
+// =============================================================================
 
-async function getFeatureCount(
-    endpoint: ArcGISEndpoint,
-    fetchFunction: typeof fetch
-): Promise<number | undefined> {
+function normalizeUrl(
+    url: string
+): string {
+
+    return url
+        .trim()
+        .replace(
+            /\/+$/,
+            ""
+        );
+}
+
+
+function detectServiceType(
+    url: string
+): ArcGISServiceType {
+
+    const match =
+        url.match(
+            /\/(FeatureServer|MapServer)(?:\/|$)/i
+        );
+
+
+    if (!match) {
+        return "unknown";
+    }
+
+
+    return (
+        match[1].toLowerCase() ===
+        "featureserver"
+    )
+        ? "FeatureServer"
+        : "MapServer";
+}
+
+
+function detectIsLayer(
+    url: string
+): boolean {
 
     /*
-     * A service endpoint such as:
+     * Examples:
      *
-     *   .../FeatureServer
+     * .../FeatureServer
+     * .../FeatureServer/0
      *
-     * does not represent an individual layer.
-     *
-     * We only perform the count request when we have:
-     *
-     *   .../FeatureServer/0
-     *
-     * or:
-     *
-     *   .../MapServer/0
+     * .../MapServer
+     * .../MapServer/35
      */
 
-    if (
-        endpoint.layerId === undefined
-    ) {
-        return undefined;
-    }
-
-
-    const queryUrl =
-        `${endpoint.metadataUrl}/query` +
-        `?where=1%3D1` +
-        `&returnCountOnly=true` +
-        `&f=json`;
-
-
-    try {
-
-        const response =
-            await fetchFunction(
-                queryUrl,
-                {
-                    headers: {
-                        "User-Agent":
-                            "us-municipal-districts-generator"
-                    }
-                }
-            );
-
-
-        if (!response.ok) {
-            return undefined;
-        }
-
-
-        const json =
-            await response.json() as unknown;
-
-
-        if (
-            typeof json !== "object" ||
-            json === null ||
-            Array.isArray(json)
-        ) {
-            return undefined;
-        }
-
-
-        const data =
-            json as Record<string, unknown>;
-
-
-        if (
-            typeof data.count === "number"
-        ) {
-            return data.count;
-        }
-
-    } catch {
-
-        /*
-         * Feature count is an enhancement.
-         *
-         * If an ArcGIS server does not allow the
-         * count request, discovery should continue.
-         */
-
-    }
-
-
-    return undefined;
-}
-
-
-// -----------------------------------------------------------------------------
-// URL helpers
-// -----------------------------------------------------------------------------
-
-function normalizeArcGISUrl(
-    inputUrl: string
-): string {
-
-    const url =
-        new URL(inputUrl);
-
-
-    url.searchParams.delete(
-        "token"
-    );
-
-    url.searchParams.delete(
-        "f"
-    );
-
-    url.searchParams.delete(
-        "popup"
-    );
-
-    url.searchParams.delete(
-        "appid"
-    );
-
-
-    return removeTrailingSlash(
-        url.toString()
+    return Boolean(
+        url.match(
+            /\/(?:FeatureServer|MapServer)\/\d+$/i
+        )
     );
 }
 
 
-function addJsonParameter(
-    inputUrl: string
+function deriveServiceRoot(
+    url: string
 ): string {
 
-    const url =
-        new URL(inputUrl);
-
-
-    url.searchParams.set(
-        "f",
-        "json"
-    );
-
-
-    return url.toString();
-}
-
-
-function removeQueryAndFragment(
-    url: URL
-): string {
-
-    const copy =
-        new URL(
-            url.toString()
+    const match =
+        url.match(
+            /^(.*\/(?:FeatureServer|MapServer))(?:\/\d+)?$/i
         );
 
 
-    copy.search = "";
-
-    copy.hash = "";
-
-
-    return removeTrailingSlash(
-        copy.toString()
+    return (
+        match?.[1] ??
+        url
     );
 }
 
 
-function removeTrailingSlash(
-    value: string
-): string {
-
-    return value.replace(
-        /\/+$/,
-        ""
-    );
-}
-
-
-// -----------------------------------------------------------------------------
-// Field helpers
-// -----------------------------------------------------------------------------
-
-function getString(
-    value: unknown
+function extractServiceName(
+    url: string
 ): string | undefined {
 
-    if (
-        typeof value !== "string"
-    ) {
+    const serviceRoot =
+        deriveServiceRoot(
+            url
+        );
+
+
+    const match =
+        serviceRoot.match(
+            /\/([^/]+)\/(?:FeatureServer|MapServer)$/i
+        );
+
+
+    return (
+        match?.[1]
+    );
+}
+
+
+function extractLayerName(
+    url: string
+): string | undefined {
+
+    const match =
+        url.match(
+            /\/(?:FeatureServer|MapServer)\/(\d+)$/i
+        );
+
+
+    if (!match) {
         return undefined;
     }
 
 
-    const result =
-        value.trim();
-
-
-    return result.length > 0
-        ? result
-        : undefined;
+    return `Layer ${match[1]}`;
 }
 
 
-function findField(
-    actualFields: string[],
-    possibleFields: readonly string[]
-): string | undefined {
+// =============================================================================
+// Geometry
+// =============================================================================
 
-    for (
-        const possible
-            of possibleFields
-    ) {
+function normalizeGeometryType(
+    value?: string
+): ArcGISGeometryType | undefined {
 
-        const exact =
-            actualFields.find(
-                field =>
-                    field === possible
-            );
-
-
-        if (exact) {
-            return exact;
-        }
+    if (!value) {
+        return undefined;
     }
 
-
-    for (
-        const possible
-            of possibleFields
-    ) {
-
-        const lower =
-            possible.toLowerCase();
-
-
-        const match =
-            actualFields.find(
-                field =>
-                    field.toLowerCase() ===
-                    lower
-            );
-
-
-        if (match) {
-            return match;
-        }
-    }
-
-
-    return undefined;
-}
-
-
-function isDistrictField(
-    field: string
-): boolean {
 
     const normalized =
-        field
-            .toLowerCase()
-            .replace(
-                /[^a-z0-9]/g,
-                ""
-            );
+        value
+            .trim()
+            .toLowerCase();
 
 
-    return [
-        "district",
-        "districtid",
-        "districtno",
-        "districtnum",
-        "districtnumber",
+    switch (normalized) {
 
-        "ward",
-        "wardid",
-        "wardno",
-        "wardnum",
-        "wardnumber",
+        case "esrigeometrypoint":
+            return "esriGeometryPoint";
 
-        "councildistrict",
-        "councildistrictid",
-        "councildistrictno",
-        "councildistrictnum",
+        case "esrigeometrymultipoint":
+            return "esriGeometryMultipoint";
 
-        "aldermanicdistrict"
-    ].includes(
-        normalized
-    );
+        case "esrigeometrypolyline":
+            return "esriGeometryPolyline";
+
+        case "esrigeometrypolygon":
+            return "esriGeometryPolygon";
+
+        case "esrigeometryenvelope":
+            return "esriGeometryEnvelope";
+
+        case "point":
+            return "point";
+
+        case "multipoint":
+            return "multipoint";
+
+        case "polyline":
+            return "polyline";
+
+        case "polygon":
+            return "polygon";
+
+        default:
+            return "unknown";
+    }
 }
 
 
-// -----------------------------------------------------------------------------
-// Boundary keywords
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Capabilities
+// =============================================================================
 
-function containsBoundaryKeyword(
-    text: string
+function normalizeCapabilities(
+    metadata: ArcGISResponse
+): {
+    supportsQuery?: boolean;
+    supportsGeoJSON?: boolean;
+    supportsPagination?: boolean;
+} {
+
+    const capabilities =
+        normalize(
+            metadata.capabilities
+        );
+
+
+    const supportsQuery =
+        metadata.supportsQuery ??
+        capabilities.includes(
+            "query"
+        );
+
+
+    const supportsPagination =
+        metadata.supportsPagination ??
+        metadata
+            .advancedQueryCapabilities
+            ?.supportsPagination;
+
+
+    /*
+     * ArcGIS FeatureServer layers frequently expose GeoJSON through
+     * supportedQueryFormats in newer APIs. We don't require it to
+     * exist because it isn't present in every ArcGIS deployment.
+     */
+
+    function supportsFormat(
+        supportedQueryFormats: unknown,
+        format: string
+    ): boolean {
+
+        if (
+            typeof supportedQueryFormats !== "string"
+        ) {
+            return false;
+        }
+
+        return supportedQueryFormats
+            .split(",")
+            .map(value => value.trim().toLowerCase())
+            .includes(format.toLowerCase());
+    }
+
+    const supportsGeoJSON =
+        supportsFormat(
+            metadata.supportedQueryFormats,
+            "geojson"
+        );
+
+
+    return {
+        supportsQuery,
+
+        supportsGeoJSON,
+
+        supportsPagination
+    };
+}
+
+
+// =============================================================================
+// Fields
+// =============================================================================
+
+function normalizeFields(
+    fields:
+        | ArcGISResponse["fields"]
+        | undefined
+): ArcGISField[] {
+
+    if (!Array.isArray(fields)) {
+        return [];
+    }
+
+
+    return fields
+        .filter(
+            field =>
+                typeof field.name ===
+                "string"
+        )
+        .map(
+            field => ({
+                name:
+                    field.name!.trim(),
+
+                ...(field.alias
+                    ? {
+                        alias:
+                            field.alias.trim()
+                    }
+                    : {}),
+
+                ...(field.type
+                    ? {
+                        type:
+                            field.type
+                    }
+                    : {}),
+
+                ...(typeof field.length ===
+                    "number"
+                    ? {
+                        length:
+                            field.length
+                    }
+                    : {}),
+
+                ...(field.domain !==
+                    undefined
+                    ? {
+                        domain:
+                            field.domain
+                    }
+                    : {})
+            })
+        );
+}
+
+
+// =============================================================================
+// Unknown inspection
+// =============================================================================
+
+function createUnknownInspection(
+    url: string
+): ArcGISInspection {
+
+    return {
+        url,
+
+        isArcGIS: false,
+
+        serviceType: "unknown",
+
+        isLayer: false,
+
+        districtFields: [],
+
+        nameFields: []
+    };
+}
+
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+function normalize(
+    value?: string
+): string {
+
+    return (value ?? "")
+        .toLowerCase()
+        .replace(
+            /[_-]+/g,
+            " "
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+}
+
+
+function containsAny(
+    value: string,
+    terms: string[]
 ): boolean {
 
-    const keywords = [
-
-        "ward",
-        "wards",
-
-        "council district",
-        "council districts",
-
-        "city council district",
-        "city council districts",
-
-        "aldermanic district",
-        "aldermanic districts",
-
-        "municipal district",
-        "municipal districts"
-    ];
-
-
-    return keywords.some(
-        keyword =>
-            text.includes(keyword)
+    return terms.some(
+        term =>
+            value.includes(
+                normalize(term)
+            )
     );
 }

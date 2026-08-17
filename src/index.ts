@@ -1,25 +1,43 @@
+// =============================================================================
+// Registry
+// =============================================================================
+
 export {
+    loadRegistry,
+    findRegistryEntry,
+    findRegistryEntries
+} from "./registry.js";
+
+export type {
+    MunicipalDistrictRegistry,
+    MunicipalDistrictRegistryEntry,
+    MunicipalDistrictSource
+} from "./types.js";
+
+
+// =============================================================================
+// Lookup
+// =============================================================================
+
+export {
+    searchRegistry,
+    searchMunicipalDistricts,
+    findMunicipality,
+    findMunicipalDistrictSources,
+    findBoundarySources,
     lookupMunicipalDistrict
 } from "./lookup.js";
 
-export {
-    loadRegistry
-} from "./registry.js";
+
+// =============================================================================
+// Public types
+// =============================================================================
 
 export type {
     BoundaryType,
-    SourceType,
-    GISFormat,
-    RegistryStatus,
-    FieldMapping,
-    MunicipalDistrictSource,
-    MunicipalDistrictRegistryEntry,
-    MunicipalDistrictRegistry
-} from "./registry.js";
-
-export type {
     Coordinates,
     MunicipalDistrict,
     MunicipalDistrictLookupOptions,
-    MunicipalDistrictLookupResult
+    MunicipalDistrictLookupResult,
+    MunicipalDistrictFieldMapping
 } from "./types.js";
