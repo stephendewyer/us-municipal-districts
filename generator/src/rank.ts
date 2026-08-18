@@ -18,7 +18,11 @@ import type {
  * 2. inspected
  * 3. classified
  *
- * Rejected candidates are excluded automatically.
+ * Candidates explicitly rejected by classification are excluded.
+ *
+ * Classification is treated as evidence rather than a hard requirement:
+ * a candidate does not need to be classified as a political boundary in
+ * order to be considered by the ranking system.
  */
 export function rankCandidates(
     candidates: InspectedCandidate[]
@@ -27,9 +31,6 @@ export function rankCandidates(
     return candidates
         .filter(candidate =>
             !candidate.classification.shouldReject
-        )
-        .filter(candidate =>
-            candidate.classification.isPoliticalBoundary
         )
         .map(candidate => {
 
@@ -116,7 +117,7 @@ function calculateScore(
         score += 25;
 
         reasons.push(
-            "polygon boundary layer"
+            "boundary layer"
         );
     }
 
@@ -254,7 +255,7 @@ function calculateScore(
 
 
     // -------------------------------------------------------------------------
-    // Historical datasets
+    // Title signals
     // -------------------------------------------------------------------------
 
     const title =
@@ -263,6 +264,161 @@ function calculateScore(
             candidate.candidate.title ??
             ""
         );
+
+
+    if (
+        containsAny(
+            title,
+            [
+                "ward",
+                "wards"
+            ]
+        )
+    ) {
+
+        score += 30;
+
+        reasons.push(
+            "title contains ward"
+        );
+    }
+
+
+    if (
+        containsAny(
+            title,
+            [
+                "council district",
+                "council districts",
+                "city council"
+            ]
+        )
+    ) {
+
+        score += 30;
+
+        reasons.push(
+            "title contains council district terminology"
+        );
+    }
+
+
+    if (
+        containsAny(
+            title,
+            [
+                "aldermanic district",
+                "aldermanic districts"
+            ]
+        )
+    ) {
+
+        score += 30;
+
+        reasons.push(
+            "title contains aldermanic district terminology"
+        );
+    }
+
+
+    if (
+        containsAny(
+            title,
+            [
+                "municipal district",
+                "municipal districts"
+            ]
+        )
+    ) {
+
+        score += 25;
+
+        reasons.push(
+            "title contains municipal district terminology"
+        );
+    }
+
+
+    if (
+        containsAny(
+            title,
+            [
+                "district boundary",
+                "district boundaries",
+                "ward boundary",
+                "ward boundaries"
+            ]
+        )
+    ) {
+
+        score += 25;
+
+        reasons.push(
+            "title contains boundary terminology"
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Strong field evidence
+    // -------------------------------------------------------------------------
+
+    const districtFields =
+        inspection.districtFields
+            .map(normalizeText);
+
+
+    const nameFields =
+        inspection.nameFields
+            .map(normalizeText);
+
+
+    if (
+        containsAny(
+            districtFields.join(" "),
+            [
+                "ward",
+                "ward number",
+                "district",
+                "district number",
+                "council district",
+                "council district number"
+            ]
+        )
+    ) {
+
+        score += 15;
+
+        reasons.push(
+            "field names strongly indicate political district"
+        );
+    }
+
+
+    if (
+        containsAny(
+            nameFields.join(" "),
+            [
+                "ward name",
+                "district name",
+                "council district name",
+                "ward",
+                "district"
+            ]
+        )
+    ) {
+
+        score += 10;
+
+        reasons.push(
+            "name field appears to identify district"
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Historical datasets
+    // -------------------------------------------------------------------------
 
     if (
         isHistorical(title)
@@ -274,6 +430,84 @@ function calculateScore(
             "appears to be historical"
         );
     }
+
+
+    // -------------------------------------------------------------------------
+    // Thematic/non-boundary datasets
+    // -------------------------------------------------------------------------
+
+    if (
+        classification.isThematicDataset
+    ) {
+
+        score -= 40;
+
+        reasons.push(
+            "thematic dataset"
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Census datasets
+    // -------------------------------------------------------------------------
+
+    if (
+        classification.isCensusDataset
+    ) {
+
+        score -= 50;
+
+        reasons.push(
+            "Census dataset"
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Housing datasets
+    // -------------------------------------------------------------------------
+
+    if (
+        classification.isHousingDataset
+    ) {
+
+        score -= 40;
+
+        reasons.push(
+            "housing dataset"
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Parcel datasets
+    // -------------------------------------------------------------------------
+
+    if (
+        classification.isParcelDataset
+    ) {
+
+        score -= 40;
+
+        reasons.push(
+            "parcel dataset"
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Clamp score
+    // -------------------------------------------------------------------------
+
+    score =
+        Math.max(
+            0,
+            Math.min(
+                300,
+                score
+            )
+        );
 
 
     return {
@@ -295,9 +529,13 @@ function isPolygonGeometry(
         return false;
     }
 
+    const normalized =
+        geometry.toLowerCase();
+
     return (
-        geometry === "polygon" ||
-        geometry === "esriGeometryPolygon"
+        normalized === "polygon" ||
+        normalized === "esrigeometrypolygon" ||
+        normalized.includes("polygon")
     );
 }
 
@@ -310,8 +548,13 @@ function isHistorical(
     text: string
 ): boolean {
 
-    if (
-        containsAny(text, [
+    /*
+     * Explicit historical terminology is much stronger evidence
+     * than the presence of a year in a dataset title.
+     */
+    return containsAny(
+        text,
+        [
             "historical",
             "historic",
             "old ward",
@@ -321,43 +564,15 @@ function isHistorical(
             "previous ward",
             "previous wards",
             "past ward",
-            "past wards"
-        ])
-    ) {
-        return true;
-    }
-
-
-    /*
-     * Don't automatically reject every layer containing a year.
-     *
-     * A current redistricting dataset can legitimately contain
-     * a recent year.
-     */
-    const years =
-        text.match(
-            /\b(?:19|20)\d{2}\b/g
-        );
-
-    if (!years) {
-        return false;
-    }
-
-
-    const currentYear =
-        new Date().getFullYear();
-
-
-    return years.some(year => {
-
-        const numericYear =
-            Number(year);
-
-        return (
-            numericYear <
-            currentYear - 4
-        );
-    });
+            "past wards",
+            "former council district",
+            "former council districts",
+            "previous council district",
+            "previous council districts",
+            "old council district",
+            "old council districts"
+        ]
+    );
 }
 
 
@@ -382,7 +597,10 @@ function containsAny(
     terms: string[]
 ): boolean {
 
-    return terms.some(term =>
-        value.includes(term)
+    return terms.some(
+        term =>
+            value.includes(
+                normalizeText(term)
+            )
     );
 }

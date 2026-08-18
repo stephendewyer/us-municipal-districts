@@ -1,6 +1,3 @@
-// generator/src/types.ts
-
-
 // =============================================================================
 // Basic geographic types
 // =============================================================================
@@ -736,6 +733,11 @@ export interface DiscoveryResult {
      * Candidates that survived classification.
      */
     validCandidates: InspectedCandidate[];
+
+    /**
+     * Valid candidates ranked from strongest to weakest.
+     */
+    rankedCandidates: CandidateScore[];
 
     /**
      * Candidates rejected during classification.

@@ -3,6 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+    rankCandidates
+} from "./rank.js";
+
+import {
     loadCensusPlaces
 } from "./censusPlaces.js";
 
@@ -11,7 +15,8 @@ import {
 } from "./inspectArcGIS.js";
 
 import {
-    classifyCandidate
+    classifyCandidate,
+    getClassificationReasons
 } from "./classify.js";
 
 import type {
@@ -56,54 +61,6 @@ const OUTPUT_DIR =
 // Public API
 // =============================================================================
 
-function filterPlaces(
-    places: CensusPlace[],
-    options: GeneratorOptions
-): CensusPlace[] {
-
-    let filtered =
-        places;
-
-    if (options.placeFips) {
-
-        filtered =
-            filtered.filter(
-                place =>
-                    place.placeFips ===
-                    options.placeFips
-            );
-    }
-
-    if (options.state) {
-
-        const state =
-            options.state.toUpperCase();
-
-        filtered =
-            filtered.filter(
-                place =>
-                    place.state.toUpperCase() ===
-                    state
-            );
-    }
-
-    if (options.city) {
-
-        const city =
-            options.city.trim().toLowerCase();
-
-        filtered =
-            filtered.filter(
-                place =>
-                    place.city
-                        .toLowerCase() ===
-                    city
-            );
-    }
-
-    return filtered;
-}
-
 export async function discoverArcGIS(
     options: GeneratorOptions = {}
 ): Promise<void> {
@@ -147,16 +104,103 @@ export async function discoverArcGIS(
         try {
 
             const result =
-                await discoverForPlace(place);
+                await discoverForPlace(
+                    place,
+                    options
+                );
 
-            writeDiscoveryResult(result);
+            // -----------------------------------------------------------------
+            // Ranking summary
+            // -----------------------------------------------------------------
+
+            console.log(
+                `  Ranked ${result.rankedCandidates.length} valid candidates.`
+            );
+
+            for (
+                const ranked of
+                result.rankedCandidates.slice(0, 5)
+            ) {
+
+                const title =
+                    ranked.candidate.inspection.title ??
+                    ranked.candidate.candidate.title ??
+                    "Untitled";
+
+                console.log(
+                    `    ${ranked.score} — ${title}`
+                );
+
+                if (options.verbose) {
+
+                    for (
+                        const reason of ranked.reasons
+                    ) {
+
+                        console.log(
+                            `        + ${reason}`
+                        );
+                    }
+                }
+            }
+
+            // -----------------------------------------------------------------
+            // Rejection summary
+            // -----------------------------------------------------------------
+
+            if (options.verbose) {
+
+                console.log(
+                    `  Rejected ${result.rejectedCandidates.length} candidates.`
+                );
+
+                for (
+                    const rejected of
+                    result.rejectedCandidates.slice(0, 10)
+                ) {
+
+                    const title =
+                        rejected.inspection.title ??
+                        rejected.candidate.title ??
+                        "Untitled";
+
+                    console.log(
+                        `    REJECTED — ${title}`
+                    );
+
+                    for (
+                        const reason of
+                        getClassificationReasons(
+                            rejected.classification
+                        )
+                    ) {
+
+                        console.log(
+                            `        ${reason}`
+                        );
+                    }
+                }
+            }
+
+            // -----------------------------------------------------------------
+            // Write result
+            // -----------------------------------------------------------------
+
+            if (
+                options.writeDiscovery !== false
+            ) {
+
+                writeDiscoveryResult(
+                    result,
+                    options
+                );
+            }
 
             processed++;
 
             console.log(
                 `[${processed}/${places.length}] ` +
-                `${place.city}, ${place.state} ` +
-                `(${result.candidates.length} candidates)`
+                `${place.city}, ${place.state}`
             );
 
         } catch (error) {
@@ -175,15 +219,73 @@ export async function discoverArcGIS(
 
 
 // =============================================================================
+// Filter Census places
+// =============================================================================
+
+function filterPlaces(
+    places: CensusPlace[],
+    options: GeneratorOptions
+): CensusPlace[] {
+
+    let filtered =
+        places;
+
+    if (options.placeFips) {
+
+        filtered =
+            filtered.filter(
+                place =>
+                    place.placeFips ===
+                    options.placeFips
+            );
+    }
+
+    if (options.state) {
+
+        const state =
+            options.state.toUpperCase();
+
+        filtered =
+            filtered.filter(
+                place =>
+                    place.state.toUpperCase() ===
+                    state
+            );
+    }
+
+    if (options.city) {
+
+        const city =
+            options.city
+                .trim()
+                .toLowerCase();
+
+        filtered =
+            filtered.filter(
+                place =>
+                    place.city
+                        .toLowerCase() ===
+                    city
+            );
+    }
+
+    return filtered;
+}
+
+
+// =============================================================================
 // Discover a single municipality
 // =============================================================================
 
 async function discoverForPlace(
-    place: CensusPlace
+    place: CensusPlace,
+    options: GeneratorOptions = {}
 ): Promise<DiscoveryResult> {
 
     const candidates =
-        await discoverCandidates(place);
+        await discoverCandidates(
+            place
+        );
 
     const inspectedCandidates:
         InspectedCandidate[] = [];
@@ -193,6 +295,10 @@ async function discoverForPlace(
 
     const validCandidates:
         InspectedCandidate[] = [];
+
+    // -------------------------------------------------------------------------
+    // Inspect and classify every candidate
+    // -------------------------------------------------------------------------
 
     for (const candidate of candidates) {
 
@@ -216,17 +322,104 @@ async function discoverForPlace(
                     inspection
                 );
 
-            const inspected: InspectedCandidate = {
-                candidate,
-                inspection,
-                classification
-            };
+            const inspected:
+                InspectedCandidate = {
+                    candidate,
+                    inspection,
+                    classification
+                };
 
             inspectedCandidates.push(
                 inspected
             );
 
-            if (classification.shouldReject) {
+            // -----------------------------------------------------------------
+            // Optional verbose inspection output
+            // -----------------------------------------------------------------
+
+            if (options.verbose) {
+
+                const title =
+                    inspection.title ??
+                    candidate.title ??
+                    "Untitled";
+
+                console.log(
+                    `\n  Inspected: ${title}`
+                );
+
+                console.log(
+                    `    URL: ${candidate.candidateUrl}`
+                );
+
+                console.log(
+                    `    Service: ${inspection.serviceType}`
+                );
+
+                console.log(
+                    `    Layer: ${inspection.isLayer}`
+                );
+
+                console.log(
+                    `    Geometry: ${
+                        inspection.geometryType ??
+                        "unknown"
+                    }`
+                );
+
+                console.log(
+                    `    District fields: ${
+                        inspection.districtFields.join(", ") ||
+                        "(none)"
+                    }`
+                );
+
+                console.log(
+                    `    Name fields: ${
+                        inspection.nameFields.join(", ") ||
+                        "(none)"
+                    }`
+                );
+
+                console.log(
+                    `    Political boundary: ${
+                        classification.isPoliticalBoundary
+                    }`
+                );
+
+                console.log(
+                    `    Boundary layer: ${
+                        classification.isBoundaryLayer
+                    }`
+                );
+
+                console.log(
+                    `    District type: ${
+                        classification.districtType ??
+                        "unknown"
+                    }`
+                );
+
+                console.log(
+                    `    Official source: ${
+                        classification.officialMunicipalSource
+                    }`
+                );
+
+                console.log(
+                    `    Rejected: ${
+                        classification.shouldReject
+                    }`
+                );
+            }
+
+            // -----------------------------------------------------------------
+            // Classification result
+            // -----------------------------------------------------------------
+
+            if (
+                classification.shouldReject
+            ) {
 
                 rejectedCandidates.push(
                     inspected
@@ -246,7 +439,20 @@ async function discoverForPlace(
                 error
             );
         }
+
+        await delay(
+            REQUEST_DELAY_MS
+        );
     }
+
+    // -------------------------------------------------------------------------
+    // Rank candidates
+    // -------------------------------------------------------------------------
+
+    const rankedCandidates =
+        rankCandidates(
+            validCandidates
+        );
 
     return {
         place,
@@ -256,6 +462,8 @@ async function discoverForPlace(
         inspectedCandidates,
 
         validCandidates,
+
+        rankedCandidates,
 
         rejectedCandidates,
 
@@ -273,10 +481,15 @@ async function discoverCandidates(
 ): Promise<DiscoveryCandidate[]> {
 
     const queries =
-        createSearchQueries(place);
+        createSearchQueries(
+            place
+        );
 
     const candidates =
-        new Map<string, DiscoveryCandidate>();
+        new Map<
+            string,
+            DiscoveryCandidate
+        >();
 
     for (const query of queries) {
 
@@ -307,18 +520,25 @@ async function discoverCandidates(
                         candidateUrl
                     );
 
-                if (candidates.has(normalizedUrl)) {
+                if (
+                    candidates.has(
+                        normalizedUrl
+                    )
+                ) {
                     continue;
                 }
 
                 candidates.set(
                     normalizedUrl,
                     {
-                        placeFips: place.placeFips,
+                        placeFips:
+                            place.placeFips,
 
-                        city: place.city,
+                        city:
+                            place.city,
 
-                        state: place.state,
+                        state:
+                            place.state,
 
                         candidateUrl:
                             normalizedUrl,
@@ -326,15 +546,19 @@ async function discoverCandidates(
                         title:
                             result.title,
 
-                        score: 0,
+                        score:
+                            0,
 
-                        requiresReview: true,
+                        requiresReview:
+                            true,
 
                         reasons: [],
 
-                        source: "arcgis-online",
+                        source:
+                            "arcgis-online",
 
-                        searchQuery: query
+                        searchQuery:
+                            query
                     }
                 );
             }
@@ -398,16 +622,19 @@ async function searchArcGISOnline(
 
     const params =
         new URLSearchParams({
-            q: query,
+            q:
+                query,
 
             num:
                 String(
                     MAX_RESULTS_PER_QUERY
                 ),
 
-            start: "1",
+            start:
+                "1",
 
-            f: "json"
+            f:
+                "json"
         });
 
     const response =
@@ -425,7 +652,10 @@ async function searchArcGISOnline(
     const data =
         await response.json() as ArcGISSearchResponse;
 
-    return data.results ?? [];
+    return (
+        data.results ??
+        []
+    );
 }
 
 
@@ -470,21 +700,28 @@ function extractArcGISUrl(
         result.url.trim();
 
     if (
-        !url.toLowerCase().includes(
-            "/rest/services/"
-        )
+        !url
+            .toLowerCase()
+            .includes(
+                "/rest/services/"
+            )
     ) {
+
         return undefined;
     }
 
+    const lower =
+        url.toLowerCase();
+
     if (
-        !url.toLowerCase().includes(
+        !lower.includes(
             "featureserver"
         ) &&
-        !url.toLowerCase().includes(
+        !lower.includes(
             "mapserver"
         )
     ) {
+
         return undefined;
     }
 
@@ -501,7 +738,10 @@ function normalizeUrl(
 ): string {
 
     return url
-        .replace(/\/+$/, "")
+        .replace(
+            /\/+$/,
+            ""
+        )
         .replace(
             /\?[^/]*$/,
             ""
@@ -514,15 +754,27 @@ function normalizeUrl(
 // =============================================================================
 
 function writeDiscoveryResult(
-    result: DiscoveryResult
+    result: DiscoveryResult,
+    options: GeneratorOptions = {}
 ): void {
 
     const filename =
         `${result.place.placeFips}.json`;
 
+    const outputDirectory =
+        options.outputDir
+            ? path.resolve(
+                options.outputDir
+            )
+            : OUTPUT_DIR;
+
+    ensureDirectory(
+        outputDirectory
+    );
+
     const outputPath =
         path.join(
-            OUTPUT_DIR,
+            outputDirectory,
             filename
         );
 
@@ -544,8 +796,18 @@ function writeDiscoveryResult(
 
 function ensureOutputDirectory(): void {
 
+    ensureDirectory(
+        OUTPUT_DIR
+    );
+}
+
+
+function ensureDirectory(
+    directory: string
+): void {
+
     fs.mkdirSync(
-        OUTPUT_DIR,
+        directory,
         {
             recursive: true
         }

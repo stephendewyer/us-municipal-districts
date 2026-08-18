@@ -1,5 +1,3 @@
-// generator/src/classify.ts
-
 import type {
     ArcGISInspection,
     CandidateClassification,
@@ -8,9 +6,9 @@ import type {
 } from "./types.js";
 
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Keyword groups
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 const THEMATIC_TERMS = [
     "housing",
@@ -42,8 +40,22 @@ const THEMATIC_TERMS = [
     "business",
     "impact fee",
     "project",
-    "projects"
+    "projects",
+    "transit",
+    "route",
+    "routes",
+    "stop",
+    "stops",
+    "maintenance",
+    "recreation",
+    "playground",
+    "playgrounds",
+    "aquatics",
+    "golf course",
+    "golf courses",
+    "connectivity"
 ];
+
 
 const CENSUS_TERMS = [
     "census",
@@ -55,6 +67,7 @@ const CENSUS_TERMS = [
     "zcta"
 ];
 
+
 const PARCEL_TERMS = [
     "parcel",
     "parcels",
@@ -63,8 +76,10 @@ const PARCEL_TERMS = [
     "lot",
     "lots",
     "land split",
-    "land splits"
+    "land splits",
+    "zoning"
 ];
+
 
 const HOUSING_TERMS = [
     "housing",
@@ -74,18 +89,34 @@ const HOUSING_TERMS = [
     "low income housing"
 ];
 
+
 const POLITICAL_TERMS = [
     "ward",
     "wards",
+    "ward boundary",
+    "ward boundaries",
+
     "council district",
     "council districts",
+    "council district boundary",
+    "council district boundaries",
+
     "city council",
+    "city council district",
+    "city council districts",
+
     "municipal district",
     "municipal districts",
+    "municipal district boundary",
+    "municipal district boundaries",
+
     "aldermanic",
     "aldermanic district",
-    "aldermanic districts"
+    "aldermanic districts",
+    "aldermanic district boundary",
+    "aldermanic district boundaries"
 ];
+
 
 const BOUNDARY_TERMS = [
     "boundary",
@@ -96,6 +127,7 @@ const BOUNDARY_TERMS = [
     "wards",
     "council"
 ];
+
 
 const OFFICIAL_TERMS = [
     "city of",
@@ -110,11 +142,12 @@ const OFFICIAL_TERMS = [
 ];
 
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Helpers
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 function normalize(value?: string): string {
+
     return (value ?? "")
         .toLowerCase()
         .replace(/[_-]+/g, " ")
@@ -127,6 +160,7 @@ function searchableText(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection
 ): string {
+
     return normalize([
         candidate.title,
         candidate.candidateUrl,
@@ -144,7 +178,11 @@ function containsAny(
     text: string,
     terms: string[]
 ): string | undefined {
-    return terms.find(term => text.includes(term));
+
+    return terms.find(
+        term =>
+            text.includes(term)
+    );
 }
 
 
@@ -152,13 +190,64 @@ function containsAnyAll(
     text: string,
     terms: string[]
 ): string[] {
-    return terms.filter(term => text.includes(term));
+
+    return terms.filter(
+        term =>
+            text.includes(term)
+    );
 }
 
 
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Field evidence
+// =============================================================================
+
+function getFieldText(
+    inspection: ArcGISInspection
+): string {
+
+    return normalize([
+        ...(inspection.districtFields ?? []),
+        ...(inspection.nameFields ?? []),
+        ...(inspection.fields ?? []).map(
+            field =>
+                `${field.name} ${field.alias ?? ""}`
+        )
+    ].join(" "));
+}
+
+
+function hasStrongPoliticalField(
+    inspection: ArcGISInspection
+): boolean {
+
+    const fields = [
+        ...(inspection.districtFields ?? []),
+        ...(inspection.fields ?? []).map(
+            field =>
+                `${field.name} ${field.alias ?? ""}`
+        )
+    ];
+
+    return fields.some(field => {
+
+        const value =
+            normalize(field);
+
+        return (
+            value.includes("ward") ||
+            value.includes("council district") ||
+            value.includes("council_district") ||
+            value.includes("aldermanic") ||
+            value.includes("municipal district")
+        );
+    });
+}
+
+
+// =============================================================================
 // District type
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 export function detectDistrictType(
     text: string
@@ -196,45 +285,120 @@ export function detectDistrictType(
 }
 
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Classification
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 export function classifyCandidate(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection
 ): CandidateClassification {
 
-    const text = searchableText(candidate, inspection);
+    const text =
+        searchableText(
+            candidate,
+            inspection
+        );
 
-    const thematicMatches = containsAnyAll(text, THEMATIC_TERMS);
-    const censusMatches = containsAnyAll(text, CENSUS_TERMS);
-    const parcelMatches = containsAnyAll(text, PARCEL_TERMS);
-    const housingMatches = containsAnyAll(text, HOUSING_TERMS);
-    const politicalMatches = containsAnyAll(text, POLITICAL_TERMS);
-    const boundaryMatches = containsAnyAll(text, BOUNDARY_TERMS);
-    const officialMatches = containsAnyAll(text, OFFICIAL_TERMS);
+    const fieldText =
+        getFieldText(
+            inspection
+        );
 
-    const districtType = detectDistrictType(text);
+    const thematicMatches =
+        containsAnyAll(
+            text,
+            THEMATIC_TERMS
+        );
 
-    // -------------------------------------------------------------------------
+    const censusMatches =
+        containsAnyAll(
+            text,
+            CENSUS_TERMS
+        );
+
+    const parcelMatches =
+        containsAnyAll(
+            text,
+            PARCEL_TERMS
+        );
+
+    const housingMatches =
+        containsAnyAll(
+            text,
+            HOUSING_TERMS
+        );
+
+    const politicalMatches =
+        containsAnyAll(
+            text,
+            POLITICAL_TERMS
+        );
+
+    const boundaryMatches =
+        containsAnyAll(
+            text,
+            BOUNDARY_TERMS
+        );
+
+    const officialMatches =
+        containsAnyAll(
+            text,
+            OFFICIAL_TERMS
+        );
+
+    /*
+     * IMPORTANT:
+     *
+     * Do not use field names as the primary source of political
+     * classification.
+     *
+     * A WARD field can simply mean that a thematic dataset contains
+     * the ward associated with each feature.
+     */
+
+    const districtType =
+        detectDistrictType(
+            text
+        );
+
+
+    // =========================================================================
     // Geometry
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     const isPolygon =
-        inspection.geometryType === "esriGeometryPolygon" ||
-        inspection.geometryType === "polygon";
+        inspection.geometryType ===
+            "esriGeometryPolygon" ||
+        inspection.geometryType ===
+            "polygon";
+
+
+    /*
+     * A boundary layer requires BOTH:
+     *
+     *   1. polygon geometry
+     *   2. textual evidence that the layer represents a boundary
+     *
+     * Merely having a DISTRICT or WARD field is not enough.
+     */
+
+    const textualBoundaryEvidence =
+        politicalMatches.length > 0 ||
+        (
+            boundaryMatches.length > 0 &&
+            districtType !== undefined
+        );
+
 
     const isBoundaryLayer =
         isPolygon &&
-        (
-            boundaryMatches.length > 0 ||
-            politicalMatches.length > 0
-        );
+        textualBoundaryEvidence;
 
-    // -------------------------------------------------------------------------
+
+    // =========================================================================
     // Dataset rejection
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     const isCensusDataset =
         censusMatches.length > 0;
@@ -248,18 +412,15 @@ export function classifyCandidate(
     const isThematicDataset =
         thematicMatches.length > 0;
 
+
     /*
-     * A layer can contain the word "ward" and still not actually be
-     * a ward boundary layer.
+     * Thematic datasets should normally be rejected.
      *
-     * For example:
-     *
-     *   "Ward 3 Census Block Groups"
-     *   "Ward Housing"
-     *   "Section 8 Housing per Ward"
-     *
-     * Those should not become canonical ward sources.
+     * The exception is a genuine political boundary layer whose
+     * metadata explicitly identifies the layer as a ward/council/
+     * municipal district boundary.
      */
+
     const shouldReject =
         isCensusDataset ||
         isParcelDataset ||
@@ -269,9 +430,10 @@ export function classifyCandidate(
             !isBoundaryLayer
         );
 
-    // -------------------------------------------------------------------------
-    // Official source detection
-    // -------------------------------------------------------------------------
+
+    // =========================================================================
+    // Official source
+    // =========================================================================
 
     const officialMunicipalSource =
         isLikelyOfficialMunicipalSource(
@@ -279,15 +441,46 @@ export function classifyCandidate(
             inspection
         );
 
-    // -------------------------------------------------------------------------
-    // Political boundary detection
-    // -------------------------------------------------------------------------
+
+    // =========================================================================
+    // Political boundary
+    // =========================================================================
+
+    /*
+     * This is intentionally strict.
+     *
+     * A candidate is a political boundary only when:
+     *
+     *   - it is a polygon
+     *   - it has explicit political-boundary evidence
+     *   - a district type can be identified
+     *   - it has a district field
+     *
+     * This prevents datasets such as:
+     *
+     *   "LaDoceFocusNeighborhoods"
+     *   "Tree Equity"
+     *   "Golf Courses"
+     *
+     * from becoming ward sources merely because they contain
+     * a WARD field.
+     */
+
+    const hasDistrictField =
+        Boolean(
+            inspection.districtField
+        ) ||
+        (
+            inspection.districtFields?.length ?? 0
+        ) > 0;
+
 
     const isPoliticalBoundary =
         !shouldReject &&
         isBoundaryLayer &&
-        politicalMatches.length > 0 &&
-        districtType !== undefined;
+        districtType !== undefined &&
+        hasDistrictField;
+
 
     return {
         isBoundaryLayer,
@@ -300,7 +493,10 @@ export function classifyCandidate(
 
         officialMunicipalSource,
 
-        districtType,
+        districtType:
+            isPoliticalBoundary
+                ? districtType
+                : undefined,
 
         shouldReject,
 
@@ -317,46 +513,41 @@ export function classifyCandidate(
 }
 
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Official municipal source
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 export function isLikelyOfficialMunicipalSource(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection
 ): boolean {
 
-    const url = normalize(candidate.candidateUrl);
+    const url =
+        normalize(
+            candidate.candidateUrl
+        );
 
-    const text = normalize([
-        candidate.title,
-        inspection.title,
-        inspection.serviceName,
-        inspection.layerName,
-        inspection.description
-    ]
-        .filter(Boolean)
-        .join(" "));
+    const text =
+        normalize([
+            candidate.title,
+            inspection.title,
+            inspection.serviceName,
+            inspection.layerName,
+            inspection.description
+        ]
+            .filter(Boolean)
+            .join(" "));
 
-    /*
-     * Strongest signal:
-     *
-     *   city/town/village GIS domain
-     *
-     * We deliberately don't assume every ArcGIS Online service is official.
-     */
 
     const officialDomain =
-        isMunicipalDomain(url);
+        isMunicipalDomain(
+            url
+        );
 
     if (officialDomain) {
         return true;
     }
 
-    /*
-     * ArcGIS services hosted by a municipality can sometimes use a generic
-     * ArcGIS URL. In that case, look for strong municipal ownership signals.
-     */
 
     const municipalLanguage =
         containsAny(
@@ -369,6 +560,7 @@ export function isLikelyOfficialMunicipalSource(
             ]
         );
 
+
     const officialLanguage =
         containsAny(
             text,
@@ -379,6 +571,7 @@ export function isLikelyOfficialMunicipalSource(
             ]
         );
 
+
     return Boolean(
         municipalLanguage &&
         officialLanguage
@@ -386,30 +579,28 @@ export function isLikelyOfficialMunicipalSource(
 }
 
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Municipal-domain detection
-// -----------------------------------------------------------------------------
+// =============================================================================
 
-function isMunicipalDomain(url: string): boolean {
-
-    /*
-     * Extract hostname from the URL.
-     */
+function isMunicipalDomain(
+    url: string
+): boolean {
 
     let hostname: string;
 
     try {
-        hostname = new URL(url).hostname.toLowerCase();
+
+        hostname =
+            new URL(url)
+                .hostname
+                .toLowerCase();
+
     } catch {
+
         return false;
     }
 
-    /*
-     * Common municipal domains.
-     *
-     * This intentionally favors evidence of government ownership rather
-     * than assuming that every ArcGIS.com service is official.
-     */
 
     const governmentDomain =
         hostname.endsWith(".gov") ||
@@ -419,13 +610,6 @@ function isMunicipalDomain(url: string): boolean {
         return true;
     }
 
-    /*
-     * Examples:
-     *
-     * mapdata.tucsonaz.gov
-     * gis.tucsonaz.gov
-     * gisdata.pima.gov
-     */
 
     if (
         hostname.includes("gis.") ||
@@ -435,13 +619,14 @@ function isMunicipalDomain(url: string): boolean {
         return true;
     }
 
+
     return false;
 }
 
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Rejection explanation
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 export function getClassificationReasons(
     classification: CandidateClassification
@@ -449,46 +634,88 @@ export function getClassificationReasons(
 
     const reasons: string[] = [];
 
-    if (classification.isCensusDataset) {
-        reasons.push("census dataset");
+
+    if (
+        classification.isCensusDataset
+    ) {
+        reasons.push(
+            "census dataset"
+        );
     }
 
-    if (classification.isParcelDataset) {
-        reasons.push("parcel/property dataset");
+
+    if (
+        classification.isParcelDataset
+    ) {
+        reasons.push(
+            "parcel/property dataset"
+        );
     }
 
-    if (classification.isHousingDataset) {
-        reasons.push("housing dataset");
+
+    if (
+        classification.isHousingDataset
+    ) {
+        reasons.push(
+            "housing dataset"
+        );
     }
+
 
     if (
         classification.isThematicDataset &&
         !classification.isBoundaryLayer
     ) {
-        reasons.push("thematic dataset");
+        reasons.push(
+            "thematic dataset"
+        );
     }
 
-    if (classification.isBoundaryLayer) {
-        reasons.push("polygon boundary layer");
+
+    if (
+        classification.isBoundaryLayer
+    ) {
+        reasons.push(
+            "polygon boundary layer"
+        );
     }
 
-    if (classification.isPoliticalBoundary) {
-        reasons.push("political district boundary");
+
+    if (
+        classification.isPoliticalBoundary
+    ) {
+        reasons.push(
+            "political district boundary"
+        );
     }
 
-    if (classification.officialMunicipalSource) {
-        reasons.push("likely official municipal source");
+
+    if (
+        classification.officialMunicipalSource
+    ) {
+        reasons.push(
+            "likely official municipal source"
+        );
     }
 
-    if (classification.districtType) {
+
+    if (
+        classification.districtType
+    ) {
         reasons.push(
             `district type: ${classification.districtType}`
         );
     }
 
-    if (classification.shouldReject) {
-        reasons.push("rejected");
+
+    if (
+        classification.shouldReject
+    ) {
+        reasons.push(
+            "rejected"
+        );
     }
+
 
     return reasons;
 }
