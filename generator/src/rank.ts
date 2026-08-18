@@ -1,92 +1,36 @@
 import type {
-    ArcGISGeometryType,
+    CandidateScore,
+    CanonicalAlternative,
+    CanonicalSource,
+    DistrictType,
     InspectedCandidate,
-    CandidateScore
+    EquivalentLayerGroup,
+    RegistryEntry
 } from "./types.js";
 
 
 // =============================================================================
-// Public API
+// Candidate scoring
 // =============================================================================
 
-/**
- * Rank inspected municipal district candidates.
- *
- * Candidates should already have been:
- *
- * 1. discovered
- * 2. inspected
- * 3. classified
- *
- * Candidates explicitly rejected by classification are excluded.
- *
- * Classification is treated as evidence rather than a hard requirement:
- * a candidate does not need to be classified as a political boundary in
- * order to be considered by the ranking system.
- */
-export function rankCandidates(
-    candidates: InspectedCandidate[]
-): CandidateScore[] {
-
-    return candidates
-        .filter(candidate =>
-            !candidate.classification.shouldReject
-        )
-        .map(candidate => {
-
-            const result =
-                calculateScore(candidate);
-
-            return {
-                candidate,
-                score: result.score,
-                reasons: result.reasons
-            };
-        })
-        .sort(
-            (a, b) =>
-                b.score - a.score
-        );
-}
-
-
-// =============================================================================
-// Scoring
-// =============================================================================
-
-function calculateScore(
+export function scoreCandidate(
     candidate: InspectedCandidate
-): {
-    score: number;
-    reasons: string[];
-} {
+): CandidateScore {
 
+    const inspection = candidate.inspection;
+    const classification = candidate.classification;
+
+    let score = 0;
     const reasons: string[] = [];
-
-    let score =
-        candidate.candidate.score;
-
-
-    const inspection =
-        candidate.inspection;
-
-    const classification =
-        candidate.classification;
 
 
     // -------------------------------------------------------------------------
     // Official municipal source
     // -------------------------------------------------------------------------
 
-    if (
-        classification.officialMunicipalSource
-    ) {
-
-        score += 100;
-
-        reasons.push(
-            "official municipal source"
-        );
+    if (classification.officialMunicipalSource) {
+        score += 30;
+        reasons.push("official municipal source");
     }
 
 
@@ -94,31 +38,57 @@ function calculateScore(
     // Political boundary
     // -------------------------------------------------------------------------
 
-    if (
-        classification.isPoliticalBoundary
-    ) {
-
+    if (classification.isPoliticalBoundary) {
         score += 50;
-
-        reasons.push(
-            "appears to represent a political boundary"
-        );
+        reasons.push("political boundary");
     }
 
 
     // -------------------------------------------------------------------------
-    // Boundary layer
+    // Actual boundary layer
+    // -------------------------------------------------------------------------
+
+    if (classification.isBoundaryLayer) {
+        score += 25;
+        reasons.push("boundary layer");
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Reject thematic datasets
+    // -------------------------------------------------------------------------
+
+    if (classification.isThematicDataset) {
+        score -= 50;
+        reasons.push("thematic dataset");
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Reject Census datasets
+    // -------------------------------------------------------------------------
+
+    if (classification.isCensusDataset) {
+        score -= 50;
+        reasons.push("Census dataset");
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Polygon
     // -------------------------------------------------------------------------
 
     if (
-        classification.isBoundaryLayer
+        inspection.geometryType ===
+            "esriGeometryPolygon" ||
+        inspection.geometryType === "polygon"
     ) {
-
-        score += 25;
-
-        reasons.push(
-            "boundary layer"
-        );
+        score += 20;
+        reasons.push("polygon geometry");
+    }
+    else {
+        score -= 30;
+        reasons.push("non-polygon geometry");
     }
 
 
@@ -126,10 +96,7 @@ function calculateScore(
     // District type
     // -------------------------------------------------------------------------
 
-    if (
-        classification.districtType
-    ) {
-
+    if (classification.districtType) {
         score += 20;
 
         reasons.push(
@@ -139,32 +106,11 @@ function calculateScore(
 
 
     // -------------------------------------------------------------------------
-    // Geometry
-    // -------------------------------------------------------------------------
-
-    if (
-        isPolygonGeometry(
-            inspection.geometryType
-        )
-    ) {
-
-        score += 25;
-
-        reasons.push(
-            "polygon geometry"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
     // District field
     // -------------------------------------------------------------------------
 
-    if (
-        inspection.districtField
-    ) {
-
-        score += 25;
+    if (inspection.districtField) {
+        score += 20;
 
         reasons.push(
             `district field: ${inspection.districtField}`
@@ -176,10 +122,7 @@ function calculateScore(
     // Name field
     // -------------------------------------------------------------------------
 
-    if (
-        inspection.nameField
-    ) {
-
+    if (inspection.nameField) {
         score += 10;
 
         reasons.push(
@@ -189,328 +132,86 @@ function calculateScore(
 
 
     // -------------------------------------------------------------------------
-    // FeatureServer
+    // Service capabilities
+    // -------------------------------------------------------------------------
+
+    if (inspection.supportsQuery) {
+        score += 5;
+        reasons.push("supports querying");
+    }
+
+    if (inspection.supportsGeoJSON) {
+        score += 5;
+        reasons.push("supports GeoJSON");
+    }
+
+    if (inspection.supportsPagination) {
+        score += 3;
+        reasons.push("supports pagination");
+    }
+
+
+    // -------------------------------------------------------------------------
+    // FeatureServer preference
     // -------------------------------------------------------------------------
 
     if (
         inspection.serviceType ===
         "FeatureServer"
     ) {
-
-        score += 15;
-
-        reasons.push(
-            "FeatureServer"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // MapServer
-    // -------------------------------------------------------------------------
-
-    if (
-        inspection.serviceType ===
-        "MapServer"
-    ) {
-
-        score += 10;
-
-        reasons.push(
-            "MapServer"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Query support
-    // -------------------------------------------------------------------------
-
-    if (
-        inspection.supportsQuery
-    ) {
-
-        score += 10;
-
-        reasons.push(
-            "supports querying"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // GeoJSON support
-    // -------------------------------------------------------------------------
-
-    if (
-        inspection.supportsGeoJSON
-    ) {
-
         score += 5;
-
-        reasons.push(
-            "supports GeoJSON"
-        );
+        reasons.push("FeatureServer");
     }
 
 
     // -------------------------------------------------------------------------
-    // Title signals
+    // Title
     // -------------------------------------------------------------------------
 
     const title =
-        normalizeText(
+        (
             inspection.title ??
-            candidate.candidate.title ??
+            inspection.layerName ??
+            inspection.serviceName ??
             ""
-        );
+        ).toLowerCase();
 
 
     if (
-        containsAny(
-            title,
-            [
-                "ward",
-                "wards"
-            ]
-        )
+        /\bward(s)?\b/.test(title) ||
+        /\bcouncil\b/.test(title) ||
+        /\bdistrict(s)?\b/.test(title)
     ) {
-
-        score += 30;
-
+        score += 15;
         reasons.push(
-            "title contains ward"
-        );
-    }
-
-
-    if (
-        containsAny(
-            title,
-            [
-                "council district",
-                "council districts",
-                "city council"
-            ]
-        )
-    ) {
-
-        score += 30;
-
-        reasons.push(
-            "title contains council district terminology"
-        );
-    }
-
-
-    if (
-        containsAny(
-            title,
-            [
-                "aldermanic district",
-                "aldermanic districts"
-            ]
-        )
-    ) {
-
-        score += 30;
-
-        reasons.push(
-            "title contains aldermanic district terminology"
-        );
-    }
-
-
-    if (
-        containsAny(
-            title,
-            [
-                "municipal district",
-                "municipal districts"
-            ]
-        )
-    ) {
-
-        score += 25;
-
-        reasons.push(
-            "title contains municipal district terminology"
-        );
-    }
-
-
-    if (
-        containsAny(
-            title,
-            [
-                "district boundary",
-                "district boundaries",
-                "ward boundary",
-                "ward boundaries"
-            ]
-        )
-    ) {
-
-        score += 25;
-
-        reasons.push(
-            "title contains boundary terminology"
+            "title contains political district terminology"
         );
     }
 
 
     // -------------------------------------------------------------------------
-    // Strong field evidence
+    // Field names
     // -------------------------------------------------------------------------
 
     const districtFields =
         inspection.districtFields
-            .map(normalizeText);
-
-
-    const nameFields =
-        inspection.nameFields
-            .map(normalizeText);
+            .map(field => field.toLowerCase());
 
 
     if (
-        containsAny(
-            districtFields.join(" "),
-            [
-                "ward",
-                "ward number",
-                "district",
-                "district number",
-                "council district",
-                "council district number"
-            ]
+        districtFields.some(field =>
+            /ward|council|district|alderman/.test(field)
         )
     ) {
-
-        score += 15;
-
+        score += 10;
         reasons.push(
             "field names strongly indicate political district"
         );
     }
 
 
-    if (
-        containsAny(
-            nameFields.join(" "),
-            [
-                "ward name",
-                "district name",
-                "council district name",
-                "ward",
-                "district"
-            ]
-        )
-    ) {
-
-        score += 10;
-
-        reasons.push(
-            "name field appears to identify district"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Historical datasets
-    // -------------------------------------------------------------------------
-
-    if (
-        isHistorical(title)
-    ) {
-
-        score -= 50;
-
-        reasons.push(
-            "appears to be historical"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Thematic/non-boundary datasets
-    // -------------------------------------------------------------------------
-
-    if (
-        classification.isThematicDataset
-    ) {
-
-        score -= 40;
-
-        reasons.push(
-            "thematic dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Census datasets
-    // -------------------------------------------------------------------------
-
-    if (
-        classification.isCensusDataset
-    ) {
-
-        score -= 50;
-
-        reasons.push(
-            "Census dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Housing datasets
-    // -------------------------------------------------------------------------
-
-    if (
-        classification.isHousingDataset
-    ) {
-
-        score -= 40;
-
-        reasons.push(
-            "housing dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Parcel datasets
-    // -------------------------------------------------------------------------
-
-    if (
-        classification.isParcelDataset
-    ) {
-
-        score -= 40;
-
-        reasons.push(
-            "parcel dataset"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Clamp score
-    // -------------------------------------------------------------------------
-
-    score =
-        Math.max(
-            0,
-            Math.min(
-                300,
-                score
-            )
-        );
-
-
     return {
+        candidate,
         score,
         reasons
     };
@@ -518,89 +219,146 @@ function calculateScore(
 
 
 // =============================================================================
-// Geometry
+// Rank candidates
 // =============================================================================
 
-function isPolygonGeometry(
-    geometry?: ArcGISGeometryType
-): boolean {
+export function rankCandidates(
+    candidates: InspectedCandidate[]
+): CandidateScore[] {
 
-    if (!geometry) {
-        return false;
+    return candidates
+        .map(scoreCandidate)
+        .sort((a, b) => b.score - a.score);
+}
+
+
+// =============================================================================
+// Canonical source
+// =============================================================================
+
+export function selectCanonicalSource(
+    group: EquivalentLayerGroup
+): CanonicalSource | undefined {
+
+    if (group.candidates.length === 0) {
+        return undefined;
     }
 
-    const normalized =
-        geometry.toLowerCase();
 
-    return (
-        normalized === "polygon" ||
-        normalized === "esrigeometrypolygon" ||
-        normalized.includes("polygon")
-    );
-}
+    const ranked =
+        rankCandidates(group.candidates);
 
 
-// =============================================================================
-// Historical detection
-// =============================================================================
+    const best =
+        ranked[0];
 
-function isHistorical(
-    text: string
-): boolean {
+
+    if (!best) {
+        return undefined;
+    }
+
+
+    const candidate =
+        best.candidate;
+
+
+    const inspection =
+        candidate.inspection;
+
+    const classification =
+        candidate.classification;
+
+
+    if (
+        !inspection.districtField ||
+        !classification.districtType ||
+        !inspection.geometryType
+    ) {
+        return undefined;
+    }
+
+
+    const alternatives: CanonicalAlternative[] =
+        ranked
+            .slice(1)
+            .map(item => ({
+                url: item.candidate.inspection.url,
+
+                title:
+                    item.candidate.inspection.title ??
+                    item.candidate.inspection.layerName ??
+                    item.candidate.inspection.serviceName,
+
+                serviceType:
+                    item.candidate.inspection.serviceType,
+
+                officialMunicipalSource:
+                    item.candidate.classification
+                        .officialMunicipalSource,
+
+                score: item.score
+            }));
+
 
     /*
-     * Explicit historical terminology is much stronger evidence
-     * than the presence of a year in a dataset title.
+     * Require a meaningful lead before automatically
+     * selecting a canonical source.
      */
-    return containsAny(
-        text,
-        [
-            "historical",
-            "historic",
-            "old ward",
-            "old wards",
-            "former ward",
-            "former wards",
-            "previous ward",
-            "previous wards",
-            "past ward",
-            "past wards",
-            "former council district",
-            "former council districts",
-            "previous council district",
-            "previous council districts",
-            "old council district",
-            "old council districts"
-        ]
-    );
-}
+    const second =
+        ranked[1];
+
+    const scoreGap =
+        second
+            ? best.score - second.score
+            : best.score;
 
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-function normalizeText(
-    value: string
-): string {
-
-    return value
-        .toLowerCase()
-        .replace(/[_-]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-}
+    const requiresReview =
+        group.confidence < 0.8 ||
+        scoreGap < 10;
 
 
-function containsAny(
-    value: string,
-    terms: string[]
-): boolean {
+    return {
+        url: inspection.url,
 
-    return terms.some(
-        term =>
-            value.includes(
-                normalizeText(term)
-            )
-    );
+        title:
+            inspection.title ??
+            inspection.layerName ??
+            inspection.serviceName ??
+            `${candidate.candidate.city} ${classification.districtType}`,
+
+        city: candidate.candidate.city,
+
+        state: candidate.candidate.state,
+
+        placeFips: candidate.candidate.placeFips,
+
+        districtType:
+            classification.districtType,
+
+        serviceType:
+            inspection.serviceType,
+
+        officialMunicipalSource:
+            classification.officialMunicipalSource,
+
+        districtField:
+            inspection.districtField,
+
+        nameField:
+            inspection.nameField,
+
+        geometryType:
+            inspection.geometryType,
+
+        score:
+            best.score,
+
+        alternatives,
+
+        selectionReasons:
+            best.reasons,
+
+        requiresReview
+    };
 }

@@ -124,6 +124,72 @@ export async function generateCensusPlaces(): Promise<void> {
     );
 }
 
+// =============================================================================
+// Load generated Census places
+// =============================================================================
+
+/**
+ * Load the previously generated Census places file.
+ *
+ * This does not download anything from the Census Bureau.
+ * It simply reads generator/data/census-places.json.
+ */
+export function loadCensusPlaces(): CensusPlace[] {
+
+    if (!fs.existsSync(OUTPUT_PATH)) {
+
+        throw new Error(
+            [
+                "Census places file not found.",
+                `Expected: ${OUTPUT_PATH}`,
+                "",
+                "Run:",
+                "  npm run places"
+            ].join("\n")
+        );
+    }
+
+
+    const contents =
+        fs.readFileSync(
+            OUTPUT_PATH,
+            "utf8"
+        );
+
+
+    const parsed:
+        unknown =
+        JSON.parse(contents);
+
+
+    if (
+        typeof parsed !== "object" ||
+        parsed === null
+    ) {
+
+        throw new Error(
+            "Invalid census-places.json: expected an object."
+        );
+    }
+
+
+    const record =
+        parsed as Record<string, unknown>;
+
+
+    if (
+        !Array.isArray(record.places)
+    ) {
+
+        throw new Error(
+            "Invalid census-places.json: missing places array."
+        );
+    }
+
+
+    return record.places as CensusPlace[];
+}
+
 
 // =============================================================================
 // Download

@@ -468,11 +468,11 @@ function sameUrl(
 
     const urlA =
         a.inspection.url ||
-        a.candidate.candidateUrl;
+        a.candidate.url;
 
     const urlB =
         b.inspection.url ||
-        b.candidate.candidateUrl;
+        b.candidate.url;
 
     return (
         normalizeUrl(urlA) ===
@@ -925,7 +925,7 @@ function filterValidCandidates(
             candidate.classification;
 
         return (
-            !classification.shouldReject &&
+            !classification.rejected &&
             classification.isPoliticalBoundary &&
             classification.isBoundaryLayer
         );

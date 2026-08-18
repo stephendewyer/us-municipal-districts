@@ -18,31 +18,30 @@ const __filename =
 const __dirname =
     path.dirname(__filename);
 
-const REGISTRY_PATH =
+const GENERATOR_SRC_DIR =
+    __dirname;
+
+const ROOT_DIR =
     path.resolve(
-        __dirname,
-        "../../data/municipalities"
+        GENERATOR_SRC_DIR,
+        "../.."
     );
 
+const REGISTRY_DIR =
+    path.join(
+        ROOT_DIR,
+        "data"
+    );
 
-// =============================================================================
+const REGISTRY_PATH =
+    path.join(
+        REGISTRY_DIR,
+        "registry.json"
+    )
+// ==================================================================
 // Public API
 // =============================================================================
 
-/**
- * Validate all generated municipal registry entries.
- *
- * This validates the structure of the generated JSON files and checks
- * important fields such as:
- *
- * - place FIPS
- * - city
- * - state
- * - district type
- * - ArcGIS source URL
- * - district field
- * - generated timestamp
- */
 export async function validateRegistry(): Promise<void> {
 
     console.log(
@@ -52,40 +51,80 @@ export async function validateRegistry(): Promise<void> {
     if (!fs.existsSync(REGISTRY_PATH)) {
 
         throw new Error(
-            `Registry directory not found: ${REGISTRY_PATH}`
+            `Registry file not found: ${REGISTRY_PATH}`
         );
     }
 
-    const files =
-        findJsonFiles(REGISTRY_PATH);
-
-    if (files.length === 0) {
-
-        throw new Error(
-            `No registry entries found in ${REGISTRY_PATH}`
-        );
-    }
+    const registry =
+        loadRegistry();
 
     let valid = 0;
     let invalid = 0;
 
-    for (const file of files) {
+    // =========================================================================
+    // Validate registry metadata
+    // =========================================================================
+
+    if (
+        typeof registry.version !== "string" ||
+        registry.version.trim() === ""
+    ) {
+
+        throw new Error(
+            "Registry version is missing."
+        );
+    }
+
+    if (
+        typeof registry.generatedAt !== "string" ||
+        Number.isNaN(
+            Date.parse(
+                registry.generatedAt
+            )
+        )
+    ) {
+
+        throw new Error(
+            "Registry generatedAt must be a valid date."
+        );
+    }
+
+    if (
+        !Array.isArray(registry.entries)
+    ) {
+
+        throw new Error(
+            "Registry entries must be an array."
+        );
+    }
+
+    // =========================================================================
+    // Validate entries
+    // =========================================================================
+
+    for (
+        let index = 0;
+        index < registry.entries.length;
+        index++
+    ) {
+
+        const entry =
+            registry.entries[index];
+
+        if (!entry) {
+            continue;
+        }
 
         try {
 
-            const entry =
-                loadRegistryEntry(file);
-
             validateRegistryEntry(
                 entry,
-                file
+                index
             );
 
             console.log(
-                `✓ ${path.relative(
-                    REGISTRY_PATH,
-                    file
-                )}`
+                `✓ ${entry.state} — ${entry.city} — ` +
+                `${entry.districtType}`
             );
 
             valid++;
@@ -93,16 +132,15 @@ export async function validateRegistry(): Promise<void> {
         } catch (error) {
 
             console.error(
-                `✗ ${path.relative(
-                    REGISTRY_PATH,
-                    file
-                )}`
+                `✗ Entry ${index + 1}`
             );
 
             console.error(
-                `  ${error instanceof Error
-                    ? error.message
-                    : String(error)}`
+                `  ${
+                    error instanceof Error
+                        ? error.message
+                        : String(error)
+                }`
             );
 
             invalid++;
@@ -127,64 +165,24 @@ export async function validateRegistry(): Promise<void> {
 
 
 // =============================================================================
-// File discovery
+// Registry loading
 // =============================================================================
 
-function findJsonFiles(
-    directory: string
-): string[] {
+interface GeneratedRegistry {
 
-    const results: string[] = [];
+    version: string;
 
-    const entries =
-        fs.readdirSync(
-            directory,
-            {
-                withFileTypes: true
-            }
-        );
+    generatedAt: string;
 
-    for (const entry of entries) {
-
-        const fullPath =
-            path.join(
-                directory,
-                entry.name
-            );
-
-        if (entry.isDirectory()) {
-
-            results.push(
-                ...findJsonFiles(fullPath)
-            );
-
-            continue;
-        }
-
-        if (
-            entry.isFile() &&
-            entry.name.endsWith(".json")
-        ) {
-
-            results.push(fullPath);
-        }
-    }
-
-    return results.sort();
+    entries: RegistryEntry[];
 }
 
 
-// =============================================================================
-// Loading
-// =============================================================================
-
-function loadRegistryEntry(
-    file: string
-): RegistryEntry {
+function loadRegistry(): GeneratedRegistry {
 
     const contents =
         fs.readFileSync(
-            file,
+            REGISTRY_PATH,
             "utf8"
         );
 
@@ -213,11 +211,50 @@ function loadRegistryEntry(
     ) {
 
         throw new Error(
-            "Registry entry must be a JSON object."
+            "Registry must be a JSON object."
         );
     }
 
-    return parsed as RegistryEntry;
+    const record =
+        parsed as Record<string, unknown>;
+
+    if (
+        typeof record.version !== "string"
+    ) {
+
+        throw new Error(
+            "Registry version is missing."
+        );
+    }
+
+    if (
+        typeof record.generatedAt !== "string"
+    ) {
+
+        throw new Error(
+            "Registry generatedAt is missing."
+        );
+    }
+
+    if (
+        !Array.isArray(record.entries)
+    ) {
+
+        throw new Error(
+            "Registry entries must be an array."
+        );
+    }
+
+    return {
+        version:
+            record.version,
+
+        generatedAt:
+            record.generatedAt,
+
+        entries:
+            record.entries as RegistryEntry[]
+    };
 }
 
 
@@ -227,7 +264,7 @@ function loadRegistryEntry(
 
 function validateRegistryEntry(
     entry: RegistryEntry,
-    file: string
+    index: number
 ): void {
 
     // -------------------------------------------------------------------------
@@ -240,7 +277,8 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "placeFips must be a 7-digit Census place GEOID."
+            `Entry ${index + 1}: placeFips must be a ` +
+            `7-digit Census place GEOID.`
         );
     }
 
@@ -255,7 +293,7 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "city is required."
+            `Entry ${index + 1}: city is required.`
         );
     }
 
@@ -270,7 +308,8 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "state must be a two-letter abbreviation."
+            `Entry ${index + 1}: state must be a ` +
+            `two-letter abbreviation.`
         );
     }
 
@@ -286,9 +325,8 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            `Invalid districtType: ${String(
-                entry.districtType
-            )}`
+            `Entry ${index + 1}: invalid districtType: ` +
+            `${String(entry.districtType)}`
         );
     }
 
@@ -303,7 +341,7 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "source is required."
+            `Entry ${index + 1}: source is required.`
         );
     }
 
@@ -314,20 +352,20 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "source.url must be a valid HTTP or HTTPS URL."
+            `Entry ${index + 1}: source.url must be a ` +
+            `valid HTTP or HTTPS URL.`
         );
     }
 
 
     if (
-        entry.source.serviceType !==
-            "FeatureServer" &&
-        entry.source.serviceType !==
-            "MapServer"
+        entry.source.serviceType !== "FeatureServer" &&
+        entry.source.serviceType !== "MapServer"
     ) {
 
         throw new Error(
-            "source.serviceType must be FeatureServer or MapServer."
+            `Entry ${index + 1}: source.serviceType must be ` +
+            `FeatureServer or MapServer.`
         );
     }
 
@@ -338,7 +376,7 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "source.title is required."
+            `Entry ${index + 1}: source.title is required.`
         );
     }
 
@@ -348,7 +386,7 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "source.official must be a boolean."
+            `Entry ${index + 1}: source.official must be a boolean.`
         );
     }
 
@@ -363,7 +401,7 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "fields is required."
+            `Entry ${index + 1}: fields is required.`
         );
     }
 
@@ -374,7 +412,7 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "fields.district is required."
+            `Entry ${index + 1}: fields.district is required.`
         );
     }
 
@@ -385,7 +423,8 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "fields.name must be a string when provided."
+            `Entry ${index + 1}: fields.name must be a string ` +
+            `when provided.`
         );
     }
 
@@ -400,7 +439,7 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "metadata is required."
+            `Entry ${index + 1}: metadata is required.`
         );
     }
 
@@ -415,7 +454,8 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "metadata.generatedAt must be a valid date."
+            `Entry ${index + 1}: metadata.generatedAt must be ` +
+            `a valid date.`
         );
     }
 
@@ -425,19 +465,10 @@ function validateRegistryEntry(
     ) {
 
         throw new Error(
-            "metadata.requiresReview must be a boolean."
+            `Entry ${index + 1}: metadata.requiresReview must be ` +
+            `a boolean.`
         );
     }
-
-
-    // -------------------------------------------------------------------------
-    // File name sanity check
-    // -------------------------------------------------------------------------
-
-    validateFileName(
-        file,
-        entry
-    );
 }
 
 
@@ -480,66 +511,4 @@ function isHttpUrl(
 
         return false;
     }
-}
-
-
-// =============================================================================
-// File name validation
-// =============================================================================
-
-function validateFileName(
-    file: string,
-    entry: RegistryEntry
-): void {
-
-    const filename =
-        path.basename(
-            file,
-            ".json"
-        );
-
-    /*
-     * This is intentionally a warning rather than an error because
-     * registry.ts may use a different naming convention.
-     */
-    const expected =
-        `${entry.state.toLowerCase()}-${
-            slugify(entry.city)
-        }`;
-
-    if (
-        filename !== expected
-    ) {
-
-        console.warn(
-            `  Warning: filename "${filename}.json" does not match ` +
-            `expected "${expected}.json".`
-        );
-    }
-}
-
-
-// =============================================================================
-// Slugification
-// =============================================================================
-
-function slugify(
-    value: string
-): string {
-
-    return value
-        .normalize("NFKD")
-        .replace(
-            /[\u0300-\u036f]/g,
-            ""
-        )
-        .toLowerCase()
-        .replace(
-            /[^a-z0-9]+/g,
-            "-"
-        )
-        .replace(
-            /^-+|-+$/g,
-            ""
-        );
 }

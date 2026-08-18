@@ -1,218 +1,71 @@
-// generator/src/canonical.ts
-
 import type {
-    ArcGISInspection,
     CanonicalAlternative,
     CanonicalSource,
+    CandidateScore,
     EquivalentLayerGroup,
     InspectedCandidate
 } from "./types.js";
 
 
 // =============================================================================
-// Public API
+// Candidate scoring
 // =============================================================================
 
 /**
- * Select the single canonical source from a collection of equivalent-layer
- * groups.
+ * Score an inspected candidate for canonical-source selection.
  *
- * The candidates should already have been:
+ * Higher scores represent stronger municipal political-boundary sources.
  *
- *   1. discovered
- *   2. inspected
- *   3. classified
- *   4. filtered
- *   5. grouped by equivalence
- *
- * This module is responsible only for selecting the best source.
+ * This function intentionally does not perform equivalence detection.
+ * Equivalence detection happens separately in equivalence.ts.
  */
-export function selectCanonicalSource(
-    groups: EquivalentLayerGroup[]
-): CanonicalSource | undefined {
-
-    if (groups.length === 0) {
-        return undefined;
-    }
-
-    /*
-     * Select the best candidate from every equivalent group.
-     */
-    const groupWinners = groups
-        .map(selectBestFromGroup)
-        .filter(
-            (source): source is CanonicalSource =>
-                source !== undefined
-        );
-
-    if (groupWinners.length === 0) {
-        return undefined;
-    }
-
-    /*
-     * If multiple independent groups exist, choose the strongest
-     * canonical source among them.
-     */
-    groupWinners.sort(compareCanonicalSources);
-
-    return groupWinners[0];
-}
-
-
-// =============================================================================
-// Select best candidate from an equivalent group
-// =============================================================================
-
-function selectBestFromGroup(
-    group: EquivalentLayerGroup
-): CanonicalSource | undefined {
-
-    if (group.candidates.length === 0) {
-        return undefined;
-    }
-
-    /*
-     * Rank all candidates in the group.
-     */
-    const ranked = group.candidates
-        .filter(candidate => !candidate.classification.shouldReject)
-        .map(candidate => ({
-            candidate,
-            score: calculateCanonicalScore(candidate)
-        }))
-        .sort((a, b) => b.score - a.score);
-
-    const winner = ranked[0];
-
-    if (!winner) {
-        return undefined;
-    }
-
-    const candidate = winner.candidate;
-
-    const inspection = candidate.inspection;
-
-    /*
-     * Determine the district field.
-     *
-     * This should normally already have been identified during inspection.
-     * If it hasn't, we attempt to infer it from the available fields.
-     */
-    const districtField =
-        inspection.districtField ??
-        findDistrictField(inspection);
-
-    if (!districtField) {
-        /*
-         * We cannot safely generate a registry entry without knowing
-         * which attribute identifies the district.
-         */
-        return undefined;
-    }
-
-    const nameField =
-        inspection.nameField ??
-        findNameField(inspection);
-
-    const selectionReasons =
-        getSelectionReasons(candidate, winner.score);
-
-    const alternatives: CanonicalAlternative[] =
-        ranked
-            .slice(1)
-            .map(item =>
-                createAlternative(item.candidate)
-            );
-
-    return {
-        url: inspection.url,
-
-        title:
-            inspection.title ??
-            candidate.candidate.title ??
-            inspection.layerName ??
-            inspection.serviceName ??
-            "Unnamed ArcGIS layer",
-
-        city: candidate.candidate.city,
-
-        state: candidate.candidate.state,
-
-        placeFips: candidate.candidate.placeFips,
-
-        districtType:
-            candidate.classification.districtType ??
-            "municipal-district",
-
-        serviceType:
-            inspection.serviceType,
-
-        officialMunicipalSource:
-            candidate.classification.officialMunicipalSource,
-
-        districtField,
-
-        nameField,
-
-        geometryType:
-            inspection.geometryType ??
-            "unknown",
-
-        score: winner.score,
-
-        alternatives,
-
-        selectionReasons,
-
-        requiresReview:
-            shouldRequireReview(
-                candidate,
-                winner.score,
-                districtField
-            )
-    };
-}
-
-
-// =============================================================================
-// Canonical scoring
-// =============================================================================
-
-function calculateCanonicalScore(
+export function scoreCandidate(
     candidate: InspectedCandidate
-): number {
+): CandidateScore {
 
-    const inspection = candidate.inspection;
-    const classification = candidate.classification;
+    const inspection =
+        candidate.inspection;
 
-    let score = candidate.candidate.score;
+    const classification =
+        candidate.classification;
 
-    const title = normalizeText(
-        inspection.title ??
-        candidate.candidate.title ??
-        ""
-    );
+    let score = 0;
 
-    const serviceName = normalizeText(
-        inspection.serviceName ??
-        ""
-    );
+    const reasons: string[] = [];
 
-    const layerName = normalizeText(
-        inspection.layerName ??
-        ""
-    );
 
-    const combinedText =
-        `${title} ${serviceName} ${layerName}`;
+    // -------------------------------------------------------------------------
+    // Rejected candidate
+    // -------------------------------------------------------------------------
+
+    if (classification.rejected) {
+
+        return {
+            candidate,
+
+            score:
+                Number.NEGATIVE_INFINITY,
+
+            reasons: [
+                "rejected candidate"
+            ]
+        };
+    }
 
 
     // -------------------------------------------------------------------------
     // Official municipal source
     // -------------------------------------------------------------------------
 
-    if (classification.officialMunicipalSource) {
+    if (
+        classification.officialMunicipalSource
+    ) {
+
         score += 100;
+
+        reasons.push(
+            "official municipal source"
+        );
     }
 
 
@@ -220,42 +73,47 @@ function calculateCanonicalScore(
     // Political boundary
     // -------------------------------------------------------------------------
 
-    if (classification.isPoliticalBoundary) {
-        score += 50;
+    if (
+        classification.isPoliticalBoundary
+    ) {
+
+        score += 100;
+
+        reasons.push(
+            "appears to represent a political boundary"
+        );
     }
 
 
     // -------------------------------------------------------------------------
-    // Explicit district terminology
+    // Boundary layer
     // -------------------------------------------------------------------------
 
     if (
-        containsAny(combinedText, [
-            "council district",
-            "city council",
-            "council",
-            "ward",
-            "aldermanic district",
-            "municipal district"
-        ])
+        classification.isBoundaryLayer
     ) {
-        score += 30;
+
+        score += 40;
+
+        reasons.push(
+            "boundary layer"
+        );
     }
 
 
     // -------------------------------------------------------------------------
-    // Boundary terminology
+    // District type
     // -------------------------------------------------------------------------
 
     if (
-        containsAny(combinedText, [
-            "boundary",
-            "boundaries",
-            "district boundary",
-            "district boundaries"
-        ])
+        classification.districtType
     ) {
-        score += 25;
+
+        score += 40;
+
+        reasons.push(
+            `identified as ${classification.districtType}`
+        );
     }
 
 
@@ -264,12 +122,18 @@ function calculateCanonicalScore(
     // -------------------------------------------------------------------------
 
     if (
-        inspection.geometryType &&
-        isPolygonGeometry(
-            inspection.geometryType
-        )
+        inspection.geometryType ===
+            "esriGeometryPolygon" ||
+
+        inspection.geometryType ===
+            "polygon"
     ) {
-        score += 25;
+
+        score += 30;
+
+        reasons.push(
+            "polygon geometry"
+        );
     }
 
 
@@ -277,10 +141,15 @@ function calculateCanonicalScore(
     // District field
     // -------------------------------------------------------------------------
 
-    if (inspection.districtField) {
+    if (
+        inspection.districtField
+    ) {
+
         score += 25;
-    } else if (findDistrictField(inspection)) {
-        score += 15;
+
+        reasons.push(
+            `district field: ${inspection.districtField}`
+        );
     }
 
 
@@ -288,32 +157,32 @@ function calculateCanonicalScore(
     // Name field
     // -------------------------------------------------------------------------
 
-    if (inspection.nameField) {
+    if (
+        inspection.nameField
+    ) {
+
         score += 10;
-    } else if (findNameField(inspection)) {
-        score += 5;
+
+        reasons.push(
+            `name field: ${inspection.nameField}`
+        );
     }
 
 
     // -------------------------------------------------------------------------
-    // Feature service
+    // FeatureServer preference
     // -------------------------------------------------------------------------
 
     if (
-        inspection.serviceType === "FeatureServer"
+        inspection.serviceType ===
+        "FeatureServer"
     ) {
-        score += 15;
-    }
 
-
-    // -------------------------------------------------------------------------
-    // Map service
-    // -------------------------------------------------------------------------
-
-    if (
-        inspection.serviceType === "MapServer"
-    ) {
         score += 10;
+
+        reasons.push(
+            "FeatureServer"
+        );
     }
 
 
@@ -321,8 +190,15 @@ function calculateCanonicalScore(
     // Query support
     // -------------------------------------------------------------------------
 
-    if (inspection.supportsQuery) {
-        score += 10;
+    if (
+        inspection.supportsQuery
+    ) {
+
+        score += 5;
+
+        reasons.push(
+            "supports querying"
+        );
     }
 
 
@@ -330,306 +206,139 @@ function calculateCanonicalScore(
     // GeoJSON support
     // -------------------------------------------------------------------------
 
-    if (inspection.supportsGeoJSON) {
+    if (
+        inspection.supportsGeoJSON
+    ) {
+
         score += 5;
+
+        reasons.push(
+            "supports GeoJSON"
+        );
     }
 
 
     // -------------------------------------------------------------------------
-    // Historical source
+    // Pagination
     // -------------------------------------------------------------------------
 
-    if (isHistorical(combinedText)) {
-        score -= 75;
+    if (
+        inspection.supportsPagination
+    ) {
+
+        score += 2;
+
+        reasons.push(
+            "supports pagination"
+        );
     }
 
 
     // -------------------------------------------------------------------------
-    // Rejected classification
+    // Thematic dataset penalty
     // -------------------------------------------------------------------------
 
-    if (classification.shouldReject) {
-        score -= 1000;
-    }
+    if (
+        classification.isThematicDataset
+    ) {
 
-
-    // -------------------------------------------------------------------------
-    // Non-political classification
-    // -------------------------------------------------------------------------
-
-    if (!classification.isPoliticalBoundary) {
         score -= 100;
+
+        reasons.push(
+            "thematic dataset"
+        );
     }
 
 
-    return score;
-}
+    // -------------------------------------------------------------------------
+    // Non-polygon penalty
+    // -------------------------------------------------------------------------
 
-
-// =============================================================================
-// Compare canonical sources
-// =============================================================================
-
-function compareCanonicalSources(
-    a: CanonicalSource,
-    b: CanonicalSource
-): number {
-
-    /*
-     * Official municipal sources are preferred.
-     */
     if (
-        a.officialMunicipalSource !==
-        b.officialMunicipalSource
-    ) {
-        return a.officialMunicipalSource
-            ? -1
-            : 1;
-    }
-
-
-    /*
-     * Higher score wins.
-     */
-    if (a.score !== b.score) {
-        return b.score - a.score;
-    }
-
-
-    /*
-     * FeatureServer is generally preferable because it exposes
-     * queryable features directly.
-     */
-    if (
-        a.serviceType !==
-        b.serviceType
+        inspection.geometryType &&
+        inspection.geometryType !==
+            "esriGeometryPolygon" &&
+        inspection.geometryType !==
+            "polygon"
     ) {
 
-        if (
-            a.serviceType ===
-            "FeatureServer"
-        ) {
-            return -1;
-        }
+        score -= 50;
 
-        if (
-            b.serviceType ===
-            "FeatureServer"
-        ) {
-            return 1;
-        }
+        reasons.push(
+            "non-polygon geometry"
+        );
     }
 
-
-    /*
-     * Prefer an explicitly identified district field.
-     */
-    const aExplicit =
-        a.districtField.length > 0;
-
-    const bExplicit =
-        b.districtField.length > 0;
-
-    if (aExplicit !== bExplicit) {
-        return aExplicit
-            ? -1
-            : 1;
-    }
-
-
-    /*
-     * Stable deterministic fallback.
-     */
-    return a.url.localeCompare(b.url);
-}
-
-
-// =============================================================================
-// District field detection
-// =============================================================================
-
-function findDistrictField(
-    inspection: ArcGISInspection
-): string | undefined {
-
-    if (!inspection.fields) {
-        return undefined;
-    }
-
-    const fields =
-        inspection.fields;
-
-    /*
-     * Strongest candidates first.
-     */
-    const exactCandidates = [
-        "district",
-        "districtid",
-        "district_id",
-        "districtnum",
-        "district_num",
-        "districtnumber",
-        "district_number",
-        "ward",
-        "wardid",
-        "ward_id",
-        "wardnum",
-        "ward_num",
-        "wardnumber",
-        "ward_number",
-        "councildistrict",
-        "council_district",
-        "councildistrictid",
-        "council_district_id"
-    ];
-
-    for (const candidate of exactCandidates) {
-
-        const field =
-            fields.find(field =>
-                normalizeFieldName(
-                    field.name
-                ) === normalizeFieldName(candidate)
-            );
-
-        if (field) {
-            return field.name;
-        }
-    }
-
-
-    /*
-     * More permissive matching.
-     */
-    for (const field of fields) {
-
-        const name =
-            normalizeFieldName(
-                field.name
-            );
-
-        if (
-            name.includes("district") ||
-            name.includes("ward")
-        ) {
-            return field.name;
-        }
-    }
-
-
-    return undefined;
-}
-
-
-// =============================================================================
-// Name field detection
-// =============================================================================
-
-function findNameField(
-    inspection: ArcGISInspection
-): string | undefined {
-
-    if (!inspection.fields) {
-        return undefined;
-    }
-
-    const exactCandidates = [
-        "name",
-        "districtname",
-        "district_name",
-        "wardname",
-        "ward_name",
-        "councildistrictname",
-        "council_district_name",
-        "label",
-        "districtlabel",
-        "district_label"
-    ];
-
-    for (const candidate of exactCandidates) {
-
-        const field =
-            inspection.fields.find(field =>
-                normalizeFieldName(
-                    field.name
-                ) === normalizeFieldName(candidate)
-            );
-
-        if (field) {
-            return field.name;
-        }
-    }
-
-
-    /*
-     * More permissive fallback.
-     */
-    for (const field of inspection.fields) {
-
-        const name =
-            normalizeFieldName(
-                field.name
-            );
-
-        if (
-            name.includes("district") &&
-            name.includes("name")
-        ) {
-            return field.name;
-        }
-
-        if (
-            name.includes("ward") &&
-            name.includes("name")
-        ) {
-            return field.name;
-        }
-    }
-
-
-    return undefined;
-}
-
-
-// =============================================================================
-// Alternative source
-// =============================================================================
-
-function createAlternative(
-    candidate: InspectedCandidate
-): CanonicalAlternative {
 
     return {
-        url:
-            candidate.inspection.url,
-
-        title:
-            candidate.inspection.title ??
-            candidate.candidate.title,
-
-        serviceType:
-            candidate.inspection.serviceType,
-
-        officialMunicipalSource:
-            candidate.classification
-                .officialMunicipalSource,
-
-        score:
-            candidate.candidate.score
+        candidate,
+        score,
+        reasons
     };
 }
 
 
 // =============================================================================
-// Selection reasons
+// Select canonical source within an equivalence group
 // =============================================================================
 
-function getSelectionReasons(
-    candidate: InspectedCandidate,
-    score: number
-): string[] {
+/**
+ * Select the strongest source from one equivalence group.
+ *
+ * Example:
+ *
+ * TucsonWards2022
+ * COT_wards
+ *
+ * may be determined to represent the same underlying ward dataset.
+ *
+ * This function selects the best of those equivalent sources.
+ */
+export function selectCanonicalSource(
+    group: EquivalentLayerGroup
+): CanonicalSource | undefined {
 
-    const reasons: string[] = [];
+    if (
+        group.candidates.length === 0
+    ) {
+        return undefined;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Rank candidates
+    // -------------------------------------------------------------------------
+
+    const ranked =
+        group.candidates
+            .map(scoreCandidate)
+            .sort(compareCandidateScores);
+
+
+    const best =
+        ranked[0];
+
+
+    if (!best) {
+        return undefined;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Never select a rejected candidate
+    // -------------------------------------------------------------------------
+
+    if (
+        best.score ===
+        Number.NEGATIVE_INFINITY
+    ) {
+
+        return undefined;
+    }
+
+
+    const candidate =
+        best.candidate;
 
     const inspection =
         candidate.inspection;
@@ -638,270 +347,441 @@ function getSelectionReasons(
         candidate.classification;
 
 
+    // -------------------------------------------------------------------------
+    // Required canonical information
+    // -------------------------------------------------------------------------
+
     if (
-        classification.officialMunicipalSource
+        !inspection.districtField ||
+        !classification.districtType
     ) {
-        reasons.push(
-            "Official municipal source"
-        );
+
+        return undefined;
     }
 
 
-    if (
-        classification.isPoliticalBoundary
-    ) {
-        reasons.push(
-            "Identified as a political boundary"
-        );
-    }
+    // -------------------------------------------------------------------------
+    // Alternatives
+    // -------------------------------------------------------------------------
+
+    const alternatives:
+        CanonicalAlternative[] =
+
+        ranked
+            .slice(1)
+
+            .filter(
+                item =>
+                    item.score !==
+                    Number.NEGATIVE_INFINITY
+            )
+
+            .map(
+                item => ({
+                    url:
+                        item.candidate
+                            .inspection
+                            .url,
+
+                    title:
+                        item.candidate
+                            .inspection
+                            .title,
+
+                    serviceType:
+                        item.candidate
+                            .inspection
+                            .serviceType,
+
+                    officialMunicipalSource:
+                        item.candidate
+                            .classification
+                            .officialMunicipalSource,
+
+                    score:
+                        item.score
+                })
+            );
 
 
-    if (
-        inspection.geometryType &&
-        isPolygonGeometry(
-            inspection.geometryType
-        )
-    ) {
-        reasons.push(
-            "Polygon geometry"
-        );
-    }
+    // -------------------------------------------------------------------------
+    // Canonical source
+    // -------------------------------------------------------------------------
 
+    return {
 
-    if (
-        inspection.districtField
-    ) {
-        reasons.push(
-            `District field identified: ${inspection.districtField}`
-        );
-    }
+        url:
+            inspection.url,
 
+        title:
+            inspection.title ??
+            inspection.layerName ??
+            inspection.serviceName ??
+            "Municipal district layer",
 
-    if (
-        inspection.nameField
-    ) {
-        reasons.push(
-            `Name field identified: ${inspection.nameField}`
-        );
-    }
+        city:
+            candidate.candidate.city,
 
+        state:
+            candidate.candidate.state,
 
-    if (
-        inspection.serviceType ===
-        "FeatureServer"
-    ) {
-        reasons.push(
-            "FeatureServer provides queryable features"
-        );
-    }
+        placeFips:
+            candidate.candidate.placeFips,
 
+        districtType:
+            classification.districtType,
 
-    if (
-        inspection.supportsGeoJSON
-    ) {
-        reasons.push(
-            "Supports GeoJSON output"
-        );
-    }
+        serviceType:
+            inspection.serviceType,
 
+        officialMunicipalSource:
+            classification
+                .officialMunicipalSource,
 
-    reasons.push(
-        `Canonical score: ${score}`
-    );
+        districtField:
+            inspection.districtField,
 
+        nameField:
+            inspection.nameField,
 
-    return reasons;
+        geometryType:
+            inspection.geometryType ??
+            "unknown",
+
+        score:
+            best.score,
+
+        alternatives,
+
+        selectionReasons:
+            best.reasons,
+
+        requiresReview:
+            Boolean(
+                candidate.candidate.requiresReview ||
+                classification.requiresReview ||
+                group.confidence < 0.75
+            )
+    };
 }
 
 
 // =============================================================================
-// Review requirements
+// Candidate score comparison
 // =============================================================================
 
-function shouldRequireReview(
-    candidate: InspectedCandidate,
-    score: number,
-    districtField: string
-): boolean {
+/**
+ * Deterministic comparison of candidate scores.
+ */
+function compareCandidateScores(
+    a: CandidateScore,
+    b: CandidateScore
+): number {
 
-    /*
-     * Never automatically accept rejected classifications.
-     */
-    if (
-        candidate.classification.shouldReject
-    ) {
-        return true;
-    }
-
-
-    /*
-     * A missing explicitly detected district field means
-     * we had to infer it.
-     */
-    if (
-        !candidate.inspection.districtField
-    ) {
-        return true;
-    }
-
-
-    /*
-     * Low-confidence candidates require review.
-     */
-    if (score < 100) {
-        return true;
-    }
-
-
-    /*
-     * Unknown geometry requires review.
-     */
-    if (
-        candidate.inspection.geometryType ===
-        "unknown"
-    ) {
-        return true;
-    }
-
-
-    /*
-     * Make sure the field actually exists.
-     */
-    if (
-        candidate.inspection.fields &&
-        !candidate.inspection.fields.some(
-            field =>
-                field.name ===
-                districtField
-        )
-    ) {
-        return true;
-    }
-
-
-    return false;
-}
-
-
-// =============================================================================
-// Historical source detection
-// =============================================================================
-
-function isHistorical(
-    text: string
-): boolean {
+    // -------------------------------------------------------------------------
+    // Highest score first
+    // -------------------------------------------------------------------------
 
     if (
-        containsAny(text, [
-            "historical",
-            "historic",
-            "old wards",
-            "old districts",
-            "previous wards",
-            "previous districts",
-            "former wards",
-            "former districts",
-            "superseded",
-            "archive",
-            "archived"
-        ])
+        b.score !==
+        a.score
     ) {
-        return true;
-    }
-
-
-    /*
-     * A year isn't automatically historical because a dataset may
-     * represent the current redistricting cycle.
-     */
-    const years =
-        text.match(
-            /\b(19|20)\d{2}\b/g
-        );
-
-    if (
-        !years ||
-        years.length === 0
-    ) {
-        return false;
-    }
-
-
-    const currentYear =
-        new Date().getFullYear();
-
-
-    return years.some(year => {
-
-        const numericYear =
-            Number(year);
 
         return (
-            numericYear <
-            currentYear - 4
+            b.score -
+            a.score
         );
-    });
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Prefer candidates that do not require review
+    // -------------------------------------------------------------------------
+
+    const aReview =
+        Boolean(
+            a.candidate.candidate.requiresReview ||
+            a.candidate.classification.requiresReview
+        );
+
+    const bReview =
+        Boolean(
+            b.candidate.candidate.requiresReview ||
+            b.candidate.classification.requiresReview
+        );
+
+
+    if (
+        aReview !==
+        bReview
+    ) {
+
+        return aReview
+            ? 1
+            : -1;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Prefer official municipal sources
+    // -------------------------------------------------------------------------
+
+    const aOfficial =
+        a.candidate
+            .classification
+            .officialMunicipalSource;
+
+    const bOfficial =
+        b.candidate
+            .classification
+            .officialMunicipalSource;
+
+
+    if (
+        aOfficial !==
+        bOfficial
+    ) {
+
+        return aOfficial
+            ? -1
+            : 1;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Prefer FeatureServer
+    // -------------------------------------------------------------------------
+
+    const aFeatureServer =
+        a.candidate
+            .inspection
+            .serviceType ===
+        "FeatureServer";
+
+    const bFeatureServer =
+        b.candidate
+            .inspection
+            .serviceType ===
+        "FeatureServer";
+
+
+    if (
+        aFeatureServer !==
+        bFeatureServer
+    ) {
+
+        return aFeatureServer
+            ? -1
+            : 1;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Deterministic URL ordering
+    // -------------------------------------------------------------------------
+
+    return a.candidate.inspection.url
+        .localeCompare(
+            b.candidate.inspection.url
+        );
 }
 
 
 // =============================================================================
-// Geometry helpers
+// Select ONE canonical source for a municipality
 // =============================================================================
 
-function isPolygonGeometry(
-    geometryType: string
-): boolean {
+/**
+ * Select exactly one canonical source from all equivalence groups
+ * belonging to a municipality.
+ *
+ * This is the function that enforces the important architectural rule:
+ *
+ *      one municipality → one canonical source
+ */
+export function selectMunicipalityCanonicalSource(
+    groups: EquivalentLayerGroup[]
+): CanonicalSource | undefined {
 
-    const value =
-        geometryType
-            .toLowerCase();
+    if (
+        groups.length === 0
+    ) {
+        return undefined;
+    }
 
-    return (
-        value ===
-            "esrigeometrypolygon" ||
-        value ===
-            "esripolygon" ||
-        value ===
-            "polygon" ||
-        value.includes("polygon")
+
+    // -------------------------------------------------------------------------
+    // Select the winner from each equivalence group
+    // -------------------------------------------------------------------------
+
+    const groupWinners =
+        groups
+            .map(
+                group =>
+                    selectCanonicalSource(
+                        group
+                    )
+            )
+            .filter(
+                (
+                    source
+                ): source is CanonicalSource =>
+                    source !== undefined
+            );
+
+
+    if (
+        groupWinners.length === 0
+    ) {
+
+        return undefined;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Select one municipality-wide winner
+    // -------------------------------------------------------------------------
+
+    groupWinners.sort(
+        compareCanonicalSources
+    );
+
+
+    return groupWinners[0];
+}
+
+
+// =============================================================================
+// Municipality canonical-source comparison
+// =============================================================================
+
+/**
+ * Compare canonical winners from different equivalence groups.
+ *
+ * Example:
+ *
+ * Group A → TucsonWards2022
+ * Group B → some other official ward dataset
+ *
+ * Only one ultimately becomes the municipality's canonical source.
+ */
+function compareCanonicalSources(
+    a: CanonicalSource,
+    b: CanonicalSource
+): number {
+
+    // -------------------------------------------------------------------------
+    // Highest score first
+    // -------------------------------------------------------------------------
+
+    if (
+        b.score !==
+        a.score
+    ) {
+
+        return (
+            b.score -
+            a.score
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Prefer sources that do not require review
+    // -------------------------------------------------------------------------
+
+    if (
+        a.requiresReview !==
+        b.requiresReview
+    ) {
+
+        return a.requiresReview
+            ? 1
+            : -1;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Prefer official municipal sources
+    // -------------------------------------------------------------------------
+
+    if (
+        a.officialMunicipalSource !==
+        b.officialMunicipalSource
+    ) {
+
+        return a.officialMunicipalSource
+            ? -1
+            : 1;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Prefer FeatureServer
+    // -------------------------------------------------------------------------
+
+    if (
+        a.serviceType !==
+        b.serviceType
+    ) {
+
+        return a.serviceType ===
+            "FeatureServer"
+            ? -1
+            : 1;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Deterministic fallback
+    // -------------------------------------------------------------------------
+
+    return a.url.localeCompare(
+        b.url
     );
 }
 
 
 // =============================================================================
-// Text helpers
+// Select canonical source from every equivalence group
 // =============================================================================
 
-function normalizeText(
-    value: string
-): string {
+/**
+ * Select one canonical source for every equivalence group.
+ *
+ * This is useful for diagnostics and review.
+ *
+ * It does NOT enforce the one-source-per-municipality rule.
+ *
+ * Use selectMunicipalityCanonicalSource() for that.
+ */
+export function selectCanonicalSources(
+    groups: EquivalentLayerGroup[]
+): CanonicalSource[] {
 
-    return value
-        .toLowerCase()
-        .replace(/[_-]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
-
-function normalizeFieldName(
-    value: string
-): string {
-
-    return value
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
-}
+    const sources: CanonicalSource[] = [];
 
 
-function containsAny(
-    value: string,
-    terms: string[]
-): boolean {
+    for (
+        const group of groups
+    ) {
 
-    return terms.some(term =>
-        value.includes(
-            normalizeText(term)
-        )
-    );
+        const canonical =
+            selectCanonicalSource(
+                group
+            );
+
+
+        if (
+            canonical
+        ) {
+
+            sources.push(
+                canonical
+            );
+        }
+    }
+
+
+    return sources;
 }

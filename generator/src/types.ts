@@ -18,10 +18,12 @@ export type DistrictType =
 
 export type CensusPlaceType =
     | "incorporated-place"
-    | "census-designated-place" 
+    | "census-designated-place"
     | "other";
 
+
 export interface CensusPlace {
+
     /**
      * Census place GEOID.
      */
@@ -49,19 +51,20 @@ export interface CensusPlace {
 
     /**
      * Census place type.
-     *
-     * Examples:
-     * - incorporated-place
-     * - census-designated-place
      */
     placeType?: CensusPlaceType;
 }
 
 
 // =============================================================================
-// Discovery
+// Discovery candidate
 // =============================================================================
 
+/**
+ * A candidate discovered through ArcGIS search.
+ *
+ * This represents the candidate BEFORE ArcGIS inspection.
+ */
 export interface DiscoveryCandidate {
     /**
      * Census place GEOID.
@@ -81,7 +84,7 @@ export interface DiscoveryCandidate {
     /**
      * URL discovered during the search process.
      */
-    candidateUrl: string;
+    url: string;
 
     /**
      * Human-readable title, if discovered.
@@ -105,11 +108,6 @@ export interface DiscoveryCandidate {
 
     /**
      * Source from which the candidate was discovered.
-     *
-     * Examples:
-     * "arcgis"
-     * "search"
-     * "municipal"
      */
     source?: string;
 
@@ -121,7 +119,7 @@ export interface DiscoveryCandidate {
 
 
 // =============================================================================
-// ArcGIS inspection
+// ArcGIS service
 // =============================================================================
 
 export type ArcGISServiceType =
@@ -143,7 +141,12 @@ export type ArcGISGeometryType =
     | "unknown";
 
 
+// =============================================================================
+// ArcGIS fields
+// =============================================================================
+
 export interface ArcGISField {
+
     /**
      * ArcGIS field name.
      */
@@ -171,7 +174,12 @@ export interface ArcGISField {
 }
 
 
+// =============================================================================
+// ArcGIS inspection
+// =============================================================================
+
 export interface ArcGISInspection {
+
     /**
      * URL inspected.
      */
@@ -284,8 +292,9 @@ export interface ArcGISInspection {
     /**
      * Raw ArcGIS response.
      *
-     * Useful during development, but should not normally be
-     * written into generated registry files.
+     * Useful during development.
+     *
+     * Should not normally be written into the generated registry.
      */
     raw?: unknown;
 }
@@ -296,18 +305,40 @@ export interface ArcGISInspection {
 // =============================================================================
 
 export interface ClassificationMatches {
+
+    /**
+     * Evidence suggesting the dataset is thematic.
+     */
     thematic: string[];
 
+    /**
+     * Evidence suggesting a Census dataset.
+     */
     census: string[];
 
+    /**
+     * Evidence suggesting a parcel/property dataset.
+     */
     parcel: string[];
 
+    /**
+     * Evidence suggesting a housing dataset.
+     */
     housing: string[];
 
+    /**
+     * Evidence suggesting a political boundary.
+     */
     political: string[];
 
+    /**
+     * Evidence suggesting a generic boundary layer.
+     */
     boundary: string[];
 
+    /**
+     * Evidence suggesting an official municipal source.
+     */
     official: string[];
 }
 
@@ -357,9 +388,15 @@ export interface CandidateClassification {
     districtType?: DistrictType;
 
     /**
-     * Whether the candidate should be rejected.
+     * Whether the candidate should be rejected from
+     * canonical selection.
      */
-    shouldReject: boolean;
+    rejected: boolean;
+
+    /**
+     * Whether the candidate should receive manual review.
+     */
+    requiresReview: boolean;
 
     /**
      * Keyword evidence used during classification.
@@ -373,9 +410,11 @@ export interface CandidateClassification {
 // =============================================================================
 
 /**
- * A discovery candidate after ArcGIS inspection and classification.
+ * A discovery candidate after ArcGIS inspection
+ * and classification.
  */
 export interface InspectedCandidate {
+
     /**
      * Original discovery candidate.
      */
@@ -398,13 +437,14 @@ export interface InspectedCandidate {
 // =============================================================================
 
 export interface CandidateScore {
+
     /**
      * Candidate being scored.
      */
     candidate: InspectedCandidate;
 
     /**
-     * Final score.
+     * Final canonical-selection score.
      */
     score: number;
 
@@ -420,10 +460,11 @@ export interface CandidateScore {
 // =============================================================================
 
 /**
- * Normalized representation of an ArcGIS layer used for
- * duplicate/equivalence detection.
+ * Normalized representation of an ArcGIS layer used
+ * for duplicate/equivalence detection.
  */
 export interface LayerFingerprint {
+
     /**
      * Normalized layer title.
      */
@@ -472,21 +513,22 @@ export interface LayerFingerprint {
 // =============================================================================
 
 /**
- * Group of ArcGIS layers believed to represent the same
- * underlying municipal political boundary dataset.
+ * Group of ArcGIS layers believed to represent the
+ * same underlying municipal political boundary dataset.
  */
 export interface EquivalentLayerGroup {
+
     /**
      * Candidates in this equivalence group.
      */
     candidates: InspectedCandidate[];
 
     /**
-     * Confidence that the candidates represent the
-     * same underlying dataset.
+     * Confidence that the candidates represent
+     * the same underlying dataset.
      *
      * 0 = no confidence
-     * 1 = complete confidence
+     * 1 = complete confidence.
      */
     confidence: number;
 
@@ -502,6 +544,7 @@ export interface EquivalentLayerGroup {
 // =============================================================================
 
 export interface CanonicalSource {
+
     /**
      * Selected canonical ArcGIS layer URL.
      */
@@ -538,8 +581,8 @@ export interface CanonicalSource {
     serviceType: ArcGISServiceType;
 
     /**
-     * Whether the source appears to be maintained by
-     * the municipality.
+     * Whether the source appears to be maintained
+     * by the municipality.
      */
     officialMunicipalSource: boolean;
 
@@ -581,6 +624,7 @@ export interface CanonicalSource {
 
 
 export interface CanonicalAlternative {
+
     /**
      * Alternative source URL.
      */
@@ -613,6 +657,7 @@ export interface CanonicalAlternative {
 // =============================================================================
 
 export interface RegistryEntry {
+
     /**
      * Census place FIPS.
      */
@@ -651,6 +696,7 @@ export interface RegistryEntry {
 
 
 export interface RegistrySource {
+
     /**
      * Canonical ArcGIS layer URL.
      */
@@ -674,6 +720,7 @@ export interface RegistrySource {
 
 
 export interface RegistryFields {
+
     /**
      * District identifier field.
      */
@@ -687,6 +734,7 @@ export interface RegistryFields {
 
 
 export interface RegistryMetadata {
+
     /**
      * Date/time registry entry was generated.
      */
@@ -713,19 +761,28 @@ export interface RegistryMetadata {
 // Discovery result
 // =============================================================================
 
+/**
+ * Complete result of discovering municipal political
+ * district sources for ONE Census municipality.
+ *
+ * The pipeline intentionally produces exactly one
+ * DiscoveryResult per municipality.
+ */
 export interface DiscoveryResult {
+
     /**
      * Census municipality being processed.
      */
     place: CensusPlace;
 
     /**
-     * Raw discovered candidates.
+     * Raw candidates returned by ArcGIS discovery.
      */
     candidates: DiscoveryCandidate[];
 
     /**
-     * Candidates after ArcGIS inspection.
+     * Candidates that were successfully inspected
+     * and classified.
      */
     inspectedCandidates: InspectedCandidate[];
 
@@ -745,19 +802,26 @@ export interface DiscoveryResult {
     rejectedCandidates: InspectedCandidate[];
 
     /**
-     * Groups of equivalent sources.
+     * Groups of equivalent ArcGIS sources.
      */
     equivalentGroups: EquivalentLayerGroup[];
 
     /**
-     * Selected canonical source.
+     * One municipality-level canonical source.
      */
     canonical?: CanonicalSource;
 
     /**
-     * Generated registry entry.
+     * Registry entry generated from the canonical source.
      */
     registryEntry?: RegistryEntry;
+
+    /**
+     * Error encountered while processing this municipality.
+     *
+     * A failed municipality still produces a DiscoveryResult.
+     */
+    error?: string;
 }
 
 
@@ -766,6 +830,7 @@ export interface DiscoveryResult {
 // =============================================================================
 
 export interface GeneratorOptions {
+
     /**
      * Process only a specific city.
      */
@@ -800,4 +865,74 @@ export interface GeneratorOptions {
      * Generator output directory.
      */
     outputDir?: string;
+}
+
+
+// =============================================================================
+// ArcGIS search
+// =============================================================================
+
+export interface ArcGISSearchResult {
+
+    /**
+     * ArcGIS item ID.
+     */
+    id: string;
+
+    /**
+     * ArcGIS item title.
+     */
+    title: string;
+
+    /**
+     * ArcGIS item type.
+     */
+    type:
+        | "Feature Service"
+        | "Map Service";
+
+    /**
+     * ArcGIS REST URL.
+     */
+    url: string;
+
+    /**
+     * ArcGIS item owner.
+     */
+    owner?: string;
+
+    /**
+     * ArcGIS description.
+     */
+    description?: string;
+
+    /**
+     * ArcGIS snippet.
+     */
+    snippet?: string;
+
+    /**
+     * ArcGIS tags.
+     */
+    tags?: string[];
+
+    /**
+     * Access level.
+     */
+    access?: string;
+
+    /**
+     * Creation timestamp.
+     */
+    created?: number;
+
+    /**
+     * Modification timestamp.
+     */
+    modified?: number;
+
+    /**
+     * ArcGIS type keywords.
+     */
+    typeKeywords?: string[];
 }
