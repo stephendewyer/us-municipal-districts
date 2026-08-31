@@ -1,0 +1,28 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-08-18T21:11:54.346Z",
+  "entries": [
+    {
+      "placeFips": "0477000",
+      "city": "Tucson",
+      "state": "AZ",
+      "districtType": "ward",
+      "source": {
+        "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Vulnerability_WFL1/FeatureServer/7",
+        "serviceType": "FeatureServer",
+        "title": "COT_wards",
+        "official": false
+      },
+      "fields": {
+        "district": "WARD",
+        "name": "NAME"
+      },
+      "metadata": {
+        "generatedAt": "2026-08-18T21:11:54.346Z",
+        "generatorVersion": "0.1.0",
+        "alternatives": [],
+        "requiresReview": true
+      }
+    }
+  ]
+}
