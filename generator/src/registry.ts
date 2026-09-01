@@ -6,7 +6,6 @@ import type {
     CanonicalSource,
     CensusPlace,
     DiscoveryResult,
-    DistrictType,
     RegistryEntry
 } from "./types.js";
 
@@ -136,8 +135,11 @@ export function buildRegistry(
     entries.sort(compareRegistryEntries);
 
     return {
-        version: GENERATOR_VERSION,
+        version:
+            GENERATOR_VERSION,
+
         generatedAt,
+
         entries
     };
 }
@@ -200,10 +202,13 @@ function createRegistryEntry(
         state:
             place.state,
 
-        districtType:
+        boundaryType:
             canonical.districtType,
 
         source: {
+            sourceType:
+                "arcgis",
+
             url:
                 canonical.url,
 
@@ -221,20 +226,30 @@ function createRegistryEntry(
                 canonical.title,
 
             official:
-                canonical.officialMunicipalSource
+                canonical.officialMunicipalSource,
+
+            /*
+             * A source selected by the canonical-selection stage has
+             * already been inspected and accepted by the generator.
+             */
+            verified:
+                true,
+
+            fieldMapping: {
+                district:
+                    canonical.districtField,
+
+                ...(canonical.nameField
+                    ? {
+                        name:
+                            canonical.nameField
+                    }
+                    : {})
+            }
         },
 
-        fields: {
-            district:
-                canonical.districtField,
-
-            ...(canonical.nameField
-                ? {
-                    name:
-                        canonical.nameField
-                }
-                : {})
-        },
+        generatedFile:
+            `geometry/${place.placeFips}/${canonical.districtType}.geojson`,
 
         metadata: {
             generatedAt,
@@ -243,7 +258,35 @@ function createRegistryEntry(
                 GENERATOR_VERSION,
 
             alternatives:
-                canonical.alternatives,
+                canonical.alternatives.map(
+                    alternative => ({
+                        url:
+                            alternative.url,
+
+                        ...(alternative.itemId
+                            ? {
+                                itemId:
+                                    alternative.itemId
+                            }
+                            : {}),
+
+                        ...(alternative.title
+                            ? {
+                                title:
+                                    alternative.title
+                            }
+                            : {}),
+
+                        serviceType:
+                            alternative.serviceType ?? "unknown",
+
+                        official:
+                            false,
+
+                        score:
+                             alternative.score ?? 0
+                    })
+                ),
 
             requiresReview:
                 canonical.requiresReview
@@ -289,11 +332,11 @@ function compareRegistryEntries(
 
     /*
      * Tertiary sort:
-     * district type
+     * boundary type
      */
     const typeComparison =
-        a.districtType.localeCompare(
-            b.districtType
+        a.boundaryType.localeCompare(
+            b.boundaryType
         );
 
     if (typeComparison !== 0) {
@@ -319,7 +362,8 @@ function compareRegistryEntries(
  *
  * Useful for validation and debugging.
  */
-export function loadGeneratedRegistry(): GeneratedRegistry {
+export function loadGeneratedRegistry():
+    GeneratedRegistry {
 
     if (!fs.existsSync(REGISTRY_PATH)) {
         throw new Error(

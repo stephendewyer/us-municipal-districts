@@ -70,8 +70,6 @@ export type {
 
     DiscoveryCandidate,
     DiscoveryResult,
-
-    ArcGISServiceType,
     ArcGISGeometryType,
     ArcGISField,
     ArcGISInspection,
@@ -89,10 +87,13 @@ export type {
     CanonicalSource,
     CanonicalAlternative,
 
-    RegistryEntry,
-    RegistrySource,
-    RegistryFields,
-    RegistryMetadata,
-
+    // Canonical municipal registry types
+    MunicipalDistrictRegistry,
+    MunicipalDistrictRegistryEntry,
+    MunicipalDistrictSource,
+    MunicipalDistrictFieldMapping,
+    MunicipalDistrictMetadata,
+    MunicipalDistrictAlternative,
+    ArcGISServiceType,
     GeneratorOptions,
 } from "./types.js";

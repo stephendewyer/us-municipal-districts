@@ -6,28 +6,35 @@
       "placeFips": "0477000",
       "city": "Tucson",
       "state": "AZ",
-      "districtType": "ward",
+      "boundaryType": "ward",
+
       "source": {
+        "sourceType": "arcgis",
         "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Tree_Equity_Score__City_of_Tucson_2020_/FeatureServer/158",
         "itemId": "1e60a4c5892340579cbf16808fcfab45",
         "serviceType": "FeatureServer",
         "title": "Tree Equity Score (City of Tucson 2020)",
-        "official": true
+        "official": true,
+        "verified": true,
+        "fieldMapping": {
+          "district": "WARD",
+          "name": "NAME"
+        }
       },
-      "fields": {
-        "district": "WARD",
-        "name": "NAME"
-      },
+
+      "generatedFile": "geometry/0477000/ward.geojson",
+
       "metadata": {
         "generatedAt": "2026-08-31T21:55:36.404Z",
         "generatorVersion": "0.1.0",
+
         "alternatives": [
           {
             "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Vulnerability_WFL1/FeatureServer/7",
             "itemId": "114c086823734b058ae80a0b2d7a0ed0",
             "title": "COT_wards",
             "serviceType": "FeatureServer",
-            "officialMunicipalSource": false,
+            "official": false,
             "score": 138
           },
           {
@@ -35,10 +42,11 @@
             "itemId": "114c086823734b058ae80a0b2d7a0ed0",
             "title": "Tucson_Tree_Equity_Scores",
             "serviceType": "FeatureServer",
-            "officialMunicipalSource": false,
+            "official": false,
             "score": 138
           }
         ],
+
         "requiresReview": false
       }
     }

@@ -5,63 +5,88 @@ import type {
     MunicipalDistrictRegistry,
 } from "../../src/registry.js";
 
+
 test(
     "registry accepts a municipal council district entry",
     () => {
+
         const registry:
             MunicipalDistrictRegistry = {
-                version: "0.1.0",
 
-                generatedAt:
-                    "2026-08-13T00:00:00.000Z",
+            version:
+                "0.1.0",
 
-                entries: [
-                    {
-                        placeFips:
-                            "0455000",
+            generatedAt:
+                "2026-08-13T00:00:00.000Z",
 
-                        city:
-                            "Phoenix",
+            entries: [
+                {
+                    placeFips:
+                        "0455000",
 
-                        state:
-                            "AZ",
+                    city:
+                        "Phoenix",
 
-                        boundaryType:
-                            "city-council-district",
+                    state:
+                        "AZ",
 
-                        source: {
-                            url:
-                                "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0",
+                    boundaryType:
+                        "city-council-district",
 
-                            sourceType:
-                                "official-municipal",
+                    source: {
+                        sourceType:
+                            "arcgis",
 
-                            format:
-                                "arcgis-rest",
+                        url:
+                            "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0",
 
-                            verified: true,
+                        serviceType:
+                            "MapServer",
 
-                            fieldMapping: {
-                                district:
-                                    "DISTRICT",
-                                name:
-                                    "REP_NAME",
-                            },
+                        title:
+                            "Phoenix Council Districts",
 
-                            lastVerified:
-                                "2026-08-13",
-                        },
+                        official:
+                            true,
 
-                        generatedFile:
-                            "AZ/0455000.geojson",
+                        verified:
+                            true,
+
+                        fieldMapping: {
+                            district:
+                                "DISTRICT",
+
+                            name:
+                                "REP_NAME"
+                        }
                     },
-                ],
-            };
+
+                    generatedFile:
+                        "geometry/0455000/city-council-district.geojson",
+
+                    metadata: {
+                        generatedAt:
+                            "2026-08-13T00:00:00.000Z",
+
+                        generatorVersion:
+                            "0.1.0",
+
+                        alternatives:
+                            [],
+
+                        requiresReview:
+                            false
+                    }
+                }
+            ]
+        };
+
 
         assert.equal(
             registry.entries.length,
             1
         );
+
 
         assert.equal(
             registry.entries[0]
@@ -69,12 +94,29 @@ test(
             "city-council-district"
         );
 
+
         assert.equal(
             registry.entries[0]
                 .source
                 .fieldMapping
-                ?.district,
+                .district,
             "DISTRICT"
+        );
+
+
+        assert.equal(
+            registry.entries[0]
+                .source
+                .serviceType,
+            "MapServer"
+        );
+
+
+        assert.equal(
+            registry.entries[0]
+                .source
+                .official,
+            true
         );
     }
 );

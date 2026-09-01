@@ -1,3 +1,11 @@
+import type {
+    MunicipalDistrictFieldMapping,
+    MunicipalDistrictMetadata,
+    MunicipalDistrictRegistryEntry,
+    MunicipalDistrictSource,
+    ArcGISServiceType
+} from "../../src/types.js";
+
 // =============================================================================
 // Basic geographic types
 // =============================================================================
@@ -328,12 +336,6 @@ export interface DiscoveryCandidate {
 // =============================================================================
 // ArcGIS service
 // =============================================================================
-
-export type ArcGISServiceType =
-    | "FeatureServer"
-    | "MapServer"
-    | "unknown";
-
 
 export type ArcGISGeometryType =
     | "esriGeometryPoint"
@@ -800,70 +802,11 @@ export interface CanonicalAlternative {
 
     title?: string;
 
-    serviceType?: ArcGISServiceType;
+    serviceType: ArcGISServiceType;
 
     officialMunicipalSource?: boolean;
 
     score?: number;
-}
-
-
-// =============================================================================
-// Registry
-// =============================================================================
-
-export interface RegistryEntry {
-
-    placeFips: string;
-
-    city: string;
-
-    state: StateAbbreviation;
-
-    districtType: DistrictType;
-
-    source: RegistrySource;
-
-    fields: RegistryFields;
-
-    metadata: RegistryMetadata;
-}
-
-
-export interface RegistrySource {
-
-    url: string;
-
-    /**
-     * ArcGIS item ID, when available.
-     */
-    itemId?: string;
-
-    serviceType: ArcGISServiceType;
-
-    title: string;
-
-    official: boolean;
-}
-
-
-export interface RegistryFields {
-
-    district: string;
-
-    name?: string;
-}
-
-
-export interface RegistryMetadata {
-
-    generatedAt: string;
-
-    generatorVersion?: string;
-
-    alternatives?: CanonicalAlternative[];
-
-    requiresReview: boolean;
 }
 
 
@@ -899,7 +842,7 @@ export interface DiscoveryResult {
      */
     canonical?: CanonicalSource;
 
-    registryEntry?: RegistryEntry;
+    registryEntry?: MunicipalDistrictRegistryEntry;
 
     error?: string;
 }
@@ -1016,3 +959,42 @@ export interface GeneratorOptions {
 
     outputDir?: string;
 }
+
+// =============================================================================
+// Canonical municipal registry types
+// =============================================================================
+
+export type {
+    BoundaryType,
+    MunicipalDistrictRegistry,
+    MunicipalDistrictRegistryEntry,
+    MunicipalDistrictSource,
+    MunicipalDistrictFieldMapping,
+    MunicipalDistrictMetadata,
+    MunicipalDistrictAlternative,
+    ArcGISServiceType
+} from "../../src/types.js";
+
+// =============================================================================
+// Legacy registry type aliases
+// =============================================================================
+
+/**
+ * @deprecated Use MunicipalDistrictRegistryEntry.
+ */
+export type RegistryEntry = MunicipalDistrictRegistryEntry;
+
+/**
+ * @deprecated Use MunicipalDistrictSource.
+ */
+export type RegistrySource = MunicipalDistrictSource;
+
+/**
+ * @deprecated Use MunicipalDistrictFieldMapping.
+ */
+export type RegistryFields = MunicipalDistrictFieldMapping;
+
+/**
+ * @deprecated Use MunicipalDistrictMetadata.
+ */
+export type RegistryMetadata = MunicipalDistrictMetadata;

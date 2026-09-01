@@ -3,11 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type {
+    ArcGISServiceType,
     BoundaryType,
     MunicipalDistrictLookupOptions,
     MunicipalDistrictRegistry,
     MunicipalDistrictRegistryEntry,
-    MunicipalDistrictSource
+    MunicipalDistrictSource,
+    MunicipalDistrictMetadata,
+    MunicipalDistrictAlternative
 } from "./types.js";
 
 export type {
@@ -15,6 +18,7 @@ export type {
     MunicipalDistrictRegistryEntry,
     MunicipalDistrictSource
 };
+
 
 // =============================================================================
 // Paths
@@ -306,10 +310,36 @@ function validateRegistryEntry(
     }
 
     if (
+        !isBoundaryType(
+            record.boundaryType
+        )
+    ) {
+        throw new Error(
+            `Invalid registry entry: unsupported boundaryType "${record.boundaryType}".`
+        );
+    }
+
+    if (
         typeof record.generatedFile !== "string"
     ) {
         throw new Error(
             "Invalid registry entry: missing generatedFile."
+        );
+    }
+
+    if (
+        record.source === undefined
+    ) {
+        throw new Error(
+            "Invalid registry entry: missing source."
+        );
+    }
+
+    if (
+        record.metadata === undefined
+    ) {
+        throw new Error(
+            "Invalid registry entry: missing metadata."
         );
     }
 
@@ -326,7 +356,7 @@ function validateRegistryEntry(
             ),
 
         boundaryType:
-            record.boundaryType as BoundaryType,
+            record.boundaryType,
 
         source:
             validateSource(
@@ -334,7 +364,12 @@ function validateRegistryEntry(
             ),
 
         generatedFile:
-            record.generatedFile
+            record.generatedFile,
+
+        metadata:
+            validateMetadata(
+                record.metadata
+            )
     };
 }
 
@@ -364,6 +399,14 @@ function validateSource(
     ) {
         throw new Error(
             "Invalid registry source: missing sourceType."
+        );
+    }
+
+    if (
+        record.sourceType !== "arcgis"
+    ) {
+        throw new Error(
+            `Invalid registry source: unsupported sourceType "${record.sourceType}".`
         );
     }
 
@@ -398,12 +441,45 @@ function validateSource(
         );
     }
 
+    if (
+        typeof record.official !== "boolean"
+    ) {
+        throw new Error(
+            "Invalid registry source: official must be a boolean."
+        );
+    }
+
+    if (
+        typeof record.verified !== "boolean"
+    ) {
+        throw new Error(
+            "Invalid registry source: verified must be a boolean."
+        );
+    }
+
+    if (
+        record.serviceType !== "FeatureServer" &&
+        record.serviceType !== "MapServer"
+    ) {
+        throw new Error(
+            "Invalid registry source: serviceType must be FeatureServer or MapServer."
+        );
+    }
+
     return {
         sourceType:
-            record.sourceType,
+            "arcgis",
 
         url:
             record.url,
+
+        itemId:
+            typeof record.itemId === "string"
+                ? record.itemId
+                : undefined,
+
+        serviceType:
+            record.serviceType,
 
         title:
             typeof record.title === "string"
@@ -413,22 +489,12 @@ function validateSource(
         official:
             typeof record.official === "boolean"
                 ? record.official
-                : undefined,
+                : false,
 
         verified:
             typeof record.verified === "boolean"
                 ? record.verified
-                : undefined,
-
-        lastVerified:
-            typeof record.lastVerified === "string"
-                ? record.lastVerified
-                : undefined,
-
-        format:
-            typeof record.format === "string"
-                ? record.format
-                : undefined,
+                : false,
 
         fieldMapping: {
             district:
@@ -440,6 +506,184 @@ function validateSource(
                     : undefined
         }
     };
+}
+
+
+// =============================================================================
+// Metadata validation
+// =============================================================================
+
+function validateMetadata(
+    value: unknown
+): MunicipalDistrictMetadata {
+
+    if (
+        typeof value !== "object" ||
+        value === null
+    ) {
+        throw new Error(
+            "Invalid registry metadata: expected an object."
+        );
+    }
+
+    const record =
+        value as Record<string, unknown>;
+
+    if (
+        typeof record.generatedAt !== "string"
+    ) {
+        throw new Error(
+            "Invalid registry metadata: missing generatedAt."
+        );
+    }
+
+    if (
+        typeof record.generatorVersion !== "string"
+    ) {
+        throw new Error(
+            "Invalid registry metadata: missing generatorVersion."
+        );
+    }
+
+    if (
+        typeof record.requiresReview !== "boolean"
+    ) {
+        throw new Error(
+            "Invalid registry metadata: requiresReview must be a boolean."
+        );
+    }
+
+    let alternatives:
+        MunicipalDistrictAlternative[] = [];
+
+    if (
+        record.alternatives !== undefined
+    ) {
+
+        if (
+            !Array.isArray(
+                record.alternatives
+            )
+        ) {
+            throw new Error(
+                "Invalid registry metadata: alternatives must be an array."
+            );
+        }
+
+        alternatives =
+            record.alternatives.map(
+                validateAlternative
+            );
+    }
+
+    return {
+        generatedAt:
+            record.generatedAt,
+
+        generatorVersion:
+            record.generatorVersion,
+
+        alternatives,
+
+        requiresReview:
+            record.requiresReview
+    };
+}
+
+
+// =============================================================================
+// Alternative source validation
+// =============================================================================
+
+function validateAlternative(
+    value: unknown
+): MunicipalDistrictAlternative {
+
+    if (
+        typeof value !== "object" ||
+        value === null
+    ) {
+        throw new Error(
+            "Invalid registry alternative: expected an object."
+        );
+    }
+
+    const record =
+        value as Record<string, unknown>;
+
+    if (
+        typeof record.url !== "string"
+    ) {
+        throw new Error(
+            "Invalid registry alternative: missing url."
+        );
+    }
+
+    if (
+        typeof record.official !== "boolean"
+    ) {
+        throw new Error(
+            "Invalid registry alternative: official must be a boolean."
+        );
+    }
+
+    if (
+        typeof record.score !== "number"
+    ) {
+        throw new Error(
+            "Invalid registry alternative: score must be a number."
+        );
+    }
+
+    return {
+        url:
+            record.url,
+
+        itemId:
+            typeof record.itemId === "string"
+                ? record.itemId
+                : undefined,
+
+        title:
+            typeof record.title === "string"
+                ? record.title
+                : undefined,
+
+        serviceType:
+            record.serviceType === "FeatureServer" ||
+            record.serviceType === "MapServer" ||
+            record.serviceType === "unknown"
+                ? record.serviceType
+                : "unknown",
+
+        official:
+            typeof record.official === "boolean"
+                ? record.official
+                : false,
+
+        score:
+            typeof record.score === "number"
+                ? record.score
+                : 0
+    };
+}
+
+
+// =============================================================================
+// Boundary type validation
+// =============================================================================
+
+function isBoundaryType(
+    value: string
+): value is BoundaryType {
+
+    return (
+        value === "ward" ||
+        value === "council-district" ||
+        value === "city-council-district" ||
+        value === "aldermanic-district" ||
+        value === "municipal-district"
+    );
 }
 
 

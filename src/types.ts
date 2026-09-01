@@ -22,6 +22,19 @@ export type BoundaryType =
 
 
 // =============================================================================
+// ArcGIS service types
+// =============================================================================
+
+/**
+ * ArcGIS service type used as a municipal boundary source.
+ */
+export type ArcGISServiceType =
+    | "FeatureServer"
+    | "MapServer"
+    | "unknown";
+
+
+// =============================================================================
 // Coordinates
 // =============================================================================
 
@@ -101,7 +114,6 @@ export interface MunicipalDistrict {
      */
     geometry: Polygon | MultiPolygon;
 }
-
 
 // =============================================================================
 // Lookup options
@@ -185,6 +197,9 @@ export interface MunicipalDistrictRegistry {
 
     /**
      * Registry schema version.
+     *
+     * Example:
+     * "0.1.0"
      */
     version: string;
 
@@ -201,58 +216,106 @@ export interface MunicipalDistrictRegistry {
 
 
 /**
- * Registry entry for a municipality.
+ * Registry entry describing the canonical geometry source
+ * for one municipality and boundary type.
  */
 export interface MunicipalDistrictRegistryEntry {
 
     /**
      * Census place GEOID.
+     *
+     * Example:
+     * "0477000"
      */
     placeFips: string;
 
     /**
      * Municipality name.
+     *
+     * Example:
+     * "Tucson"
      */
     city: string;
 
     /**
-     * State abbreviation.
+     * Two-letter state abbreviation.
+     *
+     * Example:
+     * "AZ"
      */
     state: string;
 
     /**
-     * Type of municipal boundary.
+     * Type of municipal political boundary.
      */
     boundaryType: BoundaryType;
 
     /**
-     * Boundary data source.
+     * Canonical source used to generate the geometry.
      */
     source: MunicipalDistrictSource;
-    
+
     /**
-     * Relative path to the generated normalized GeoJSON file.
+     * Path to the generated GeoJSON file relative to
+     * data/municipalities/.
      *
      * Example:
-     * municipalities/0477000/ward.geojson
+     * "geometry/0477000/ward.geojson"
      */
     generatedFile: string;
+
+    /**
+     * Metadata associated with the registry entry.
+     */
+    metadata: MunicipalDistrictMetadata;
+}
+
+
+// =============================================================================
+// Registry metadata
+// =============================================================================
+
+/**
+ * Metadata generated during source discovery and geometry generation.
+ */
+export interface MunicipalDistrictMetadata {
+
+    /**
+     * ISO timestamp indicating when this entry was generated.
+     */
+    generatedAt: string;
+
+    /**
+     * Version of the generator that produced the entry.
+     */
+    generatorVersion: string;
+
+    /**
+     * Alternative sources discovered for this municipality.
+     */
+    alternatives: MunicipalDistrictAlternative[];
+
+    /**
+     * Whether the entry requires manual review.
+     */
+    requiresReview: boolean;
 }
 
 
 /**
- * Source information for a municipal boundary dataset.
+ * An alternative source discovered during source selection.
  */
-export interface MunicipalDistrictSource {
-    /**
-     * Type of geographic data source.
-     */
-    sourceType: string;
+export interface MunicipalDistrictAlternative {
 
     /**
-     * URL of the original geographic data source.
+     * Source URL.
      */
     url: string;
+
+    /**
+     * ArcGIS Portal item ID.
+     */
+    itemId?: string;
 
     /**
      * Human-readable source title.
@@ -260,35 +323,70 @@ export interface MunicipalDistrictSource {
     title?: string;
 
     /**
+     * ArcGIS service type.
+     */
+    serviceType: ArcGISServiceType;
+
+    /**
      * Whether the source is an official municipal source.
      */
-    official?: boolean;
+    official: boolean;
 
     /**
-     * Whether the source has been verified as representing
-     * the intended municipal boundary.
+     * Source discovery/ranking score.
      */
-    verified?: boolean;
+    score: number;
+}
 
+
+// =============================================================================
+// Municipal district source
+// =============================================================================
+
+/**
+ * Canonical source used to generate municipal district geometry.
+ */
+export interface MunicipalDistrictSource {
+
+    sourceType: string;
     /**
-     * Date the source was last verified.
+     * Source URL.
      *
-     * Stored as an ISO 8601 date/time string.
+     * For example:
+     *
+     * https://.../FeatureServer/158
      */
-    lastVerified?: string;
+    url: string;
 
     /**
-     * Geographic data format.
+     * ArcGIS Portal item ID.
      */
-    format?: string;
+    itemId?: string;
 
     /**
-     * Mapping between normalized properties and source fields.
+     * ArcGIS service type.
      */
-    fieldMapping: {
-        district: string;
-        name?: string;
-    };
+    serviceType: ArcGISServiceType;
+
+    /**
+     * Human-readable source title.
+     */
+    title?: string;
+
+    /**
+     * Whether this is an official municipal/government source.
+     */
+    official: boolean;
+
+    /**
+     * Whether the source has been verified.
+     */
+    verified: boolean;
+
+    /**
+     * Mapping from normalized fields to source fields.
+     */
+    fieldMapping: MunicipalDistrictFieldMapping;
 }
 
 
@@ -303,11 +401,17 @@ export interface MunicipalDistrictFieldMapping {
 
     /**
      * Source field containing the district identifier.
+     *
+     * Example:
+     * "WARD"
      */
     district: string;
 
     /**
      * Optional source field containing the district name.
+     *
+     * Example:
+     * "NAME"
      */
     name?: string;
 }

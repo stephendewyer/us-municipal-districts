@@ -332,7 +332,7 @@ function validateEntry(
 
     if (
         !isDistrictType(
-            entry.districtType
+            entry.boundaryType
         )
     ) {
 
@@ -358,7 +358,7 @@ function validateEntry(
     // =========================================================================
 
     validateFields(
-        entry.fields,
+        entry.source?.fieldMapping,
         prefix,
         errors
     );

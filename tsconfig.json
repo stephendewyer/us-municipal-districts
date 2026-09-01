@@ -3,32 +3,23 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-
     "strict": true,
-
     "declaration": true,
     "declarationMap": true,
-
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-
-    "types": [
-      "node"
-    ],
-
-    "rootDir": "src",
+    "types": ["node"],
+    "rootDir": ".",
     "outDir": "dist"
   },
-
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "generator/src/**/*.ts"
   ],
-
   "exclude": [
     "node_modules",
     "dist",
-    "generator",
     "tests"
   ]
 }
