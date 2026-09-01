@@ -876,7 +876,3 @@ Repository:
 
 https://github.com/stephendewyer/us-municipal-districts
 
-```
-
-I would use this as the **current 0.1.0 README**, with one important caveat: before publishing to npm, I would tighten the README's package API examples against the final `src/index.ts` and add the actual license and npm metadata. The architecture and generator workflow above match the structure you've built so far.
-```
