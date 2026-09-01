@@ -5,9 +5,16 @@ import {
     writeRegistry
 } from "./registry.js";
 import { validateRegistry } from "./validate.js";
+import {
+    loadGeneratedRegistry
+} from "./registry.js";
+import {
+    generateGeometry
+} from "./geometry.js";
 
 import type {
-    DiscoveryResult
+    DiscoveryResult,
+    MunicipalDistrictRegistryEntry
 } from "./types.js";
 
 
@@ -19,6 +26,7 @@ type Command =
     | "places"
     | "discover"
     | "build"
+    | "geometry"
     | "validate"
     | undefined;
 
@@ -88,10 +96,6 @@ async function main(): Promise<void> {
             );
 
 
-            // ---------------------------------------------------------------
-            // Write registry
-            // ---------------------------------------------------------------
-
             const registry =
                 writeRegistry(
                     results
@@ -113,10 +117,9 @@ async function main(): Promise<void> {
         case "build": {
 
             /*
-             * Build is currently kept as a compatibility command.
+             * Build is currently retained as a compatibility command.
              *
-             * If registry.ts eventually reads persisted DiscoveryResult
-             * data, this command can be expanded later.
+             * Discovery is responsible for producing the registry.
              */
 
             const registry =
@@ -127,6 +130,20 @@ async function main(): Promise<void> {
 
             console.log(
                 `Built registry with ${registry.entries.length} entries.`
+            );
+
+            break;
+        }
+
+
+        // ---------------------------------------------------------------------
+        // Geometry
+        // ---------------------------------------------------------------------
+
+        case "geometry": {
+
+            await generateRegistryGeometry(
+                options
             );
 
             break;
@@ -156,6 +173,238 @@ async function main(): Promise<void> {
             process.exitCode = 1;
         }
     }
+}
+
+
+// =============================================================================
+// Generate geometry from registry
+// =============================================================================
+
+async function generateRegistryGeometry(
+    options: CliOptions
+): Promise<void> {
+
+    const registry =
+        loadGeneratedRegistry();
+
+
+    let entries =
+        registry.entries;
+
+
+    // =========================================================================
+    // Filter
+    // =========================================================================
+
+    if (
+        options.city !== undefined
+    ) {
+
+        const city =
+            normalizeName(
+                options.city
+            );
+
+        entries =
+            entries.filter(
+                entry =>
+                    normalizeName(
+                        entry.city
+                    ) === city
+            );
+    }
+
+
+    if (
+        options.state !== undefined
+    ) {
+
+        const state =
+            options.state.toUpperCase();
+
+        entries =
+            entries.filter(
+                entry =>
+                    entry.state.toUpperCase() ===
+                    state
+            );
+    }
+
+
+    if (
+        options.placeFips !== undefined
+    ) {
+
+        entries =
+            entries.filter(
+                entry =>
+                    entry.placeFips ===
+                    options.placeFips
+            );
+    }
+
+
+    // =========================================================================
+    // Nothing found
+    // =========================================================================
+
+    if (
+        entries.length === 0
+    ) {
+
+        console.log(
+            "\nNo registry entries matched the supplied options."
+        );
+
+        return;
+    }
+
+
+    console.log(
+        `\nGenerating geometry for ${entries.length} registry entr${
+            entries.length === 1
+                ? "y"
+                : "ies"
+        }...`
+    );
+
+
+    // =========================================================================
+    // Output root
+    // =========================================================================
+
+    const outputRoot =
+        process.cwd();
+
+
+    let successful = 0;
+
+    let failed = 0;
+
+
+    // =========================================================================
+    // Generate each geometry file
+    // =========================================================================
+
+    for (
+        const entry of entries
+    ) {
+
+        console.log(
+            `\n  ${entry.city}, ${entry.state} — ${entry.boundaryType}`
+        );
+
+        console.log(
+            `    Source: ${entry.source.url}`
+        );
+
+
+        try {
+
+            const outputPath =
+                await generateGeometry(
+                    entry,
+                    outputRoot
+                );
+
+
+            console.log(
+                `    ✓ ${outputPath}`
+            );
+
+
+            successful++;
+
+        } catch (error) {
+
+            failed++;
+
+
+            console.error(
+                `    ✗ Geometry generation failed`
+            );
+
+
+            if (
+                error instanceof Error
+            ) {
+
+                console.error(
+                    `      ${error.message}`
+                );
+
+            } else {
+
+                console.error(
+                    `      ${String(error)}`
+                );
+            }
+        }
+    }
+
+
+    // =========================================================================
+    // Summary
+    // =========================================================================
+
+    console.log(
+        "\nGeometry generation complete."
+    );
+
+    console.log(
+        `  Requested: ${entries.length}`
+    );
+
+    console.log(
+        `  Successful: ${successful}`
+    );
+
+    console.log(
+        `  Failed: ${failed}`
+    );
+
+
+    if (
+        failed > 0
+    ) {
+
+        process.exitCode = 1;
+    }
+}
+
+
+// =============================================================================
+// Name normalization
+// =============================================================================
+
+function normalizeName(
+    value: string
+): string {
+
+    return value
+        .normalize("NFKD")
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
+        .toLowerCase()
+        .replace(
+            /['’]/g,
+            ""
+        )
+        .replace(
+            /[-]/g,
+            " "
+        )
+        .replace(
+            /[^\p{L}\p{N}\s]/gu,
+            " "
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
 }
 
 
@@ -299,10 +548,6 @@ function printDiscoverySummary(
     );
 
 
-    // =========================================================================
-    // Failed municipalities
-    // =========================================================================
-
     if (
         failed.length > 0
     ) {
@@ -331,10 +576,6 @@ function printDiscoverySummary(
     }
 
 
-    // =========================================================================
-    // Municipalities without canonical sources
-    // =========================================================================
-
     if (
         noCanonical.length > 0
     ) {
@@ -354,10 +595,6 @@ function printDiscoverySummary(
         }
     }
 
-
-    // =========================================================================
-    // Rejection report
-    // =========================================================================
 
     printRejectionReport(
         results
@@ -433,10 +670,6 @@ function printRejectionReport(
             );
 
 
-            // -----------------------------------------------------------------
-            // Political matches
-            // -----------------------------------------------------------------
-
             if (
                 rejected.classification.matches.political.length > 0
             ) {
@@ -448,10 +681,6 @@ function printRejectionReport(
                 );
             }
 
-
-            // -----------------------------------------------------------------
-            // Thematic matches
-            // -----------------------------------------------------------------
 
             if (
                 rejected.classification.matches.thematic.length > 0
@@ -465,10 +694,6 @@ function printRejectionReport(
             }
 
 
-            // -----------------------------------------------------------------
-            // District fields
-            // -----------------------------------------------------------------
-
             if (
                 rejected.inspection.districtFields.length > 0
             ) {
@@ -480,10 +705,6 @@ function printRejectionReport(
                 );
             }
 
-
-            // -----------------------------------------------------------------
-            // Name fields
-            // -----------------------------------------------------------------
 
             if (
                 rejected.inspection.nameFields.length > 0
@@ -525,10 +746,6 @@ function getRejectionReasons(
         candidate.inspection;
 
 
-    // =========================================================================
-    // Geometry
-    // =========================================================================
-
     const isPolygon =
         inspection.geometryType ===
             "esriGeometryPolygon" ||
@@ -546,10 +763,6 @@ function getRejectionReasons(
     }
 
 
-    // =========================================================================
-    // Census
-    // =========================================================================
-
     if (
         classification.isCensusDataset
     ) {
@@ -559,10 +772,6 @@ function getRejectionReasons(
         );
     }
 
-
-    // =========================================================================
-    // Parcel
-    // =========================================================================
 
     if (
         classification.isParcelDataset
@@ -574,10 +783,6 @@ function getRejectionReasons(
     }
 
 
-    // =========================================================================
-    // Housing
-    // =========================================================================
-
     if (
         classification.isHousingDataset &&
         !classification.isPoliticalBoundary
@@ -588,10 +793,6 @@ function getRejectionReasons(
         );
     }
 
-
-    // =========================================================================
-    // District field
-    // =========================================================================
 
     const hasDistrictField =
         inspection.districtFields.length > 0;
@@ -632,10 +833,6 @@ function getRejectionReasons(
     }
 
 
-    // =========================================================================
-    // Political boundary
-    // =========================================================================
-
     if (
         !classification.isPoliticalBoundary
     ) {
@@ -645,10 +842,6 @@ function getRejectionReasons(
         );
     }
 
-
-    // =========================================================================
-    // Thematic evidence
-    // =========================================================================
 
     if (
         classification.matches.thematic.length > 0
@@ -661,10 +854,6 @@ function getRejectionReasons(
         );
     }
 
-
-    // =========================================================================
-    // Fallback
-    // =========================================================================
 
     if (
         reasons.length === 0
@@ -704,10 +893,6 @@ function parseOptions(
 
         switch (argument) {
 
-            // -----------------------------------------------------------------
-            // City
-            // -----------------------------------------------------------------
-
             case "--city": {
 
                 const value =
@@ -728,10 +913,6 @@ function parseOptions(
                 break;
             }
 
-
-            // -----------------------------------------------------------------
-            // State
-            // -----------------------------------------------------------------
 
             case "--state": {
 
@@ -754,10 +935,6 @@ function parseOptions(
             }
 
 
-            // -----------------------------------------------------------------
-            // Place FIPS
-            // -----------------------------------------------------------------
-
             case "--placeFips": {
 
                 const value =
@@ -779,10 +956,6 @@ function parseOptions(
             }
 
 
-            // -----------------------------------------------------------------
-            // Review
-            // -----------------------------------------------------------------
-
             case "--review": {
 
                 options.review =
@@ -792,10 +965,6 @@ function parseOptions(
             }
 
 
-            // -----------------------------------------------------------------
-            // Verbose
-            // -----------------------------------------------------------------
-
             case "--verbose": {
 
                 options.verbose =
@@ -804,10 +973,6 @@ function parseOptions(
                 break;
             }
 
-
-            // -----------------------------------------------------------------
-            // Unknown option
-            // -----------------------------------------------------------------
 
             default: {
 
@@ -848,6 +1013,14 @@ Usage:
 
   npm run build
 
+  npm run geometry
+
+  npm run geometry -- --city Tucson --state AZ
+
+  npm run geometry -- --state AZ
+
+  npm run geometry -- --placeFips 0477000
+
   npm run validate
 
 
@@ -860,13 +1033,19 @@ Commands:
   discover
       Search ArcGIS, inspect discovered layers,
       classify candidates, detect equivalent layers,
-      and select canonical municipal district sources.
+      select canonical municipal district sources,
+      and write registry.json.
 
   build
       Build the registry.
+      Retained as a compatibility command.
+
+  geometry
+      Download GeoJSON geometry for registry entries
+      and write the normalized geometry files.
 
   validate
-      Validate the generated registry.
+      Validate the generated municipal registry.
 
 
 Discover options:

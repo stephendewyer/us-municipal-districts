@@ -1,13 +1,12 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-08-31T21:55:36.404Z",
+  "generatedAt": "2026-09-01T04:34:47.786Z",
   "entries": [
     {
       "placeFips": "0477000",
       "city": "Tucson",
       "state": "AZ",
       "boundaryType": "ward",
-
       "source": {
         "sourceType": "arcgis",
         "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Tree_Equity_Score__City_of_Tucson_2020_/FeatureServer/158",
@@ -21,13 +20,10 @@
           "name": "NAME"
         }
       },
-
       "generatedFile": "geometry/0477000/ward.geojson",
-
       "metadata": {
-        "generatedAt": "2026-08-31T21:55:36.404Z",
+        "generatedAt": "2026-09-01T04:34:47.786Z",
         "generatorVersion": "0.1.0",
-
         "alternatives": [
           {
             "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Vulnerability_WFL1/FeatureServer/7",
@@ -46,7 +42,6 @@
             "score": 138
           }
         ],
-
         "requiresReview": false
       }
     }
