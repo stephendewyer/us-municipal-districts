@@ -7,16 +7,16 @@ import {
     point
 } from "@turf/turf";
 
-import {
-    findRegistryEntries
-} from "./registry.js";
-
 import type {
     Feature,
     FeatureCollection,
     Polygon,
     MultiPolygon
 } from "geojson";
+
+import {
+    findRegistryEntries
+} from "./registry.js";
 
 import type {
     BoundaryType,
@@ -32,19 +32,21 @@ import type {
 // Paths
 // =============================================================================
 
-const __filename =
-    fileURLToPath(import.meta.url);
-
-const __dirname =
-    path.dirname(__filename);
+const MODULE_DIRECTORY =
+    path.dirname(
+        fileURLToPath(import.meta.url)
+    );
 
 /**
- * Directory containing generated municipal boundary data.
+ * Root directory of the npm package.
+ *
+ * When compiled, this will normally be the directory containing
+ * dist/, geometry/, data/, etc.
  */
-const MUNICIPALITIES_PATH =
+const PACKAGE_ROOT =
     path.resolve(
-        __dirname,
-        "../data/municipalities"
+        MODULE_DIRECTORY,
+        ".."
     );
 
 
@@ -53,17 +55,50 @@ const MUNICIPALITIES_PATH =
 // =============================================================================
 
 /**
+ * Options used when searching registry metadata.
+ *
+ * These are deliberately separate from MunicipalDistrictLookupOptions
+ * because registry searches do not require geographic coordinates.
+ */
+export interface RegistrySearchOptions {
+    city?: string;
+    state?: string;
+    placeFips?: string;
+    boundaryType?: BoundaryType;
+}
+
+
+/**
  * Search the municipal registry.
  *
  * This searches registry metadata and does not perform
  * geographic point-in-polygon lookup.
  */
 export function searchRegistry(
-    options: MunicipalDistrictLookupOptions = {}
+    options: RegistrySearchOptions = {}
 ): MunicipalDistrictRegistryEntry[] {
 
-    return findRegistryEntries(options);
+    return findRegistryEntries({
+        city:
+            options.city,
+
+        state:
+            options.state,
+
+        placeFips:
+            options.placeFips,
+
+        boundaryType:
+            options.boundaryType
+    });
 }
+
+
+/**
+ * Alias for searchRegistry().
+ */
+export const searchMunicipalDistricts =
+    searchRegistry;
 
 
 // =============================================================================
@@ -71,13 +106,23 @@ export function searchRegistry(
 // =============================================================================
 
 /**
- * Find a municipality's registry entry.
+ * Find registry entries for a municipality.
+ *
+ * This is a metadata lookup and does not perform geographic
+ * point-in-polygon testing.
+ *
+ * If multiple boundary datasets exist for a municipality,
+ * all matching registry entries are returned.
  */
 export function findMunicipality(
-    options: MunicipalDistrictLookupOptions
-): MunicipalDistrictRegistryEntry | undefined {
+    city: string,
+    state?: string
+): MunicipalDistrictRegistryEntry[] {
 
-    return searchRegistry(options)[0];
+    return searchRegistry({
+        city,
+        state
+    });
 }
 
 
@@ -88,30 +133,60 @@ export function findMunicipality(
 /**
  * Find the municipal district containing a latitude/longitude.
  *
- * The registry is first used to identify the appropriate municipality
- * and boundary dataset. The corresponding normalized GeoJSON is then
- * loaded and searched with Turf.
+ * The latitude and longitude are required. Optional municipality
+ * identifiers can be supplied to narrow the registry search before
+ * performing the geographic lookup.
+ *
+ * Example:
+ *
+ * lookupMunicipalDistrict({
+ *     latitude: 32.2226,
+ *     longitude: -110.9747,
+ *     city: "Tucson",
+ *     state: "AZ"
+ * });
  */
 export function lookupMunicipalDistrict(
-    latitude: number,
-    longitude: number,
-    options: MunicipalDistrictLookupOptions = {}
+    options: MunicipalDistrictLookupOptions
 ): MunicipalDistrictLookupResult {
 
     validateCoordinates(
-        latitude,
-        longitude
+        options.latitude,
+        options.longitude
     );
 
     const coordinates: Coordinates = {
-        latitude,
-        longitude
+        latitude:
+            options.latitude,
+
+        longitude:
+            options.longitude
     };
 
+    /*
+     * Search the registry first.
+     *
+     * This is important for a nationwide package because we do not
+     * want to scan every municipality's geometry for every lookup.
+     */
     const entries =
-        searchRegistry(options);
+        searchRegistry({
+            city:
+                options.city,
 
-    if (entries.length === 0) {
+            state:
+                options.state,
+
+            placeFips:
+                options.placeFips,
+
+            boundaryType:
+                options.boundaryType
+        });
+
+    if (
+        entries.length === 0
+    ) {
         return {
             found: false,
             district: null,
@@ -121,14 +196,15 @@ export function lookupMunicipalDistrict(
 
     const turfPoint =
         point([
-            longitude,
-            latitude
+            options.longitude,
+            options.latitude
         ]);
 
     /*
      * Try each matching registry entry.
      *
-     * Usually there will be one entry for a municipality/boundary type.
+     * Normally there should be one matching municipality/boundary
+     * dataset, but multiple entries are possible.
      */
     for (const entry of entries) {
 
@@ -189,35 +265,57 @@ export function lookupMunicipalDistrict(
 // GeoJSON loading
 // =============================================================================
 
-function loadMunicipalityGeoJSON(
+/**
+ * Load the normalized GeoJSON associated with a registry entry.
+ *
+ * The registry stores the generated file path, for example:
+ *
+ * geometry/0477000/ward.geojson
+ */
+export function loadMunicipalityGeoJSON(
     entry: MunicipalDistrictRegistryEntry
 ): FeatureCollection<
     Polygon | MultiPolygon
 > | null {
 
+    if (
+        !entry.generatedFile ||
+        typeof entry.generatedFile !== "string"
+    ) {
+        return null;
+    }
+
     /*
-     * Prefer a predictable municipality-specific directory.
-     *
-     * Example:
-     *
-     * data/municipalities/0477000/ward.geojson
+     * Resolve the generated file relative to the package root.
      */
-    const directory =
-        path.join(
-            MUNICIPALITIES_PATH,
-            entry.placeFips
-        );
-
-    const filename =
-        `${entry.boundaryType}.geojson`;
-
     const filePath =
-        path.join(
-            directory,
-            filename
+        path.resolve(
+            PACKAGE_ROOT,
+            entry.generatedFile
         );
 
-    if (!fs.existsSync(filePath)) {
+    /*
+     * Prevent a malformed registry entry from escaping the package
+     * root through "../" path traversal.
+     */
+    const relativePath =
+        path.relative(
+            PACKAGE_ROOT,
+            filePath
+        );
+
+    if (
+        relativePath.startsWith("..") ||
+        path.isAbsolute(relativePath)
+    ) {
+        throw new Error(
+            `Invalid generatedFile path: ${entry.generatedFile}`
+        );
+    }
+
+    if (
+        !fs.existsSync(filePath)
+    ) {
         return null;
     }
 
@@ -252,6 +350,10 @@ function loadMunicipalityGeoJSON(
 // GeoJSON validation
 // =============================================================================
 
+/**
+ * Check whether a value is a GeoJSON FeatureCollection containing
+ * Polygon or MultiPolygon features.
+ */
 function isFeatureCollection(
     value: unknown
 ): value is FeatureCollection<
@@ -283,7 +385,81 @@ function isFeatureCollection(
         return false;
     }
 
+    /*
+     * Validate the geometry type of each feature rather than merely
+     * trusting that the file is a FeatureCollection.
+     */
+    for (const feature of record.features) {
+
+        if (
+            typeof feature !== "object" ||
+            feature === null
+        ) {
+            return false;
+        }
+
+        const featureRecord =
+            feature as Record<string, unknown>;
+
+        if (
+            featureRecord.type !== "Feature"
+        ) {
+            return false;
+        }
+
+        const geometry =
+            featureRecord.geometry;
+
+        if (
+            typeof geometry !== "object" ||
+            geometry === null
+        ) {
+            return false;
+        }
+
+        const geometryRecord =
+            geometry as Record<string, unknown>;
+
+        if (
+            geometryRecord.type !== "Polygon" &&
+            geometryRecord.type !== "MultiPolygon"
+        ) {
+            return false;
+        }
+    }
+
     return true;
+}
+
+
+// =============================================================================
+// Geographic helper
+// =============================================================================
+
+/**
+ * Test whether a latitude/longitude is inside a GeoJSON polygon
+ * or multipolygon feature.
+ */
+export function pointInMunicipalBoundary(
+    latitude: number,
+    longitude: number,
+    feature: Feature<
+        Polygon | MultiPolygon
+    >
+): boolean {
+
+    validateCoordinates(
+        latitude,
+        longitude
+    );
+
+    return booleanPointInPolygon(
+        point([
+            longitude,
+            latitude
+        ]),
+        feature
+    );
 }
 
 
@@ -291,7 +467,11 @@ function isFeatureCollection(
 // Convert GeoJSON feature
 // =============================================================================
 
-function featureToMunicipalDistrict(
+/**
+ * Convert a normalized GeoJSON feature into the public
+ * MunicipalDistrict type.
+ */
+export function featureToMunicipalDistrict(
     feature: Feature<
         Polygon | MultiPolygon
     >,
@@ -304,23 +484,40 @@ function featureToMunicipalDistrict(
     const fieldMapping =
         entry.source.fieldMapping;
 
+    /*
+     * The generated GeoJSON should normally contain normalized
+     * "district" and "name" properties.
+     *
+     * Fall back to the original source field names so this function
+     * also works with geometry generated from older data.
+     */
     const districtValue =
+        properties.district ??
         properties[
             fieldMapping.district
         ];
 
     const nameValue =
-        fieldMapping.name
-            ? properties[
-                fieldMapping.name
-            ]
-            : undefined;
+        properties.name ??
+        (
+            fieldMapping.name
+                ? properties[
+                    fieldMapping.name
+                ]
+                : undefined
+        );
 
     const district =
         String(
             districtValue ?? ""
         ).trim();
 
+    /*
+     * MunicipalDistrict.name is required by the public type.
+     *
+     * If the source does not contain a separate name, use the
+     * district identifier as a sensible fallback.
+     */
     const name =
         String(
             nameValue ??
@@ -328,12 +525,35 @@ function featureToMunicipalDistrict(
         ).trim();
 
     /*
-     * Use a stable ID when the source does not provide one.
+     * Prefer a normalized ID, then a GeoJSON feature ID, and finally
+     * construct a deterministic ID from the municipality and district.
      */
-    const id =
-        typeof properties.id === "string"
-            ? properties.id
-            : `${entry.placeFips}-${entry.boundaryType}-${district}`;
+    const propertyId =
+        properties.id;
+
+    let id: string;
+
+    if (
+        typeof propertyId === "string" ||
+        typeof propertyId === "number"
+    ) {
+        id =
+            String(
+                propertyId
+            ).trim();
+
+    } else if (
+        feature.id !== undefined
+    ) {
+        id =
+            String(
+                feature.id
+            ).trim();
+
+    } else {
+        id =
+            `${entry.placeFips}-${entry.boundaryType}-${district}`;
+    }
 
     return {
         id,
@@ -364,6 +584,9 @@ function featureToMunicipalDistrict(
 // Coordinate validation
 // =============================================================================
 
+/**
+ * Validate geographic coordinates.
+ */
 function validateCoordinates(
     latitude: number,
     longitude: number
@@ -415,7 +638,7 @@ export function findMunicipalDistrictSources(
  */
 export function findBoundarySources(
     boundaryType: BoundaryType,
-    options: MunicipalDistrictLookupOptions = {}
+    options: RegistrySearchOptions = {}
 ): MunicipalDistrictRegistryEntry[] {
 
     return searchRegistry({
@@ -423,10 +646,3 @@ export function findBoundarySources(
         boundaryType
     });
 }
-
-
-/**
- * Alias for searchRegistry().
- */
-export const searchMunicipalDistricts =
-    searchRegistry;

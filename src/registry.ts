@@ -3,9 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type {
-    ArcGISServiceType,
     BoundaryType,
-    MunicipalDistrictLookupOptions,
     MunicipalDistrictRegistry,
     MunicipalDistrictRegistryEntry,
     MunicipalDistrictSource,
@@ -18,6 +16,13 @@ export type {
     MunicipalDistrictRegistryEntry,
     MunicipalDistrictSource
 };
+
+export interface RegistrySearchOptions {
+    city?: string;
+    state?: string;
+    placeFips?: string;
+    boundaryType?: BoundaryType;
+}
 
 
 // =============================================================================
@@ -116,7 +121,7 @@ export function loadRegistry():
  * Find the first registry entry matching the supplied options.
  */
 export function findRegistryEntry(
-    options: MunicipalDistrictLookupOptions = {}
+    options: RegistrySearchOptions  = {}
 ):
     MunicipalDistrictRegistryEntry | undefined {
 
@@ -134,7 +139,7 @@ export function findRegistryEntry(
  * Find all registry entries matching the supplied options.
  */
 export function findRegistryEntries(
-    options: MunicipalDistrictLookupOptions = {}
+    options: RegistrySearchOptions = {}
 ):
     MunicipalDistrictRegistryEntry[] {
 
@@ -157,7 +162,7 @@ export function findRegistryEntries(
 
 function matchesRegistryEntry(
     entry: MunicipalDistrictRegistryEntry,
-    options: MunicipalDistrictLookupOptions
+    options: RegistrySearchOptions 
 ): boolean {
 
     if (

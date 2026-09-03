@@ -20,14 +20,6 @@ const __filename =
 const __dirname =
     path.dirname(__filename);
 
-
-/**
- * generator/src
- */
-const GENERATOR_SRC_DIR =
-    __dirname;
-
-
 /**
  * Repository root.
  *
@@ -41,10 +33,9 @@ const GENERATOR_SRC_DIR =
  */
 const ROOT_DIR =
     path.resolve(
-        GENERATOR_SRC_DIR,
+        __dirname,
         "../.."
     );
-
 
 const REGISTRY_DIR =
     path.join(
@@ -52,7 +43,6 @@ const REGISTRY_DIR =
         "data",
         "municipalities"
     );
-
 
 const REGISTRY_PATH =
     path.join(
@@ -67,9 +57,7 @@ const REGISTRY_PATH =
 
 export interface GeneratedRegistry {
     version: string;
-
     generatedAt: string;
-
     entries: RegistryEntry[];
 }
 
@@ -132,7 +120,9 @@ export function buildRegistry(
      * This makes generated JSON easier to review in Git and prevents
      * otherwise identical builds from producing noisy diffs.
      */
-    entries.sort(compareRegistryEntries);
+    entries.sort(
+        compareRegistryEntries
+    );
 
     return {
         version:
@@ -267,24 +257,30 @@ function createRegistryEntry(
                             ? {
                                 itemId:
                                     alternative.itemId
-                            }
+                                }
                             : {}),
 
                         ...(alternative.title
                             ? {
                                 title:
                                     alternative.title
-                            }
+                                }
                             : {}),
 
                         serviceType:
-                            alternative.serviceType ?? "unknown",
+                            alternative.serviceType ??
+                            "unknown",
 
+                        /*
+                         * Alternatives are not selected as the
+                         * municipality's canonical source.
+                         */
                         official:
                             false,
 
                         score:
-                             alternative.score ?? 0
+                            alternative.score ??
+                            0
                     })
                 ),
 
@@ -377,9 +373,20 @@ export function loadGeneratedRegistry():
             "utf8"
         );
 
-    const parsed:
-        unknown =
-        JSON.parse(contents);
+    let parsed: unknown;
+
+    try {
+        parsed =
+            JSON.parse(contents);
+    } catch (error) {
+        throw new Error(
+            `Invalid registry JSON: ${
+                error instanceof Error
+                    ? error.message
+                    : String(error)
+            }`
+        );
+    }
 
     if (
         typeof parsed !== "object" ||

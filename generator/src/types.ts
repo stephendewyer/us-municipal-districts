@@ -16,9 +16,9 @@ export type StateAbbreviation = string;
 export type DistrictType =
     | "ward"
     | "council-district"
+    | "city-council-district"
     | "aldermanic-district"
     | "municipal-district";
-
 
 // =============================================================================
 // Census place

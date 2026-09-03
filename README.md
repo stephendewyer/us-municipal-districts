@@ -848,19 +848,6 @@ Potential future development includes:
 * [ ] Published npm package data
 * [ ] Versioned historical municipal boundaries
 
----
-
-# License
-
-Add the project's chosen license here before publishing the package.
-
-For example:
-
-```text
-MIT License
-```
-
-The licensing of the generated geographic data and the licensing of third-party source data should also be reviewed before distributing the complete dataset.
 
 ---
 

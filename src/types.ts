@@ -1,5 +1,3 @@
-// src/types.ts
-
 import type {
     Polygon,
     MultiPolygon
@@ -115,6 +113,7 @@ export interface MunicipalDistrict {
     geometry: Polygon | MultiPolygon;
 }
 
+
 // =============================================================================
 // Lookup options
 // =============================================================================
@@ -122,14 +121,35 @@ export interface MunicipalDistrict {
 /**
  * Options used to identify the municipality whose district
  * should be searched.
+ *
+ * Latitude and longitude are required because the actual district
+ * lookup is performed using a Turf point-in-polygon operation.
+ *
+ * City/state or placeFips should normally be supplied so the package
+ * can identify which municipality's geometry should be searched.
  */
 export interface MunicipalDistrictLookupOptions {
+
+    /**
+     * Latitude in decimal degrees.
+     *
+     * Range: -90 to 90.
+     */
+    latitude: number;
+
+    /**
+     * Longitude in decimal degrees.
+     *
+     * Range: -180 to 180.
+     */
+    longitude: number;
 
     /**
      * Municipality name.
      *
      * Example:
-     * "Phoenix"
+     *
+     * "Tucson"
      */
     city?: string;
 
@@ -137,6 +157,7 @@ export interface MunicipalDistrictLookupOptions {
      * State abbreviation or full state name.
      *
      * Examples:
+     *
      * "AZ"
      * "Arizona"
      */
@@ -146,7 +167,8 @@ export interface MunicipalDistrictLookupOptions {
      * Census place GEOID.
      *
      * Example:
-     * "0455000"
+     *
+     * "0477000"
      */
     placeFips?: string;
 
@@ -173,7 +195,7 @@ export interface MunicipalDistrictLookupResult {
     found: boolean;
 
     /**
-     * Matching district.
+     * Matching municipal district.
      *
      * null when no district was found.
      */
@@ -199,6 +221,7 @@ export interface MunicipalDistrictRegistry {
      * Registry schema version.
      *
      * Example:
+     *
      * "0.1.0"
      */
     version: string;
@@ -225,6 +248,7 @@ export interface MunicipalDistrictRegistryEntry {
      * Census place GEOID.
      *
      * Example:
+     *
      * "0477000"
      */
     placeFips: string;
@@ -233,6 +257,7 @@ export interface MunicipalDistrictRegistryEntry {
      * Municipality name.
      *
      * Example:
+     *
      * "Tucson"
      */
     city: string;
@@ -241,6 +266,7 @@ export interface MunicipalDistrictRegistryEntry {
      * Two-letter state abbreviation.
      *
      * Example:
+     *
      * "AZ"
      */
     state: string;
@@ -257,9 +283,10 @@ export interface MunicipalDistrictRegistryEntry {
 
     /**
      * Path to the generated GeoJSON file relative to
-     * data/municipalities/.
+     * the package root.
      *
      * Example:
+     *
      * "geometry/0477000/ward.geojson"
      */
     generatedFile: string;
@@ -348,7 +375,16 @@ export interface MunicipalDistrictAlternative {
  */
 export interface MunicipalDistrictSource {
 
+    /**
+     * Type of source.
+     *
+     * Examples:
+     *
+     * "arcgis"
+     * "official-municipal"
+     */
     sourceType: string;
+
     /**
      * Source URL.
      *
@@ -403,6 +439,7 @@ export interface MunicipalDistrictFieldMapping {
      * Source field containing the district identifier.
      *
      * Example:
+     *
      * "WARD"
      */
     district: string;
@@ -411,6 +448,7 @@ export interface MunicipalDistrictFieldMapping {
      * Optional source field containing the district name.
      *
      * Example:
+     *
      * "NAME"
      */
     name?: string;
