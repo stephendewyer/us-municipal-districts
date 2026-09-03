@@ -36,6 +36,11 @@ import {
     buildDiscoveryResult
 } from "./pipeline.js";
 
+import {
+    scoreSearchResult,
+    SEARCH_RELEVANCE_THRESHOLD
+} from "./searchRelevance.js";
+
 
 // =============================================================================
 // Options
@@ -80,11 +85,13 @@ export interface DiscoverOptions {
 /**
  * Discover municipal political district sources.
  *
- * discover.ts is responsible for:
+ * Pipeline:
  *
  *     Census places
  *          ↓
  *     ArcGIS search
+ *          ↓
+ *     search relevance filtering
  *          ↓
  *     ArcGIS item resolution
  *          ↓
@@ -99,16 +106,8 @@ export interface DiscoverOptions {
  *     classification
  *          ↓
  *     validation
- *
- * pipeline.ts is then responsible for:
- *
- *     valid/rejected candidates
  *          ↓
- *     ranking
- *          ↓
- *     equivalence detection
- *          ↓
- *     canonical selection
+ *     pipeline ranking / canonical selection
  */
 export async function discoverArcGIS(
     options: DiscoverOptions = {}
@@ -202,6 +201,15 @@ async function discoverMunicipality(
         );
 
 
+    if (options.verbose) {
+
+        console.log(
+            `    Relevant search candidates: ` +
+            `${searchCandidates.length}`
+        );
+    }
+
+
     // =========================================================================
     // 2. Resolve ArcGIS item metadata
     // =========================================================================
@@ -215,10 +223,13 @@ async function discoverMunicipality(
     ) {
 
         /*
-         * Some search results may not contain an item ID.
+         * Search relevance filtering has already occurred.
          *
-         * Keep these candidates because the URL may still be useful.
+         * Only candidates that survived the inexpensive search-stage
+         * relevance filter reach ArcGIS item resolution.
          */
+
+
         if (!candidate.itemId) {
 
             if (options.verbose) {
@@ -232,6 +243,11 @@ async function discoverMunicipality(
                 );
             }
 
+
+            /*
+             * Keep URL-only candidates because the URL may still be
+             * useful to the subsequent discovery stages.
+             */
 
             resolvedCandidates.push(
                 candidate
@@ -330,6 +346,15 @@ async function discoverMunicipality(
         );
 
 
+    if (options.verbose) {
+
+        console.log(
+            `    Unique layer candidates: ` +
+            `${layerCandidates.length}`
+        );
+    }
+
+
     // =========================================================================
     // 5. Inspect, classify, and validate
     // =========================================================================
@@ -376,12 +401,12 @@ async function discoverMunicipality(
                          * Do not allow the discovery search query to influence
                          * classification.
                          *
-                         * Search queries intentionally contain terms such as
-                         * "city council districts", "ward boundaries", etc.
-                         * Those terms describe what we are searching FOR, not
-                         * what the returned ArcGIS layer actually represents.
+                         * Search queries describe what we searched FOR.
+                         * They are not evidence about what the returned
+                         * ArcGIS layer actually represents.
                          */
-                        searchQuery: undefined
+                        searchQuery:
+                            undefined
                     },
                     inspection
                 );
@@ -486,23 +511,6 @@ async function discoverMunicipality(
     // 6. Build final DiscoveryResult through pipeline.ts
     // =========================================================================
 
-    /*
-     * IMPORTANT:
-     *
-     * discover.ts does NOT determine:
-     *
-     *   - valid candidates
-     *   - rejected candidates
-     *   - ranking
-     *   - equivalent layers
-     *   - canonical source
-     *
-     * Those decisions belong to pipeline.ts.
-     *
-     * `review` is also passed into the pipeline rather than modifying
-     * the canonical result here.
-     */
-
     const result =
         buildDiscoveryResult(
             place,
@@ -526,10 +534,6 @@ async function discoverMunicipality(
     }
 
 
-    // =========================================================================
-    // 8. Return result
-    // =========================================================================
-
     return result;
 }
 
@@ -548,6 +552,9 @@ async function searchMunicipalArcGIS(
      * municipalities.
      *
      * Use several formulations to maximize discovery recall.
+     *
+     * Search relevance provides an inexpensive precision filter before
+     * expensive ArcGIS item resolution and layer inspection.
      *
      * Classification and validation remain responsible for determining
      * whether a returned layer is actually a political boundary.
@@ -645,13 +652,18 @@ async function searchMunicipalArcGIS(
         DiscoveryCandidate[] = [];
 
 
+    let searchResultCount = 0;
+
+    let relevantResultCount = 0;
+
+    let rejectedResultCount = 0;
+
+
     for (
         const query of queries
     ) {
 
-        if (
-            options.verbose
-        ) {
+        if (options.verbose) {
 
             console.log(
                 `    Searching: "${query}"`
@@ -667,16 +679,89 @@ async function searchMunicipalArcGIS(
                 );
 
 
+            searchResultCount +=
+                searchResults.length;
+
+
             for (
                 const result of searchResults
             ) {
 
-                if (
-                    !result.id
-                ) {
+                if (!result.id) {
                     continue;
                 }
 
+
+                // =================================================================
+                // Early search relevance scoring
+                // =================================================================
+
+                const relevance =
+                    scoreSearchResult(
+                        result,
+                        place
+                    );
+
+
+                if (options.verbose) {
+
+                    console.log(
+                        `      Search relevance: ` +
+                        `${relevance.score}`
+                    );
+
+                    console.log(
+                        `      ${
+                            relevance.likelyRelevant
+                                ? "KEEP"
+                                : "SKIP"
+                        }: ${
+                            result.title
+                        }`
+                    );
+
+                    console.log(
+                        `      ${
+                            relevance.reasons.join(
+                                "; "
+                            )
+                        }`
+                    );
+                }
+
+
+                // =================================================================
+                // Cheap pre-filter
+                // =================================================================
+
+                if (
+                    relevance.score <
+                    SEARCH_RELEVANCE_THRESHOLD
+                ) {
+
+                    rejectedResultCount++;
+
+
+                    if (options.verbose) {
+
+                        console.log(
+                            `      Skipping low-relevance search result ` +
+                            `(score ${relevance.score}, ` +
+                            `threshold ${SEARCH_RELEVANCE_THRESHOLD})`
+                        );
+                    }
+
+
+                    continue;
+                }
+
+
+                relevantResultCount++;
+
+
+                // =================================================================
+                // Create discovery candidate
+                // =================================================================
 
                 discovered.push({
 
@@ -699,14 +784,16 @@ async function searchMunicipalArcGIS(
                         result.title,
 
                     score:
-                        0,
+                        relevance.score,
 
                     requiresReview:
                         false,
 
                     reasons: [
 
-                        `search query: ${query}`
+                        `search query: ${query}`,
+
+                        ...relevance.reasons
 
                     ],
 
@@ -718,13 +805,9 @@ async function searchMunicipalArcGIS(
                 });
             }
 
-        } catch (
-            error
-        ) {
+        } catch (error) {
 
-            if (
-                options.verbose
-            ) {
+            if (options.verbose) {
 
                 console.warn(
                     `    Search failed: "${query}"`
@@ -738,9 +821,37 @@ async function searchMunicipalArcGIS(
     }
 
 
-    return deduplicateSearchCandidates(
-        discovered
-    );
+    const deduplicated =
+        deduplicateSearchCandidates(
+            discovered
+        );
+
+
+    if (options.verbose) {
+
+        console.log(
+            `    ArcGIS search results: ` +
+            `${searchResultCount}`
+        );
+
+        console.log(
+            `    Relevant results: ` +
+            `${relevantResultCount}`
+        );
+
+        console.log(
+            `    Rejected results: ` +
+            `${rejectedResultCount}`
+        );
+
+        console.log(
+            `    Unique relevant candidates: ` +
+            `${deduplicated.length}`
+        );
+    }
+
+
+    return deduplicated;
 }
 
 
@@ -967,12 +1078,6 @@ async function expandArcGISLayers(
             console.warn(
                 `      URL: ${url}`
             );
-
-            /*
-             * Tables can exist on a service without appearing in
-             * metadata.layers. They are not useful for polygon
-             * political-boundary discovery.
-             */
 
             return [];
         }

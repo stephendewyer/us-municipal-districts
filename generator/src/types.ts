@@ -847,6 +847,36 @@ export interface DiscoveryResult {
     error?: string;
 }
 
+// =============================================================================
+// Search relevance
+// =============================================================================
+
+/**
+ * Relevance assessment performed against an ArcGIS search result
+ * before expensive ArcGIS item resolution.
+ */
+export interface SearchRelevance {
+
+    /**
+     * Relevance score.
+     *
+     * Higher values indicate that the search result is more likely
+     * to represent a municipal political-district dataset.
+     */
+    score: number;
+
+    /**
+     * Human-readable evidence contributing to the score.
+     */
+    reasons: string[];
+
+    /**
+     * Whether the result should continue through the discovery
+     * pipeline.
+     */
+    likelyRelevant: boolean;
+}
+
 
 // =============================================================================
 // ArcGIS search
