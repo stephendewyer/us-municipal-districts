@@ -679,6 +679,8 @@ export interface InspectedCandidate {
     classification: CandidateClassification;
 
     validation?: ArcGISCandidateValidation;
+
+    municipalityValidation?: MunicipalityValidation;
 }
 
 
@@ -875,6 +877,39 @@ export interface SearchRelevance {
      * pipeline.
      */
     likelyRelevant: boolean;
+}
+
+// =============================================================================
+// Municipality validation
+// =============================================================================
+
+/**
+ * Evidence-based assessment of whether an ArcGIS layer
+ * belongs to the municipality currently being discovered.
+ */
+export interface MunicipalityValidation {
+
+    /**
+     * Municipality-specific validation score.
+     *
+     * Positive values indicate evidence that the layer belongs
+     * to the target municipality.
+     *
+     * Negative values indicate evidence that the layer belongs
+     * to a larger or different geographic jurisdiction.
+     */
+    score: number;
+
+    /**
+     * Human-readable evidence contributing to the score.
+     */
+    reasons: string[];
+
+    /**
+     * Whether the candidate appears to belong to the
+     * municipality being processed.
+     */
+    likelyMunicipalityMatch: boolean;
 }
 
 

@@ -41,6 +41,11 @@ import {
     SEARCH_RELEVANCE_THRESHOLD
 } from "./searchRelevance.js";
 
+import {
+    validateMunicipality,
+    MUNICIPALITY_VALIDATION_THRESHOLD
+} from "./municipalityValidation.js";
+
 
 // =============================================================================
 // Options
@@ -103,9 +108,11 @@ export interface DiscoverOptions {
  *          ↓
  *     ArcGIS inspection
  *          ↓
+ *     municipality validation
+ *          ↓
  *     classification
  *          ↓
- *     validation
+ *     political-boundary validation
  *          ↓
  *     pipeline ranking / canonical selection
  */
@@ -228,7 +235,6 @@ async function discoverMunicipality(
          * Only candidates that survived the inexpensive search-stage
          * relevance filter reach ArcGIS item resolution.
          */
-
 
         if (!candidate.itemId) {
 
@@ -356,7 +362,7 @@ async function discoverMunicipality(
 
 
     // =========================================================================
-    // 5. Inspect, classify, and validate
+    // 5. Inspect, classify, validate municipality, and validate
     // =========================================================================
 
     const inspectedCandidates:
@@ -392,19 +398,25 @@ async function discoverMunicipality(
             // Classify
             // -----------------------------------------------------------------
 
+            /*
+            * Classification determines what kind of dataset this appears
+            * to represent:
+            *
+            *     ward
+            *     council district
+            *     aldermanic district
+            *     etc.
+            *
+            * The discovery search query is deliberately removed because
+            * the query describes what we searched FOR, not what the
+            * ArcGIS dataset actually represents.
+            */
+
             const classification =
                 classifyCandidate(
                     {
                         ...candidate,
 
-                        /*
-                         * Do not allow the discovery search query to influence
-                         * classification.
-                         *
-                         * Search queries describe what we searched FOR.
-                         * They are not evidence about what the returned
-                         * ArcGIS layer actually represents.
-                         */
                         searchQuery:
                             undefined
                     },
@@ -421,7 +433,73 @@ async function discoverMunicipality(
 
 
             // -----------------------------------------------------------------
-            // Validate
+            // Municipality validation
+            // -----------------------------------------------------------------
+
+            /*
+            * Municipality validation answers a different question from
+            * political-boundary validation:
+            *
+            *     "Does this dataset appear to belong to this municipality?"
+            *
+            * It does NOT determine whether the dataset is actually a
+            * ward/council-district boundary.
+            *
+            * That remains the responsibility of classification and
+            * validateCandidate().
+            */
+
+            const municipalityValidation =
+                validateMunicipality(
+                    {
+                        candidate,
+                        inspection,
+                        classification
+                    },
+                    place
+                );
+
+
+            if (options.verbose) {
+
+                printMunicipalityValidation(
+                    municipalityValidation
+                );
+            }
+
+
+            /*
+            * A low municipality score means that the dataset is probably
+            * associated with another jurisdiction.
+            *
+            * Reject it before expensive downstream validation/ranking.
+            *
+            * The threshold is intentionally conservative because Phase 2A
+            * municipality validation is primarily metadata-based.
+            */
+
+            if (
+                municipalityValidation.score <
+                MUNICIPALITY_VALIDATION_THRESHOLD
+            ) {
+
+                if (options.verbose) {
+
+                    console.log(
+                        `      REJECTED: municipality validation ` +
+                        `score ${municipalityValidation.score} ` +
+                        `< threshold ` +
+                        `${MUNICIPALITY_VALIDATION_THRESHOLD}`
+                    );
+                }
+
+
+                continue;
+            }
+
+
+            // -----------------------------------------------------------------
+            // Validate political boundary
             // -----------------------------------------------------------------
 
             let validation:
@@ -441,12 +519,13 @@ async function discoverMunicipality(
             } catch (error) {
 
                 /*
-                 * Validation is supporting evidence.
-                 *
-                 * A validation failure does not automatically reject
-                 * the candidate. The candidate remains available to
-                 * ranking based on its classification and inspection.
-                 */
+                * Political-boundary validation is supporting evidence.
+                *
+                * A validation failure does not automatically reject
+                * the candidate. The candidate remains available to
+                * ranking based on its classification, inspection, and
+                * municipality validation.
+                */
 
                 if (options.verbose) {
 
@@ -477,22 +556,24 @@ async function discoverMunicipality(
 
                 classification,
 
-                validation
+                validation,
+
+                municipalityValidation
             });
 
         } catch (error) {
 
             /*
-             * Inspection/classification failure means we cannot safely
-             * construct an InspectedCandidate.
-             *
-             * Continue with the remaining candidates.
-             */
+            * Inspection/classification/municipality-validation failure
+            * means we cannot safely construct an InspectedCandidate.
+            *
+            * Continue with the remaining candidates.
+            */
 
             if (options.verbose) {
 
                 console.warn(
-                    `\n    Failed to inspect/classify:`
+                    `\n    Failed to inspect/classify/validate municipality:`
                 );
 
                 console.warn(
@@ -1623,6 +1704,39 @@ function printInspection(
             "(none)"
         }`
     );
+}
+
+
+// =============================================================================
+// Municipality validation output
+// =============================================================================
+
+function printMunicipalityValidation(
+    validation: ReturnType<typeof validateMunicipality>
+): void {
+
+    console.log(
+        `      Municipality match: ${
+            validation.likelyMunicipalityMatch
+        }`
+    );
+
+    console.log(
+        `      Municipality score: ${
+            validation.score
+        }`
+    );
+
+    if (
+        validation.reasons.length > 0
+    ) {
+
+        console.log(
+            `      Municipality evidence: ${
+                validation.reasons.join("; ")
+            }`
+        );
+    }
 }
 
 
