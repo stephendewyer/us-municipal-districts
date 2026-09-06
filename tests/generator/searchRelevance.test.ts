@@ -54,8 +54,6 @@ test(
                 tucson
             );
 
-        console.log("Tucson ward relevance:", relevance);
-
         assert.ok(
             relevance.score >= SEARCH_RELEVANCE_THRESHOLD
         );

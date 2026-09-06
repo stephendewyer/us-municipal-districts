@@ -22,6 +22,7 @@
     "test": "tsx --test tests/**/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "places": "tsx generator/src/cli.ts places",
+    "census-geometries": "tsx generator/src/generateCensusPlaceGeometries.ts",
     "discover": "tsx generator/src/cli.ts discover",
     "generate": "tsx generator/src/cli.ts build",
     "validate": "tsx generator/src/cli.ts validate",
@@ -33,12 +34,14 @@
     "@turf/boolean-point-in-polygon": "^7.4.0",
     "@turf/helpers": "^7.4.0",
     "@turf/turf": "^7.4.0",
-    "adm-zip": "^0.6.0"
+    "adm-zip": "^0.6.0",
+    "shapefile": "^0.6.6"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^22.20.1",
+    "@types/shapefile": "^0.6.4",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
