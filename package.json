@@ -19,7 +19,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "tsx --test tests/**/*.test.ts",
+    "test": "tsx --test tests/generator/**/*.test.ts",
+    "test:integration": "tsx --test tests/integration/**/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "places": "tsx generator/src/cli.ts places",
     "census-geometries": "tsx generator/src/generateCensusPlaceGeometries.ts",
