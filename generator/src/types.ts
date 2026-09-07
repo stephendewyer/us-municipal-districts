@@ -989,18 +989,13 @@ export interface ArcGISSearchResponse {
 // =============================================================================
 
 export interface ArcGISQueryOptions {
-
     where?: string;
-
     outFields?: string[];
-
-    resultRecordCount?: number;
-
-    resultOffset?: number;
-
     returnGeometry?: boolean;
-
+    resultRecordCount?: number;
+    resultOffset?: number;
     maxUniqueValues?: number;
+    outSR?: number;
 }
 
 

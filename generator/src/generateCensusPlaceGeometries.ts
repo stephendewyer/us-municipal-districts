@@ -25,7 +25,7 @@ import type {
 // -----------------------------------------------------------------------------
 
 const CENSUS_VINTAGE =
-    "2025";
+    2025;
 
 const CENSUS_PLACE_BASE_URL =
     "https://www2.census.gov/geo/tiger/TIGER2025/PLACE";
@@ -44,7 +44,7 @@ const DEFAULT_OUTPUT_DIRECTORY =
 export interface CensusPlaceGeometryStateFile {
     state: string;
     stateFips: string;
-    vintage: string;
+    vintage: number;
     generatedAt: string;
     source: string;
 

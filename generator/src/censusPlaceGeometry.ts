@@ -226,11 +226,13 @@ function validateStateGeometryFile(
     }
 
     if (
-        typeof record.vintage !== "string"
+        typeof record.vintage !== "number" ||
+        !Number.isInteger(record.vintage) ||
+        record.vintage < 1900
     ) {
         throw new Error(
             `Invalid Census place geometry file ` +
-            `${filePath}: missing vintage.`
+            `${filePath}: missing or invalid vintage.`
         );
     }
 
