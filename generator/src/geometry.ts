@@ -15,28 +15,20 @@ interface GeoJSONGeometry {
     type:
         | "Polygon"
         | "MultiPolygon";
-
     coordinates: unknown;
 }
 
-
 interface GeoJSONFeature {
     type: "Feature";
-
-    properties:
-        Record<string, unknown>;
-
+    properties: Record<string, unknown>;
     geometry:
         | GeoJSONGeometry
         | null;
 }
 
-
 interface GeoJSONFeatureCollection {
     type: "FeatureCollection";
-
-    features:
-        GeoJSONFeature[];
+    features: GeoJSONFeature[];
 }
 
 
@@ -59,17 +51,14 @@ export async function generateGeometry(
     const source =
         entry.source;
 
-
     console.log(
         `    Source: ${source.url}`
     );
-
 
     const geojson =
         await fetchArcGISGeoJSON(
             source
         );
-
 
     const normalized =
         normalizeGeoJSON(
@@ -78,13 +67,11 @@ export async function generateGeometry(
             entry
         );
 
-
     const outputPath =
         path.join(
             outputRoot,
             entry.generatedFile
         );
-
 
     fs.mkdirSync(
         path.dirname(outputPath),
@@ -92,7 +79,6 @@ export async function generateGeometry(
             recursive: true
         }
     );
-
 
     fs.writeFileSync(
         outputPath,
@@ -103,7 +89,6 @@ export async function generateGeometry(
         ) + "\n",
         "utf8"
     );
-
 
     return outputPath;
 }
@@ -126,7 +111,6 @@ async function fetchArcGISGeoJSON(
         );
     }
 
-
     /*
      * The registry URL points to the ArcGIS layer itself.
      *
@@ -146,24 +130,20 @@ async function fetchArcGISGeoJSON(
             ) + "/query"
         );
 
-
     queryUrl.searchParams.set(
         "where",
         "1=1"
     );
-
 
     queryUrl.searchParams.set(
         "outFields",
         "*"
     );
 
-
     queryUrl.searchParams.set(
         "returnGeometry",
         "true"
     );
-
 
     /*
      * Request WGS84 coordinates so the resulting GeoJSON
@@ -175,24 +155,19 @@ async function fetchArcGISGeoJSON(
         "4326"
     );
 
-
     queryUrl.searchParams.set(
         "f",
         "geojson"
     );
-
 
     const response =
         await fetch(
             queryUrl
         );
 
-
     if (!response.ok) {
-
         const body =
             await response.text();
-
 
         throw new Error(
             `ArcGIS request failed ` +
@@ -202,10 +177,8 @@ async function fetchArcGISGeoJSON(
         );
     }
 
-
     const result =
         await response.json();
-
 
     /*
      * ArcGIS may return an error object with HTTP 200.
@@ -218,7 +191,6 @@ async function fetchArcGISGeoJSON(
         const record =
             result as Record<string, unknown>;
 
-
         if (
             record.error &&
             typeof record.error === "object"
@@ -226,7 +198,6 @@ async function fetchArcGISGeoJSON(
 
             const error =
                 record.error as Record<string, unknown>;
-
 
             throw new Error(
                 `ArcGIS query error: ${
@@ -237,7 +208,6 @@ async function fetchArcGISGeoJSON(
             );
         }
     }
-
 
     return result;
 }
@@ -257,37 +227,30 @@ function normalizeGeoJSON(
         typeof value !== "object" ||
         value === null
     ) {
-
         throw new Error(
             "ArcGIS response is not an object."
         );
     }
 
-
     const record =
         value as Record<string, unknown>;
-
 
     if (
         record.type !==
         "FeatureCollection"
     ) {
-
         throw new Error(
             "ArcGIS response is not a GeoJSON FeatureCollection."
         );
     }
 
-
     if (
         !Array.isArray(record.features)
     ) {
-
         throw new Error(
             "ArcGIS response has no features."
         );
     }
-
 
     const features:
         GeoJSONFeature[] =
@@ -300,21 +263,17 @@ function normalizeGeoJSON(
                 )
         );
 
-
     if (
         features.length === 0
     ) {
-
         throw new Error(
             "ArcGIS layer returned zero features."
         );
     }
 
-
     return {
         type:
             "FeatureCollection",
-
         features
     };
 }
@@ -334,66 +293,51 @@ function normalizeFeature(
         typeof value !== "object" ||
         value === null
     ) {
-
         throw new Error(
             "Invalid GeoJSON feature."
         );
     }
 
-
     const record =
         value as Record<string, unknown>;
-
 
     if (
         record.type !== "Feature"
     ) {
-
         throw new Error(
             "Invalid GeoJSON feature type."
         );
     }
 
-
     if (
         typeof record.properties !== "object" ||
         record.properties === null
     ) {
-
         throw new Error(
             "Feature has no properties."
         );
     }
 
-
     const properties =
-        record.properties as Record<
-            string,
-            unknown
-        >;
-
+        record.properties as Record<string, unknown>;
 
     const districtField =
         source.fieldMapping.district;
-
 
     const district =
         properties[
             districtField
         ];
 
-
     if (
         district === undefined ||
         district === null
     ) {
-
         throw new Error(
             `District field "${districtField}" ` +
             "was not found in a feature."
         );
     }
-
 
     const normalizedProperties:
         Record<string, unknown> = {
@@ -414,7 +358,6 @@ function normalizeFeature(
             String(district)
     };
 
-
     /*
      * Preserve the optional district representative/name field.
      */
@@ -427,17 +370,14 @@ function normalizeFeature(
                 source.fieldMapping.name
             ];
 
-
         if (
             name !== undefined &&
             name !== null
         ) {
-
             normalizedProperties.name =
                 String(name);
         }
     }
-
 
     return {
         type:
@@ -466,47 +406,40 @@ function normalizeGeometry(
     if (
         value === null
     ) {
-
         throw new Error(
             "Feature has null geometry."
         );
     }
 
-
     if (
         typeof value !== "object"
     ) {
-
         throw new Error(
             "Feature has invalid geometry."
         );
     }
 
-
     const record =
         value as Record<string, unknown>;
-
 
     if (
         record.type !== "Polygon" &&
         record.type !== "MultiPolygon"
     ) {
-
         throw new Error(
             `Unsupported geometry type: ${String(record.type)}`
         );
     }
 
-
     if (
-        record.coordinates === undefined
+        !Array.isArray(
+            record.coordinates
+        )
     ) {
-
         throw new Error(
-            "Feature geometry has no coordinates."
+            "Feature geometry has invalid coordinates."
         );
     }
-
 
     return {
         type:
