@@ -6,6 +6,10 @@ import type {
     ArcGISServiceType
 } from "../../src/types.js";
 
+import type {
+    MunicipalityGeographyValidation
+} from "./validateMunicipalityGeography.js";
+
 // =============================================================================
 // Basic geographic types
 // =============================================================================
@@ -681,6 +685,8 @@ export interface InspectedCandidate {
     validation?: ArcGISCandidateValidation;
 
     municipalityValidation?: MunicipalityValidation;
+
+    municipalityGeographyValidation?: MunicipalityGeographyValidation;
 }
 
 

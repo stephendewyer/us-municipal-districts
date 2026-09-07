@@ -9,6 +9,10 @@ import type {
 } from "./types.js";
 
 import {
+    validateMunicipalityGeography
+} from "./validateMunicipalityGeography.js";
+
+import {
     loadCensusPlaces
 } from "./generateCensusPlaces.js";
 
@@ -46,6 +50,9 @@ import {
     MUNICIPALITY_VALIDATION_THRESHOLD
 } from "./municipalityValidation.js";
 
+import {
+    queryArcGISLayerGeometry
+} from "./queryArcGISLayerGeometry.js";
 
 // =============================================================================
 // Options
@@ -70,9 +77,6 @@ export interface DiscoverOptions {
 
     /**
      * Require manual review before accepting a canonical source.
-     *
-     * The option is passed to the pipeline. discover.ts does not
-     * modify the canonical result itself.
      */
     review?: boolean;
 
@@ -108,9 +112,11 @@ export interface DiscoverOptions {
  *          ↓
  *     ArcGIS inspection
  *          ↓
- *     municipality validation
+ *     municipality metadata validation
  *          ↓
  *     classification
+ *          ↓
+ *     municipality geographic validation
  *          ↓
  *     political-boundary validation
  *          ↓
@@ -229,13 +235,6 @@ async function discoverMunicipality(
         const candidate of searchCandidates
     ) {
 
-        /*
-         * Search relevance filtering has already occurred.
-         *
-         * Only candidates that survived the inexpensive search-stage
-         * relevance filter reach ArcGIS item resolution.
-         */
-
         if (!candidate.itemId) {
 
             if (options.verbose) {
@@ -249,11 +248,6 @@ async function discoverMunicipality(
                 );
             }
 
-
-            /*
-             * Keep URL-only candidates because the URL may still be
-             * useful to the subsequent discovery stages.
-             */
 
             resolvedCandidates.push(
                 candidate
@@ -294,11 +288,6 @@ async function discoverMunicipality(
             }
 
         } catch (error) {
-
-            /*
-             * Failure to resolve one item should not stop discovery
-             * for the municipality.
-             */
 
             if (options.verbose) {
 
@@ -362,7 +351,7 @@ async function discoverMunicipality(
 
 
     // =========================================================================
-    // 5. Inspect, classify, validate municipality, and validate
+    // 5. Inspect and validate candidates
     // =========================================================================
 
     const inspectedCandidates:
@@ -398,20 +387,6 @@ async function discoverMunicipality(
             // Classify
             // -----------------------------------------------------------------
 
-            /*
-            * Classification determines what kind of dataset this appears
-            * to represent:
-            *
-            *     ward
-            *     council district
-            *     aldermanic district
-            *     etc.
-            *
-            * The discovery search query is deliberately removed because
-            * the query describes what we searched FOR, not what the
-            * ArcGIS dataset actually represents.
-            */
-
             const classification =
                 classifyCandidate(
                     {
@@ -433,21 +408,8 @@ async function discoverMunicipality(
 
 
             // -----------------------------------------------------------------
-            // Municipality validation
+            // Municipality metadata validation
             // -----------------------------------------------------------------
-
-            /*
-            * Municipality validation answers a different question from
-            * political-boundary validation:
-            *
-            *     "Does this dataset appear to belong to this municipality?"
-            *
-            * It does NOT determine whether the dataset is actually a
-            * ward/council-district boundary.
-            *
-            * That remains the responsibility of classification and
-            * validateCandidate().
-            */
 
             const municipalityValidation =
                 validateMunicipality(
@@ -469,15 +431,10 @@ async function discoverMunicipality(
 
 
             /*
-            * A low municipality score means that the dataset is probably
-            * associated with another jurisdiction.
-            *
-            * Reject it before expensive downstream validation/ranking.
-            *
-            * The threshold is intentionally conservative because Phase 2A
-            * municipality validation is primarily metadata-based.
-            */
-
+             * Reject candidates with insufficient municipality
+             * metadata evidence before performing the more expensive
+             * geometry query.
+             */
             if (
                 municipalityValidation.score <
                 MUNICIPALITY_VALIDATION_THRESHOLD
@@ -495,6 +452,112 @@ async function discoverMunicipality(
 
 
                 continue;
+            }
+
+
+            // -----------------------------------------------------------------
+            // Municipality geographic validation
+            // -----------------------------------------------------------------
+
+            /*
+             * Geographic validation asks:
+             *
+             * "Do the geometries in this candidate layer actually
+             * overlap and substantially cover the Census municipality?"
+             *
+             * queryArcGISLayerGeometry() returns:
+             *
+             *     {
+             *         geometries: Polygon | MultiPolygon[]
+             *     }
+             *
+             * It does NOT return a `features` property.
+             */
+
+            let municipalityGeographyValidation:
+                Awaited<
+                    ReturnType<
+                        typeof validateMunicipalityGeography
+                    >
+                > |
+                undefined;
+
+
+            try {
+
+                const geometryResult =
+                    await queryArcGISLayerGeometry(
+                        candidate.url
+                    );
+
+
+                if (!geometryResult.success) {
+
+                    if (options.verbose) {
+
+                        console.warn(
+                            `      Geographic validation query failed:`
+                        );
+
+                        console.warn(
+                            `      ${
+                                geometryResult.error ??
+                                "Unknown ArcGIS geometry query error."
+                            }`
+                        );
+                    }
+
+                } else if (
+                    geometryResult.geometries.length === 0
+                ) {
+
+                    if (options.verbose) {
+
+                        console.warn(
+                            `      Geographic validation skipped: ` +
+                            `no valid polygon geometries returned.`
+                        );
+                    }
+
+                } else {
+
+                    municipalityGeographyValidation =
+                        await validateMunicipalityGeography(
+                            geometryResult.geometries,
+                            place
+                        );
+
+
+                    if (options.verbose) {
+
+                        printMunicipalityGeographyValidation(
+                            municipalityGeographyValidation
+                        );
+                    }
+                }
+
+            } catch (error) {
+
+                /*
+                 * Geographic validation is strong supporting evidence,
+                 * but an ArcGIS query failure should not discard an
+                 * otherwise valid candidate.
+                 */
+
+                if (options.verbose) {
+
+                    console.warn(
+                        `      Geographic validation failed:`
+                    );
+
+                    console.warn(
+                        `      ${candidate.url}`
+                    );
+
+                    console.warn(
+                        error
+                    );
+                }
             }
 
 
@@ -517,15 +580,6 @@ async function discoverMunicipality(
                     );
 
             } catch (error) {
-
-                /*
-                * Political-boundary validation is supporting evidence.
-                *
-                * A validation failure does not automatically reject
-                * the candidate. The candidate remains available to
-                * ranking based on its classification, inspection, and
-                * municipality validation.
-                */
 
                 if (options.verbose) {
 
@@ -558,22 +612,17 @@ async function discoverMunicipality(
 
                 validation,
 
-                municipalityValidation
+                municipalityValidation,
+
+                municipalityGeographyValidation
             });
 
         } catch (error) {
 
-            /*
-            * Inspection/classification/municipality-validation failure
-            * means we cannot safely construct an InspectedCandidate.
-            *
-            * Continue with the remaining candidates.
-            */
-
             if (options.verbose) {
 
                 console.warn(
-                    `\n    Failed to inspect/classify/validate municipality:`
+                    `\n    Failed to inspect/classify/validate candidate:`
                 );
 
                 console.warn(
@@ -589,7 +638,7 @@ async function discoverMunicipality(
 
 
     // =========================================================================
-    // 6. Build final DiscoveryResult through pipeline.ts
+    // 6. Build final DiscoveryResult
     // =========================================================================
 
     const result =
@@ -628,103 +677,42 @@ async function searchMunicipalArcGIS(
     options: DiscoverOptions
 ): Promise<DiscoveryCandidate[]> {
 
-    /*
-     * ArcGIS metadata and item titles are inconsistent between
-     * municipalities.
-     *
-     * Use several formulations to maximize discovery recall.
-     *
-     * Search relevance provides an inexpensive precision filter before
-     * expensive ArcGIS item resolution and layer inspection.
-     *
-     * Classification and validation remain responsible for determining
-     * whether a returned layer is actually a political boundary.
-     */
-
     const queries = [
 
-        // ---------------------------------------------------------------------
-        // Council terminology
-        // ---------------------------------------------------------------------
-
         `"${place.city}" ${place.state} city council districts`,
-
         `"${place.city}" ${place.state} city council district boundaries`,
-
         `"${place.city}" ${place.state} council district map`,
-
         `"${place.city}" ${place.state} council districts map`,
-
         `"${place.city}" ${place.state} council wards`,
-
         `"${place.city}" ${place.state} city wards`,
 
-        // ---------------------------------------------------------------------
-        // Ward terminology
-        // ---------------------------------------------------------------------
-
         `"${place.city}" ${place.state} ward boundaries`,
-
         `"${place.city}" ${place.state} ward boundary`,
-
         `"${place.city}" ${place.state} ward map`,
-
         `"${place.city}" ${place.state} wards`,
-
         `"${place.city}" ${place.state} municipal wards`,
-
         `"${place.city}" ${place.state} electoral wards`,
 
-        // ---------------------------------------------------------------------
-        // Municipal district terminology
-        // ---------------------------------------------------------------------
-
         `"${place.city}" ${place.state} municipal districts`,
-
         `"${place.city}" ${place.state} municipal district boundaries`,
-
         `"${place.city}" ${place.state} political districts`,
-
         `"${place.city}" ${place.state} political district boundaries`,
 
-        // ---------------------------------------------------------------------
-        // Election terminology
-        // ---------------------------------------------------------------------
-
         `"${place.city}" ${place.state} election districts`,
-
         `"${place.city}" ${place.state} electoral districts`,
-
         `"${place.city}" ${place.state} voting districts`,
 
-        // ---------------------------------------------------------------------
-        // GIS terminology
-        // ---------------------------------------------------------------------
-
         `"${place.city}" ${place.state} official GIS wards`,
-
         `"${place.city}" ${place.state} official GIS council districts`,
-
         `"${place.city}" ${place.state} GIS ward boundaries`,
-
         `"${place.city}" ${place.state} GIS council boundaries`,
-
         `"${place.city}" ${place.state} GIS political boundaries`,
 
-        // ---------------------------------------------------------------------
-        // Common ArcGIS layer naming conventions
-        // ---------------------------------------------------------------------
-
         `"${place.city}" ${place.state} WARD_COT`,
-
         `"${place.city}" ${place.state} WARDS`,
-
         `"${place.city}" ${place.state} WARD_BOUNDARIES`,
-
         `"${place.city}" ${place.state} COUNCIL_DISTRICT`,
-
         `"${place.city}" ${place.state} COUNCIL_DISTRICTS`,
-
         `"${place.city}" ${place.state} POLITICAL_BOUNDARIES`
     ];
 
@@ -732,11 +720,8 @@ async function searchMunicipalArcGIS(
     const discovered:
         DiscoveryCandidate[] = [];
 
-
     let searchResultCount = 0;
-
     let relevantResultCount = 0;
-
     let rejectedResultCount = 0;
 
 
@@ -773,10 +758,6 @@ async function searchMunicipalArcGIS(
                 }
 
 
-                // =================================================================
-                // Early search relevance scoring
-                // =================================================================
-
                 const relevance =
                     scoreSearchResult(
                         result,
@@ -784,7 +765,9 @@ async function searchMunicipalArcGIS(
                     );
 
 
-                if (options.verbose) {
+                if (
+                    options.verbose
+                ) {
 
                     console.log(
                         `      Search relevance: ` +
@@ -796,24 +779,16 @@ async function searchMunicipalArcGIS(
                             relevance.likelyRelevant
                                 ? "KEEP"
                                 : "SKIP"
-                        }: ${
-                            result.title
-                        }`
+                        }: ${result.title}`
                     );
 
                     console.log(
                         `      ${
-                            relevance.reasons.join(
-                                "; "
-                            )
+                            relevance.reasons.join("; ")
                         }`
                     );
                 }
 
-
-                // =================================================================
-                // Cheap pre-filter
-                // =================================================================
 
                 if (
                     relevance.score <
@@ -822,27 +797,12 @@ async function searchMunicipalArcGIS(
 
                     rejectedResultCount++;
 
-
-                    if (options.verbose) {
-
-                        console.log(
-                            `      Skipping low-relevance search result ` +
-                            `(score ${relevance.score}, ` +
-                            `threshold ${SEARCH_RELEVANCE_THRESHOLD})`
-                        );
-                    }
-
-
                     continue;
                 }
 
 
                 relevantResultCount++;
 
-
-                // =================================================================
-                // Create discovery candidate
-                // =================================================================
 
                 discovered.push({
 
@@ -875,7 +835,6 @@ async function searchMunicipalArcGIS(
                         `search query: ${query}`,
 
                         ...relevance.reasons
-
                     ],
 
                     source:
@@ -911,23 +870,19 @@ async function searchMunicipalArcGIS(
     if (options.verbose) {
 
         console.log(
-            `    ArcGIS search results: ` +
-            `${searchResultCount}`
+            `    ArcGIS search results: ${searchResultCount}`
         );
 
         console.log(
-            `    Relevant results: ` +
-            `${relevantResultCount}`
+            `    Relevant results: ${relevantResultCount}`
         );
 
         console.log(
-            `    Rejected results: ` +
-            `${rejectedResultCount}`
+            `    Rejected results: ${rejectedResultCount}`
         );
 
         console.log(
-            `    Unique relevant candidates: ` +
-            `${deduplicated.length}`
+            `    Unique relevant candidates: ${deduplicated.length}`
         );
     }
 
@@ -945,11 +900,6 @@ function createResolvedCandidate(
     item: ArcGISItemResolution
 ): DiscoveryCandidate | undefined {
 
-    /*
-     * Feature Services and Map Services have service URLs
-     * that can be passed to the next stage.
-     */
-
     if (!item.url) {
         return undefined;
     }
@@ -959,7 +909,6 @@ function createResolvedCandidate(
         item.type !== "Feature Service" &&
         item.type !== "Map Service"
     ) {
-
         return undefined;
     }
 
@@ -985,7 +934,6 @@ function createResolvedCandidate(
             `resolved ArcGIS item: ${item.id}`,
 
             `item type: ${item.type}`
-
         ]
     };
 }
@@ -1005,10 +953,6 @@ async function expandArcGISLayers(
         );
 
 
-    // =========================================================================
-    // Already a specific layer
-    // =========================================================================
-
     if (
         /\/(?:FeatureServer|MapServer)\/\d+$/i.test(
             url
@@ -1021,29 +965,17 @@ async function expandArcGISLayers(
     }
 
 
-    // =========================================================================
-    // Only expand ArcGIS service roots
-    // =========================================================================
-
     if (
         !/\/(?:FeatureServer|MapServer)$/i.test(
             url
         )
     ) {
 
-        /*
-         * Keep non-standard URLs rather than silently discarding them.
-         */
-
         return [
             candidate
         ];
     }
 
-
-    // =========================================================================
-    // Fetch service metadata
-    // =========================================================================
 
     try {
 
@@ -1063,31 +995,11 @@ async function expandArcGISLayers(
             );
 
 
-        // ---------------------------------------------------------------------
-        // HTTP failure
-        // ---------------------------------------------------------------------
-
         if (!response.ok) {
-
-            console.warn(
-                `\n    Failed to expand ArcGIS service:`
-            );
-
-            console.warn(
-                `      URL: ${url}`
-            );
-
-            console.warn(
-                `      HTTP: ${response.status} ${response.statusText}`
-            );
 
             return [];
         }
 
-
-        // ---------------------------------------------------------------------
-        // Parse JSON
-        // ---------------------------------------------------------------------
 
         const metadata:
             unknown =
@@ -1096,51 +1008,18 @@ async function expandArcGISLayers(
 
         if (!isRecord(metadata)) {
 
-            console.warn(
-                `\n    Invalid ArcGIS service metadata:`
-            );
-
-            console.warn(
-                `      URL: ${url}`
-            );
-
-            console.warn(
-                `      Expected JSON object.`
-            );
-
             return [];
         }
 
-
-        // ---------------------------------------------------------------------
-        // ArcGIS may return an error object with HTTP 200.
-        // ---------------------------------------------------------------------
 
         if (
             typeof metadata.error === "object" &&
             metadata.error !== null
         ) {
 
-            console.warn(
-                `\n    ArcGIS returned an error while expanding service:`
-            );
-
-            console.warn(
-                `      URL: ${url}`
-            );
-
-            console.warn(
-                `      Error:`,
-                metadata.error
-            );
-
             return [];
         }
 
-
-        // ---------------------------------------------------------------------
-        // Get service layers
-        // ---------------------------------------------------------------------
 
         const layers =
             Array.isArray(
@@ -1149,24 +1028,6 @@ async function expandArcGISLayers(
                 ? metadata.layers
                 : [];
 
-
-        if (layers.length === 0) {
-
-            console.warn(
-                `\n    ArcGIS service contains no top-level layers:`
-            );
-
-            console.warn(
-                `      URL: ${url}`
-            );
-
-            return [];
-        }
-
-
-        // =========================================================================
-        // Expand layers
-        // =========================================================================
 
         const expanded:
             DiscoveryCandidate[] = [];
@@ -1215,47 +1076,14 @@ async function expandArcGISLayers(
                     `expanded from service: ${url}`,
 
                     `ArcGIS layer: ${id}`
-
                 ]
             });
         }
 
 
-        // =========================================================================
-        // Verify expansion succeeded
-        // =========================================================================
-
-        if (expanded.length === 0) {
-
-            console.warn(
-                `\n    ArcGIS service contained layers, ` +
-                `but none had valid IDs:`
-            );
-
-            console.warn(
-                `      URL: ${url}`
-            );
-
-            return [];
-        }
-
-
         return expanded;
 
-    } catch (error) {
-
-        console.warn(
-            `\n    Failed to expand ArcGIS service:`
-        );
-
-        console.warn(
-            `      URL: ${url}`
-        );
-
-        console.warn(
-            `      Error:`,
-            error
-        );
+    } catch {
 
         return [];
     }
@@ -1305,11 +1133,6 @@ function deduplicateSearchCandidates(
         }
 
 
-        /*
-         * Preserve search evidence from every query
-         * that discovered the same item.
-         */
-
         existing.reasons = [
 
             ...new Set([
@@ -1317,7 +1140,6 @@ function deduplicateSearchCandidates(
                 ...existing.reasons,
 
                 ...candidate.reasons
-
             ])
         ];
     }
@@ -1371,11 +1193,6 @@ function deduplicateCandidates(
         }
 
 
-        /*
-         * Preserve evidence from every search/item
-         * that produced this same layer.
-         */
-
         existing.reasons = [
 
             ...new Set([
@@ -1383,7 +1200,6 @@ function deduplicateCandidates(
                 ...existing.reasons,
 
                 ...candidate.reasons
-
             ])
         ];
     }
@@ -1407,10 +1223,6 @@ function getCensusPlaces(
         loadCensusPlaces();
 
 
-    // =========================================================================
-    // FIPS
-    // =========================================================================
-
     if (options.placeFips) {
 
         places =
@@ -1421,10 +1233,6 @@ function getCensusPlaces(
             );
     }
 
-
-    // =========================================================================
-    // City
-    // =========================================================================
 
     if (options.city) {
 
@@ -1444,10 +1252,6 @@ function getCensusPlaces(
             );
     }
 
-
-    // =========================================================================
-    // State
-    // =========================================================================
 
     if (options.state) {
 
@@ -1529,9 +1333,7 @@ function normalizeUrl(
                 url.trim()
             );
 
-
         parsed.hash = "";
-
         parsed.search = "";
 
         parsed.hostname =
@@ -1596,7 +1398,7 @@ function log(
 
 
 // =============================================================================
-// Item resolution output
+// Verbose output helpers
 // =============================================================================
 
 function printItemResolution(
@@ -1629,7 +1431,6 @@ function printItemResolution(
         }`
     );
 
-
     if (item.owner) {
 
         console.log(
@@ -1638,10 +1439,6 @@ function printItemResolution(
     }
 }
 
-
-// =============================================================================
-// Inspection output
-// =============================================================================
 
 function printInspection(
     inspection: ArcGISInspection
@@ -1690,26 +1487,8 @@ function printInspection(
                 : "(none)"
         }`
     );
-
-    console.log(
-        `      District field: ${
-            inspection.districtField ??
-            "(none)"
-        }`
-    );
-
-    console.log(
-        `      Name field: ${
-            inspection.nameField ??
-            "(none)"
-        }`
-    );
 }
 
-
-// =============================================================================
-// Municipality validation output
-// =============================================================================
 
 function printMunicipalityValidation(
     validation: ReturnType<typeof validateMunicipality>
@@ -1740,9 +1519,63 @@ function printMunicipalityValidation(
 }
 
 
-// =============================================================================
-// Classification output
-// =============================================================================
+function printMunicipalityGeographyValidation(
+    validation:
+        Awaited<
+            ReturnType<
+                typeof validateMunicipalityGeography
+            >
+        >
+): void {
+
+    console.log(
+        `      Geographic municipality match: ${
+            validation.likelyMunicipalityMatch
+        }`
+    );
+
+    console.log(
+        `      Geographic status: ${
+            validation.status
+        }`
+    );
+
+    console.log(
+        `      Geographic score: ${
+            validation.score
+        }`
+    );
+
+    console.log(
+        `      Municipality coverage: ${
+            (
+                validation.coverageOfMunicipality *
+                100
+            ).toFixed(1)
+        }%`
+    );
+
+    console.log(
+        `      Candidate containment: ${
+            (
+                validation.candidateInsideMunicipality *
+                100
+            ).toFixed(1)
+        }%`
+    );
+
+    if (
+        validation.reasons.length > 0
+    ) {
+
+        console.log(
+            `      Geographic evidence: ${
+                validation.reasons.join("; ")
+            }`
+        );
+    }
+}
+
 
 function printClassification(
     classification: ReturnType<typeof classifyCandidate>
@@ -1839,10 +1672,6 @@ function printMunicipalitySummary(
     );
 
 
-    // =========================================================================
-    // Top candidates
-    // =========================================================================
-
     if (
         result.rankedCandidates.length > 0
     ) {
@@ -1871,19 +1700,6 @@ function printMunicipalitySummary(
                 `          ${ranked.candidate.candidate.url}`
             );
 
-
-            if (
-                ranked.candidate.candidate.itemId
-            ) {
-
-                console.log(
-                    `          Item ID: ${
-                        ranked.candidate.candidate.itemId
-                    }`
-                );
-            }
-
-
             if (
                 ranked.reasons.length > 0
             ) {
@@ -1897,10 +1713,6 @@ function printMunicipalitySummary(
         }
     }
 
-
-    // =========================================================================
-    // Canonical source
-    // =========================================================================
 
     if (
         result.canonical

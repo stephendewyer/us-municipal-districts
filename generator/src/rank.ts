@@ -3,26 +3,22 @@ import type {
     InspectedCandidate
 } from "./types.js";
 
-
-// =============================================================================
+// -----------------------------------------------------------------------------
 // Helpers
-// =============================================================================
+// -----------------------------------------------------------------------------
 
 function getDistrictField(
     candidate: InspectedCandidate
 ): string | undefined {
-
     return (
         candidate.inspection.districtField ??
         candidate.validation?.districtField
     );
 }
 
-
 function isPolygon(
     candidate: InspectedCandidate
 ): boolean {
-
     return (
         candidate.inspection.geometryType ===
             "esriGeometryPolygon" ||
@@ -31,13 +27,10 @@ function isPolygon(
     );
 }
 
-
 function hasValidatedPoliticalBoundary(
     candidate: InspectedCandidate
 ): boolean {
-
-    const validation =
-        candidate.validation;
+    const validation = candidate.validation;
 
     return Boolean(
         validation &&
@@ -54,11 +47,9 @@ function hasValidatedPoliticalBoundary(
     );
 }
 
-
 function hasStrongNegativeEvidence(
     candidate: InspectedCandidate
 ): boolean {
-
     const classification =
         candidate.classification;
 
@@ -71,16 +62,11 @@ function hasStrongNegativeEvidence(
     }
 
     const thematic =
-        classification.matches
-            .thematic ?? [];
+        classification.matches.thematic ?? [];
 
     const political =
-        classification.matches
-            .political ?? [];
+        classification.matches.political ?? [];
 
-    /*
-     * Thematic layer with no explicit political identity.
-     */
     if (
         thematic.length > 0 &&
         political.length === 0
@@ -91,23 +77,83 @@ function hasStrongNegativeEvidence(
     return false;
 }
 
-
-// =============================================================================
-// Score one candidate
-// =============================================================================
+// -----------------------------------------------------------------------------
+// Geographic validation scoring
+// -----------------------------------------------------------------------------
 
 /**
- * Calculate the canonical-selection score for one inspected candidate.
+ * Returns the ranking contribution from municipality geography validation.
  *
- * Validation is intentionally weighted more heavily than raw field-name
- * detection.
- *
- * A field named WARD is not sufficient by itself.
+ * Geographic validation is intentionally a ranking signal rather than a
+ * hard eligibility gate. A candidate can still be useful when geographic
+ * validation is unavailable, but a candidate that has been demonstrated to
+ * overlap the municipality boundary should rank substantially higher.
  */
+function getGeographyScore(
+    candidate: InspectedCandidate
+): {
+    score: number;
+    reason?: string;
+} {
+    const geography =
+        candidate.municipalityGeographyValidation;
+
+    if (!geography) {
+        return {
+            score: 0
+        };
+    }
+
+    switch (geography.status) {
+        case "strong-match":
+            return {
+                score: 30,
+                reason:
+                    "+30 strong municipality geography match"
+            };
+
+        case "probable-match":
+            return {
+                score: 20,
+                reason:
+                    "+20 probable municipality geography match"
+            };
+
+        case "weak-match":
+            return {
+                score: 5,
+                reason:
+                    "+5 weak municipality geography match"
+            };
+
+        case "no-match":
+            return {
+                score: -15,
+                reason:
+                    "-15 candidate does not match municipality geography"
+            };
+
+        case "invalid":
+            return {
+                score: 0,
+                reason:
+                    "0 invalid municipality geography validation"
+            };
+
+        default:
+            return {
+                score: 0
+            };
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Candidate scoring
+// -----------------------------------------------------------------------------
+
 export function scoreCandidate(
     candidate: InspectedCandidate
 ): CandidateScore {
-
     const reasons: string[] = [];
 
     const classification =
@@ -119,137 +165,74 @@ export function scoreCandidate(
     const validation =
         candidate.validation;
 
+    // -------------------------------------------------------------------------
+    // Hard rejection gates
+    // -------------------------------------------------------------------------
 
-    // =========================================================================
-    // Hard rejection
-    // =========================================================================
-
-    if (
-        classification.rejected
-    ) {
-
-        reasons.push(
-            "candidate rejected by classification"
-        );
-
+    if (classification.rejected) {
         return {
-
             candidate,
-
-            score:
-                Number.NEGATIVE_INFINITY,
-
-            reasons
+            score: Number.NEGATIVE_INFINITY,
+            reasons: [
+                "candidate rejected by classification"
+            ]
         };
     }
 
-
-    if (
-        !isPolygon(candidate)
-    ) {
-
-        reasons.push(
-            "candidate is not polygon geometry"
-        );
-
+    if (!isPolygon(candidate)) {
         return {
-
             candidate,
-
-            score:
-                Number.NEGATIVE_INFINITY,
-
-            reasons
+            score: Number.NEGATIVE_INFINITY,
+            reasons: [
+                "candidate is not polygon geometry"
+            ]
         };
     }
 
-
-    if (
-        !classification.isPoliticalBoundary
-    ) {
-
-        reasons.push(
-            "candidate is not classified as a political boundary"
-        );
-
+    if (!classification.isPoliticalBoundary) {
         return {
-
             candidate,
-
-            score:
-                Number.NEGATIVE_INFINITY,
-
-            reasons
+            score: Number.NEGATIVE_INFINITY,
+            reasons: [
+                "candidate is not classified as a political boundary"
+            ]
         };
     }
 
-
-    if (
-        !hasValidatedPoliticalBoundary(candidate)
-    ) {
-
-        reasons.push(
-            "candidate failed validated political-boundary gate"
-        );
-
+    if (!hasValidatedPoliticalBoundary(candidate)) {
         return {
-
             candidate,
-
-            score:
-                Number.NEGATIVE_INFINITY,
-
-            reasons
+            score: Number.NEGATIVE_INFINITY,
+            reasons: [
+                "candidate failed validated political-boundary gate"
+            ]
         };
     }
 
-
-    if (
-        hasStrongNegativeEvidence(candidate)
-    ) {
-
-        reasons.push(
-            "candidate contains strong non-political/thematic evidence"
-        );
-
+    if (hasStrongNegativeEvidence(candidate)) {
         return {
-
             candidate,
-
-            score:
-                Number.NEGATIVE_INFINITY,
-
-            reasons
+            score: Number.NEGATIVE_INFINITY,
+            reasons: [
+                "candidate contains strong non-political/thematic evidence"
+            ]
         };
     }
 
-
-    // =========================================================================
+    // -------------------------------------------------------------------------
     // Base score
-    // =========================================================================
+    // -------------------------------------------------------------------------
 
     let score = 0;
 
-
-    // =========================================================================
-    // Political boundary
-    // =========================================================================
-
     score += 40;
-
     reasons.push(
         "+40 validated political boundary"
     );
 
-
-    // =========================================================================
-    // Official municipal source
-    // =========================================================================
-
     if (
         classification.officialMunicipalSource
     ) {
-
         score += 35;
 
         reasons.push(
@@ -257,51 +240,24 @@ export function scoreCandidate(
         );
     }
 
-
-    // =========================================================================
-    // District type
-    // =========================================================================
-
-    if (
-        classification.districtType
-    ) {
-
+    if (classification.districtType) {
         score += 15;
 
         reasons.push(
-            `+15 district type: ${
-                classification.districtType
-            }`
+            `+15 district type: ${classification.districtType}`
         );
     }
-
-
-    // =========================================================================
-    // District field
-    // =========================================================================
 
     const districtField =
-        getDistrictField(
-            candidate
-        );
+        getDistrictField(candidate);
 
-    if (
-        districtField
-    ) {
-
+    if (districtField) {
         score += 15;
 
         reasons.push(
-            `+15 district field: ${
-                districtField
-            }`
+            `+15 district field: ${districtField}`
         );
     }
-
-
-    // =========================================================================
-    // Polygon geometry
-    // =========================================================================
 
     score += 10;
 
@@ -309,52 +265,34 @@ export function scoreCandidate(
         "+10 polygon geometry"
     );
 
+    // -------------------------------------------------------------------------
+    // Attribute validation
+    // -------------------------------------------------------------------------
 
-    // =========================================================================
-    // Validation
-    // =========================================================================
-
-    if (
-        validation
-    ) {
-
+    if (validation) {
         score += 25;
 
         reasons.push(
             "+25 validated political boundary"
         );
 
-
-        // ---------------------------------------------------------------------
-        // Validation confidence
-        // ---------------------------------------------------------------------
-
-        if (
-            validation.confidence >= 90
-        ) {
-
+        if (validation.confidence >= 90) {
             score += 20;
 
             reasons.push(
                 "+20 validation confidence >= 0.90"
             );
-
-        }
-        else if (
+        } else if (
             validation.confidence >= 80
         ) {
-
             score += 15;
 
             reasons.push(
                 "+15 validation confidence >= 0.80"
             );
-
-        }
-        else if (
+        } else if (
             validation.confidence >= 70
         ) {
-
             score += 8;
 
             reasons.push(
@@ -362,37 +300,28 @@ export function scoreCandidate(
             );
         }
 
-
-        // ---------------------------------------------------------------------
-        // Distinct district values
-        // ---------------------------------------------------------------------
-
         if (
-            validation.distinctDistrictValues.length >= 5
+            validation.distinctDistrictValues
+                .length >= 5
         ) {
-
             score += 10;
 
             reasons.push(
                 "+10 at least 5 distinct district values"
             );
-
-        }
-        else if (
-            validation.distinctDistrictValues.length >= 3
+        } else if (
+            validation.distinctDistrictValues
+                .length >= 3
         ) {
-
             score += 7;
 
             reasons.push(
                 "+7 at least 3 distinct district values"
             );
-
-        }
-        else if (
-            validation.distinctDistrictValues.length >= 2
+        } else if (
+            validation.distinctDistrictValues
+                .length >= 2
         ) {
-
             score += 4;
 
             reasons.push(
@@ -400,17 +329,10 @@ export function scoreCandidate(
             );
         }
 
-
-        // ---------------------------------------------------------------------
-        // Recognizable value pattern
-        // ---------------------------------------------------------------------
-
         switch (
             validation.districtValuePattern
         ) {
-
             case "ward-number":
-
                 score += 12;
 
                 reasons.push(
@@ -420,7 +342,6 @@ export function scoreCandidate(
                 break;
 
             case "district-number":
-
                 score += 12;
 
                 reasons.push(
@@ -430,7 +351,6 @@ export function scoreCandidate(
                 break;
 
             case "numeric":
-
                 score += 5;
 
                 reasons.push(
@@ -440,7 +360,6 @@ export function scoreCandidate(
                 break;
 
             case "named":
-
                 score += 4;
 
                 reasons.push(
@@ -450,11 +369,7 @@ export function scoreCandidate(
                 break;
         }
 
-
-        if (
-            validation.sampleCount > 0
-        ) {
-
+        if (validation.sampleCount > 0) {
             score += 3;
 
             reasons.push(
@@ -463,28 +378,34 @@ export function scoreCandidate(
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Municipality geography validation
+    // -------------------------------------------------------------------------
 
-    // =========================================================================
-    // Name field
-    // =========================================================================
+    const geographyScore =
+        getGeographyScore(candidate);
 
-    if (
-        inspection.nameField
-    ) {
+    score += geographyScore.score;
 
+    if (geographyScore.reason) {
+        reasons.push(
+            geographyScore.reason
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // District name field
+    // -------------------------------------------------------------------------
+
+    if (inspection.nameField) {
         score += 5;
 
         reasons.push(
-            `+5 district name field: ${
-                inspection.nameField
-            }`
+            `+5 district name field: ${inspection.nameField}`
         );
-
-    }
-    else if (
+    } else if (
         inspection.nameFields.length > 0
     ) {
-
         score += 2;
 
         reasons.push(
@@ -492,16 +413,14 @@ export function scoreCandidate(
         );
     }
 
-
-    // =========================================================================
+    // -------------------------------------------------------------------------
     // Review penalty
-    // =========================================================================
+    // -------------------------------------------------------------------------
 
     if (
         candidate.candidate.requiresReview ||
         classification.requiresReview
     ) {
-
         score -= 10;
 
         reasons.push(
@@ -509,51 +428,28 @@ export function scoreCandidate(
         );
     }
 
-
-    // =========================================================================
-    // Return
-    // =========================================================================
-
     return {
-
         candidate,
-
         score,
-
         reasons
     };
 }
 
-
-// =============================================================================
-// Compare candidate scores
-// =============================================================================
+// -----------------------------------------------------------------------------
+// Candidate comparison
+// -----------------------------------------------------------------------------
 
 export function compareCandidateScores(
     a: CandidateScore,
     b: CandidateScore
 ): number {
-
-    // =========================================================================
-    // Highest score first
-    // =========================================================================
-
-    if (
-        b.score !==
-        a.score
-    ) {
-
-        return (
-            b.score -
-            a.score
-        );
+    // Primary ordering: total score, descending.
+    if (b.score !== a.score) {
+        return b.score - a.score;
     }
 
-
-    // =========================================================================
-    // Prefer validated candidates
-    // =========================================================================
-
+    // Prefer candidates that passed the validated
+    // political-boundary gate.
     const aValidated =
         hasValidatedPoliticalBoundary(
             a.candidate
@@ -564,45 +460,24 @@ export function compareCandidateScores(
             b.candidate
         );
 
-    if (
-        aValidated !==
-        bValidated
-    ) {
-
-        return aValidated
-            ? -1
-            : 1;
+    if (aValidated !== bValidated) {
+        return aValidated ? -1 : 1;
     }
 
-
-    // =========================================================================
-    // Prefer higher validation confidence
-    // =========================================================================
-
+    // Prefer higher attribute-validation confidence.
     const aConfidence =
-        a.candidate.validation?.confidence ??
-        0;
+        a.candidate.validation?.confidence ?? 0;
 
     const bConfidence =
-        b.candidate.validation?.confidence ??
-        0;
+        b.candidate.validation?.confidence ?? 0;
 
     if (
-        aConfidence !==
-        bConfidence
+        aConfidence !== bConfidence
     ) {
-
-        return (
-            bConfidence -
-            aConfidence
-        );
+        return bConfidence - aConfidence;
     }
 
-
-    // =========================================================================
-    // Prefer candidates that do not require review
-    // =========================================================================
-
+    // Prefer candidates that do not require review.
     const aRequiresReview =
         a.candidate.candidate.requiresReview ||
         a.candidate.classification.requiresReview;
@@ -615,115 +490,67 @@ export function compareCandidateScores(
         aRequiresReview !==
         bRequiresReview
     ) {
-
-        return aRequiresReview
-            ? 1
-            : -1;
+        return aRequiresReview ? 1 : -1;
     }
 
-
-    // =========================================================================
-    // Prefer official municipal sources
-    // =========================================================================
-
+    // Prefer official municipal sources.
     const aOfficial =
-        a.candidate
-            .classification
+        a.candidate.classification
             .officialMunicipalSource;
 
     const bOfficial =
-        b.candidate
-            .classification
+        b.candidate.classification
             .officialMunicipalSource;
 
-    if (
-        aOfficial !==
-        bOfficial
-    ) {
-
-        return aOfficial
-            ? -1
-            : 1;
+    if (aOfficial !== bOfficial) {
+        return aOfficial ? -1 : 1;
     }
 
-
-    // =========================================================================
-    // Prefer FeatureServer
-    // =========================================================================
-
+    // Prefer FeatureServer over MapServer when
+    // otherwise equivalent.
     const aService =
-        a.candidate
-            .inspection
-            .serviceType;
+        a.candidate.inspection.serviceType;
 
     const bService =
-        b.candidate
-            .inspection
-            .serviceType;
+        b.candidate.inspection.serviceType;
 
-    if (
-        aService !==
-        bService
-    ) {
-
-        return aService ===
-            "FeatureServer"
-            ? -1
-            : 1;
+    if (aService !== bService) {
+        return (
+            aService === "FeatureServer"
+                ? -1
+                : 1
+        );
     }
 
-
-    // =========================================================================
-    // Prefer explicit district field
-    // =========================================================================
-
+    // Prefer a candidate with a known district field.
     const aField =
-        getDistrictField(
-            a.candidate
-        );
+        getDistrictField(a.candidate);
 
     const bField =
-        getDistrictField(
-            b.candidate
-        );
+        getDistrictField(b.candidate);
 
     if (
         Boolean(aField) !==
         Boolean(bField)
     ) {
-
-        return aField
-            ? -1
-            : 1;
+        return aField ? -1 : 1;
     }
 
-
-    // =========================================================================
-    // Deterministic fallback
-    // =========================================================================
-
-    return (
-        a.candidate.inspection.url
-            .localeCompare(
-                b.candidate.inspection.url
-            )
-    );
+    // Final deterministic tie-breaker.
+    return a.candidate.inspection.url
+        .localeCompare(
+            b.candidate.inspection.url
+        );
 }
 
-
-// =============================================================================
-// Rank candidates
-// =============================================================================
+// -----------------------------------------------------------------------------
+// Ranking
+// -----------------------------------------------------------------------------
 
 export function rankCandidates(
     candidates: InspectedCandidate[]
 ): CandidateScore[] {
-
     return candidates
-        .map(
-            scoreCandidate
-        )
-        .sort(
-            compareCandidateScores
-        );
+        .map(scoreCandidate)
+        .sort(compareCandidateScores);
 }
