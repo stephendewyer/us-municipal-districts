@@ -77,7 +77,7 @@ function createGeometryDirectory(
                 "04",
 
             vintage:
-                "2025",
+                2025,
 
             source:
                 "test",

@@ -55,7 +55,7 @@ test(
                 JSON.stringify({
                     state: "AZ",
                     stateFips: "04",
-                    vintage: "2025",
+                    vintage: 2025,
                     generatedAt:
                         "2026-01-01T00:00:00.000Z",
                     source:
@@ -150,7 +150,7 @@ test(
                 JSON.stringify({
                     state: "AZ",
                     stateFips: "04",
-                    vintage: "2025",
+                    vintage: 2025,
                     generatedAt:
                         "2026-01-01T00:00:00.000Z",
                     source:
@@ -247,7 +247,7 @@ test(
                 JSON.stringify({
                     state: "AZ",
                     stateFips: "04",
-                    vintage: "2025",
+                    vintage: 2025,
                     generatedAt:
                         "2026-01-01T00:00:00.000Z",
                     source:

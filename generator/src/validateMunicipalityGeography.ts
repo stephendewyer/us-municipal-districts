@@ -143,6 +143,22 @@ export const GEOGRAPHY_WEAK_COVERAGE =
     0.20;
 
 
+/**
+ * Small tolerance used when comparing ratios against
+ * geographic thresholds.
+ *
+ * Turf calculates polygon areas using floating-point
+ * arithmetic. As a result, a mathematically exact
+ * threshold such as 0.90 can sometimes be represented
+ * internally as 0.8999999999999999.
+ *
+ * This epsilon prevents those harmless floating-point
+ * differences from changing the classification.
+ */
+export const GEOGRAPHY_COMPARISON_EPSILON =
+    1e-9;
+
+
 // =============================================================================
 // Public API
 // =============================================================================
@@ -686,12 +702,19 @@ function classifyGeography(
      * The candidate covers at least 90% of the Census
      * municipality and at least 60% of the candidate itself
      * falls inside the municipality.
+     *
+     * Comparisons use a small epsilon because Turf area
+     * calculations are floating-point calculations.
      */
     if (
-        coverageOfMunicipality >=
-            GEOGRAPHY_STRONG_COVERAGE &&
-        candidateInsideMunicipality >=
+        isAtLeast(
+            coverageOfMunicipality,
+            GEOGRAPHY_STRONG_COVERAGE
+        ) &&
+        isAtLeast(
+            candidateInsideMunicipality,
             0.60
+        )
     ) {
 
         return "strong-match";
@@ -705,10 +728,14 @@ function classifyGeography(
      * and at least 40% of the candidate falls inside it.
      */
     if (
-        coverageOfMunicipality >=
-            GEOGRAPHY_PROBABLE_COVERAGE &&
-        candidateInsideMunicipality >=
+        isAtLeast(
+            coverageOfMunicipality,
+            GEOGRAPHY_PROBABLE_COVERAGE
+        ) &&
+        isAtLeast(
+            candidateInsideMunicipality,
             0.40
+        )
     ) {
 
         return "probable-match";
@@ -723,8 +750,10 @@ function classifyGeography(
      * to identify the candidate as the municipality boundary.
      */
     if (
-        coverageOfMunicipality >=
-        GEOGRAPHY_WEAK_COVERAGE
+        isAtLeast(
+            coverageOfMunicipality,
+            GEOGRAPHY_WEAK_COVERAGE
+        )
     ) {
 
         return "weak-match";
@@ -744,6 +773,9 @@ function classifyGeography(
  *
  * The score is intentionally separate from the match status.
  * The status is what determines geographic eligibility.
+ *
+ * Threshold comparisons use the same floating-point tolerance
+ * as geographic classification.
  */
 function calculateGeographyScore(
     coverageOfMunicipality: number,
@@ -758,22 +790,28 @@ function calculateGeographyScore(
     // -------------------------------------------------------------------------
 
     if (
-        coverageOfMunicipality >=
-        GEOGRAPHY_STRONG_COVERAGE
+        isAtLeast(
+            coverageOfMunicipality,
+            GEOGRAPHY_STRONG_COVERAGE
+        )
     ) {
 
         score += 70;
 
     } else if (
-        coverageOfMunicipality >=
-        GEOGRAPHY_PROBABLE_COVERAGE
+        isAtLeast(
+            coverageOfMunicipality,
+            GEOGRAPHY_PROBABLE_COVERAGE
+        )
     ) {
 
         score += 50;
 
     } else if (
-        coverageOfMunicipality >=
-        GEOGRAPHY_WEAK_COVERAGE
+        isAtLeast(
+            coverageOfMunicipality,
+            GEOGRAPHY_WEAK_COVERAGE
+        )
     ) {
 
         score += 25;
@@ -785,22 +823,28 @@ function calculateGeographyScore(
     // -------------------------------------------------------------------------
 
     if (
-        candidateInsideMunicipality >=
-        0.90
+        isAtLeast(
+            candidateInsideMunicipality,
+            0.90
+        )
     ) {
 
         score += 30;
 
     } else if (
-        candidateInsideMunicipality >=
-        0.60
+        isAtLeast(
+            candidateInsideMunicipality,
+            0.60
+        )
     ) {
 
         score += 20;
 
     } else if (
-        candidateInsideMunicipality >=
-        0.20
+        isAtLeast(
+            candidateInsideMunicipality,
+            0.20
+        )
     ) {
 
         score += 10;
@@ -1044,6 +1088,25 @@ function invalidResult(
 // Numeric helpers
 // =============================================================================
 
+/**
+ * Determine whether a numeric ratio is at least a threshold,
+ * allowing for harmless floating-point rounding.
+ */
+function isAtLeast(
+    value: number,
+    threshold: number
+): boolean {
+
+    return (
+        value +
+        GEOGRAPHY_COMPARISON_EPSILON
+    ) >= threshold;
+}
+
+
+/**
+ * Clamp a ratio to the inclusive range 0 to 1.
+ */
 function clampRatio(
     value: number
 ): number {
