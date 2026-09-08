@@ -1,0 +1,230 @@
+name: Test municipal data generation
+
+on:
+  workflow_dispatch:
+
+
+# This workflow must never modify or commit repository contents.
+permissions:
+  contents: read
+
+
+# Prevent overlapping smoke-test runs.
+concurrency:
+  group: test-municipal-data-generation
+  cancel-in-progress: false
+
+
+jobs:
+  test-municipality:
+
+    name: Test ${{ matrix.city }}, ${{ matrix.state }}
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        include:
+          - city: Tucson
+            state: AZ
+
+          - city: Omaha
+            state: NE
+
+          - city: Boston
+            state: MA
+
+          - city: Chicago
+            state: IL
+
+
+    steps:
+
+      # -----------------------------------------------------------------------
+      # Checkout
+      # -----------------------------------------------------------------------
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+
+      # -----------------------------------------------------------------------
+      # Node
+      # -----------------------------------------------------------------------
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+
+      # -----------------------------------------------------------------------
+      # Install
+      # -----------------------------------------------------------------------
+
+      - name: Install dependencies
+        run: npm ci
+
+
+      # -----------------------------------------------------------------------
+      # Discover
+      # -----------------------------------------------------------------------
+
+      - name: Discover municipal district source
+        run: |
+          npm run discover -- \
+            --city "${{ matrix.city }}" \
+            --state "${{ matrix.state }}"
+
+
+      # -----------------------------------------------------------------------
+      # Verify discovery output
+      # -----------------------------------------------------------------------
+
+      - name: Verify registry
+        shell: bash
+        run: |
+          node --input-type=module <<'EOF'
+          import fs from "node:fs";
+
+          const registryPath =
+            "data/municipalities/registry.json";
+
+          if (!fs.existsSync(registryPath)) {
+            throw new Error(
+              `Registry file not found: ${registryPath}`
+            );
+          }
+
+          const registry =
+            JSON.parse(
+              fs.readFileSync(
+                registryPath,
+                "utf8"
+              )
+            );
+
+          if (
+            !Array.isArray(registry.entries)
+          ) {
+            throw new Error(
+              "Registry does not contain an entries array."
+            );
+          }
+
+          if (
+            registry.entries.length !== 1
+          ) {
+            throw new Error(
+              `Expected exactly one registry entry, found ${registry.entries.length}.`
+            );
+          }
+
+          const entry =
+            registry.entries[0];
+
+          if (
+            entry.city !== "${{ matrix.city }}"
+          ) {
+            throw new Error(
+              `Expected city ${{ matrix.city }}, found ${entry.city}.`
+            );
+          }
+
+          if (
+            entry.state !== "${{ matrix.state }}"
+          ) {
+            throw new Error(
+              `Expected state ${{ matrix.state }}, found ${entry.state}.`
+            );
+          }
+
+          console.log(
+            "Registry verification passed:"
+          );
+
+          console.log(
+            `  City: ${entry.city}`
+          );
+
+          console.log(
+            `  State: ${entry.state}`
+          );
+
+          console.log(
+            `  Place FIPS: ${entry.placeFips}`
+          );
+
+          console.log(
+            `  Boundary type: ${entry.boundaryType}`
+          );
+
+          console.log(
+            `  Generated file: ${entry.generatedFile}`
+          );
+          EOF
+
+
+      # -----------------------------------------------------------------------
+      # Generate
+      # -----------------------------------------------------------------------
+
+      - name: Generate municipal geometry
+        run: |
+          npm run generate -- \
+            --city "${{ matrix.city }}" \
+            --state "${{ matrix.state }}"
+
+
+      # -----------------------------------------------------------------------
+      # Validate
+      # -----------------------------------------------------------------------
+
+      - name: Validate registry and geometry
+        run: |
+          npm run validate -- \
+            --registry data/municipalities/registry.json
+
+
+      # -----------------------------------------------------------------------
+      # Test
+      # -----------------------------------------------------------------------
+
+      - name: Run tests
+        run: npm run check
+
+
+      # -----------------------------------------------------------------------
+      # Show generated changes
+      # -----------------------------------------------------------------------
+
+      - name: Show generated changes
+        run: |
+          echo "=== Git status ==="
+          git status --short
+
+          echo ""
+          echo "=== Generated data diff ==="
+          git diff -- \
+            data/municipalities/registry.json \
+            data/geometry
+
+          echo ""
+          echo "=== Generated data diff stat ==="
+          git diff --stat -- \
+            data/municipalities/registry.json \
+            data/geometry
+
+
+      # -----------------------------------------------------------------------
+      # Confirm no repository write operations are performed
+      # -----------------------------------------------------------------------
+
+      - name: Confirm smoke test is read-only
+        run: |
+          echo "Smoke test completed."
+          echo "This workflow has contents: read permission only."
+          echo "No commit or push operation is performed."
