@@ -92,4 +92,14 @@ jobs:
         run: npm run check
 
       - name: Show generated changes
-        run: git status --short
+        run: |
+          echo "=== Git status ==="
+          git status --short
+
+          echo ""
+          echo "=== Registry diff ==="
+          git diff -- data/municipalities/registry.json
+
+          echo ""
+          echo "=== Geometry changes ==="
+          git diff --stat -- data/geometry
