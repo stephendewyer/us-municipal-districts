@@ -51,10 +51,6 @@ export async function generateGeometry(
     const source =
         entry.source;
 
-    console.log(
-        `    Source: ${source.url}`
-    );
-
     const geojson =
         await fetchArcGISGeoJSON(
             source

@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-04T04:17:46.474Z",
+  "generatedAt": "2026-09-07T23:54:26.025Z",
   "entries": [
     {
       "placeFips": "0477000",
@@ -9,23 +9,23 @@
       "boundaryType": "ward",
       "source": {
         "sourceType": "arcgis",
-        "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Tucson_City_Golf_Course_HFL/FeatureServer/21",
-        "itemId": "4fd613da13b54a929c7c2034ce86d92d",
+        "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer/156",
+        "itemId": "cbb29b7016c04c43b3b51ba60db17643",
         "serviceType": "FeatureServer",
-        "title": "TPRD_GOLF",
-        "official": true,
+        "title": "TucsonWards2022",
+        "official": false,
         "verified": true,
         "fieldMapping": {
-          "district": "DISTRICT",
-          "name": "DISTRICT"
+          "district": "Label",
+          "name": "NAME"
         }
       },
       "generatedFile": "geometry/0477000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-04T04:17:46.474Z",
+        "generatedAt": "2026-09-07T23:54:26.025Z",
         "generatorVersion": "0.1.0",
         "alternatives": [],
-        "requiresReview": false
+        "requiresReview": true
       }
     }
   ]

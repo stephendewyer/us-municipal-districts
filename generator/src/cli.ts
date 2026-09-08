@@ -1,3 +1,4 @@
+import path from "node:path";
 import { generateCensusPlaces } from "./generateCensusPlaces.js";
 import { discoverArcGIS } from "./discover.js";
 import {
@@ -274,7 +275,10 @@ async function generateRegistryGeometry(
     // =========================================================================
 
     const outputRoot =
-        process.cwd();
+        path.join(
+            process.cwd(),
+            "data"
+        );
 
 
     let successful = 0;
