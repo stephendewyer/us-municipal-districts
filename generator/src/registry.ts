@@ -124,13 +124,108 @@ export function buildRegistry(
         compareRegistryEntries
     );
 
-    return {
+    const generatedRegistry:
+        GeneratedRegistry = {
         version:
             GENERATOR_VERSION,
 
         generatedAt,
 
         entries
+    };
+
+    /*
+     * If the registry already contains exactly the same substantive
+     * data, return it unchanged so that generatedAt does not create
+     * a meaningless Git diff.
+     */
+    const existingRegistry =
+        loadExistingRegistryForComparison();
+
+    if (
+        existingRegistry !== undefined &&
+        registriesAreSubstantivelyEqual(
+            existingRegistry,
+            generatedRegistry
+        )
+    ) {
+
+        return existingRegistry;
+    }
+
+    return generatedRegistry;
+}
+
+function loadExistingRegistryForComparison():
+    GeneratedRegistry | undefined {
+
+    if (
+        !fs.existsSync(
+            REGISTRY_PATH
+        )
+    ) {
+
+        return undefined;
+    }
+
+    return loadGeneratedRegistry();
+}
+
+
+// =============================================================================
+// Registry comparison
+// =============================================================================
+
+function registriesAreSubstantivelyEqual(
+    existing:
+        GeneratedRegistry,
+    generated:
+        GeneratedRegistry
+): boolean {
+
+    return (
+        JSON.stringify(
+            normalizeRegistryForComparison(
+                existing
+            )
+        ) ===
+        JSON.stringify(
+            normalizeRegistryForComparison(
+                generated
+            )
+        )
+    );
+}
+
+
+function normalizeRegistryForComparison(
+    registry:
+        GeneratedRegistry
+): GeneratedRegistry {
+
+    return {
+        ...registry,
+
+        /*
+         * Registry generation timestamps are intentionally ignored
+         * when determining whether substantive data changed.
+         */
+        generatedAt:
+            "",
+
+        entries:
+            registry.entries.map(
+                entry => ({
+                    ...entry,
+
+                    metadata: {
+                        ...entry.metadata,
+
+                        generatedAt:
+                            ""
+                    }
+                })
+            )
     };
 }
 
