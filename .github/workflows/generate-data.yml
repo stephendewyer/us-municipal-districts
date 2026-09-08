@@ -18,13 +18,36 @@ on:
   schedule:
     - cron: "0 7 1 * *"
 
+
+# Prevent overlapping nationwide/manual generation runs from
+# modifying the generated dataset simultaneously.
+concurrency:
+  group: generate-municipal-data
+  cancel-in-progress: false
+
+
+# The workflow needs permission to commit generated data.
+permissions:
+  contents: write
+
+
 jobs:
   generate:
     runs-on: ubuntu-latest
 
     steps:
+
+      # -----------------------------------------------------------------------
+      # Checkout
+      # -----------------------------------------------------------------------
+
       - name: Checkout
         uses: actions/checkout@v7
+
+
+      # -----------------------------------------------------------------------
+      # Node
+      # -----------------------------------------------------------------------
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -32,8 +55,18 @@ jobs:
           node-version: 24
           cache: npm
 
+
+      # -----------------------------------------------------------------------
+      # Install
+      # -----------------------------------------------------------------------
+
       - name: Install dependencies
         run: npm ci
+
+
+      # -----------------------------------------------------------------------
+      # Show generation mode
+      # -----------------------------------------------------------------------
 
       - name: Show generation mode
         run: |
@@ -46,6 +79,11 @@ jobs:
           else
             echo "Generation mode: nationwide manual run"
           fi
+
+
+      # -----------------------------------------------------------------------
+      # Discover
+      # -----------------------------------------------------------------------
 
       - name: Discover municipal district sources
         shell: bash
@@ -66,6 +104,11 @@ jobs:
             npm run discover -- "${args[@]}"
           fi
 
+
+      # -----------------------------------------------------------------------
+      # Generate
+      # -----------------------------------------------------------------------
+
       - name: Generate municipal geometry
         shell: bash
         run: |
@@ -85,11 +128,26 @@ jobs:
             npm run generate -- "${args[@]}"
           fi
 
+
+      # -----------------------------------------------------------------------
+      # Validate
+      # -----------------------------------------------------------------------
+
       - name: Validate registry and geometry
         run: npm run validate
 
+
+      # -----------------------------------------------------------------------
+      # Test
+      # -----------------------------------------------------------------------
+
       - name: Run tests
         run: npm run check
+
+
+      # -----------------------------------------------------------------------
+      # Show changes
+      # -----------------------------------------------------------------------
 
       - name: Show generated changes
         run: |
@@ -97,9 +155,40 @@ jobs:
           git status --short
 
           echo ""
-          echo "=== Registry diff ==="
-          git diff -- data/municipalities/registry.json
+          echo "=== Generated data diff ==="
+          git diff -- \
+            data/municipalities/registry.json \
+            data/geometry
 
           echo ""
-          echo "=== Geometry changes ==="
-          git diff --stat -- data/geometry
+          echo "=== Generated data diff stat ==="
+          git diff --stat -- \
+            data/municipalities/registry.json \
+            data/geometry
+
+
+      # -----------------------------------------------------------------------
+      # Commit generated changes
+      # -----------------------------------------------------------------------
+
+      - name: Commit generated data
+        shell: bash
+        run: |
+          git add \
+            data/municipalities/registry.json \
+            data/geometry
+
+          if git diff --cached --quiet; then
+            echo "No generated data changes detected."
+            exit 0
+          fi
+
+          echo "Generated data changes detected."
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit \
+            -m "Update generated municipal data"
+
+          git push
