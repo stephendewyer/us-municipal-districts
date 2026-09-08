@@ -2,6 +2,18 @@ name: Generate municipal data
 
 on:
   workflow_dispatch:
+    inputs:
+      city:
+        description: "City to process (leave blank for nationwide discovery)"
+        required: false
+        default: ""
+        type: string
+
+      state:
+        description: "Two-letter state abbreviation (leave blank for nationwide discovery)"
+        required: false
+        default: ""
+        type: string
 
   schedule:
     - cron: "0 7 1 * *"
@@ -23,13 +35,57 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Show generation mode
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "Generation mode: nationwide scheduled run"
+          elif [ -n "${{ inputs.city }}" ] || [ -n "${{ inputs.state }}" ]; then
+            echo "Generation mode: targeted manual run"
+            echo "City: ${{ inputs.city }}"
+            echo "State: ${{ inputs.state }}"
+          else
+            echo "Generation mode: nationwide manual run"
+          fi
+
       - name: Discover municipal district sources
-        run: npm run discover
+        shell: bash
+        run: |
+          args=()
+
+          if [ -n "${{ inputs.city }}" ]; then
+            args+=(--city "${{ inputs.city }}")
+          fi
+
+          if [ -n "${{ inputs.state }}" ]; then
+            args+=(--state "${{ inputs.state }}")
+          fi
+
+          if [ ${#args[@]} -eq 0 ]; then
+            npm run discover
+          else
+            npm run discover -- "${args[@]}"
+          fi
 
       - name: Generate municipal geometry
-        run: npm run generate
+        shell: bash
+        run: |
+          args=()
 
-      - name: Validate registry
+          if [ -n "${{ inputs.city }}" ]; then
+            args+=(--city "${{ inputs.city }}")
+          fi
+
+          if [ -n "${{ inputs.state }}" ]; then
+            args+=(--state "${{ inputs.state }}")
+          fi
+
+          if [ ${#args[@]} -eq 0 ]; then
+            npm run generate
+          else
+            npm run generate -- "${args[@]}"
+          fi
+
+      - name: Validate registry and geometry
         run: npm run validate
 
       - name: Run tests
