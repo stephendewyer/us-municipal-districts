@@ -44,9 +44,9 @@ export async function validateRegistry(): Promise<RegistryValidationResult> {
     const registryPath =
         path.resolve(
             "data",
+            "municipalities",
             "registry.json"
         );
-
 
     if (
         !fs.existsSync(

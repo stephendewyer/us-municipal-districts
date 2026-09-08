@@ -20,17 +20,20 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install
+      - name: Install dependencies
         run: npm ci
 
-      - name: Discover candidates
+      - name: Discover municipal district sources
         run: npm run discover
 
-      - name: Build data
+      - name: Generate municipal geometry
         run: npm run generate
 
-      - name: Validate
+      - name: Validate registry
+        run: npm run validate
+
+      - name: Run tests
         run: npm run check
 
-      - name: Show changes
+      - name: Show generated changes
         run: git status --short

@@ -25,7 +25,7 @@
     "places": "tsx generator/src/cli.ts places",
     "census-geometries": "tsx generator/src/generateCensusPlaceGeometries.ts",
     "discover": "tsx generator/src/cli.ts discover",
-    "generate": "tsx generator/src/cli.ts build",
+    "generate": "tsx generator/src/cli.ts generate",
     "validate": "tsx generator/src/cli.ts validate",
     "inspect": "tsx generator/src/cli.ts inspect",
     "check": "npm run build && npm run typecheck && npm test",

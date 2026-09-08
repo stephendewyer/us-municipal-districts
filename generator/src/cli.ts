@@ -1,21 +1,19 @@
 import path from "node:path";
+
 import { generateCensusPlaces } from "./generateCensusPlaces.js";
 import { discoverArcGIS } from "./discover.js";
 import {
     buildRegistry,
-    writeRegistry
-} from "./registry.js";
-import { validateRegistry } from "./validate.js";
-import {
+    writeRegistry,
     loadGeneratedRegistry
 } from "./registry.js";
+import { validateRegistry } from "./validate.js";
 import {
     generateGeometry
 } from "./geometry.js";
 
 import type {
-    DiscoveryResult,
-    MunicipalDistrictRegistryEntry
+    DiscoveryResult
 } from "./types.js";
 
 
@@ -26,6 +24,7 @@ import type {
 type Command =
     | "places"
     | "discover"
+    | "generate"
     | "build"
     | "geometry"
     | "validate"
@@ -112,25 +111,35 @@ async function main(): Promise<void> {
 
 
         // ---------------------------------------------------------------------
+        // Generate
+        // ---------------------------------------------------------------------
+
+        case "generate": {
+
+            await generateRegistryGeometry(
+                options
+            );
+
+            break;
+        }
+
+
+        // ---------------------------------------------------------------------
         // Build
         // ---------------------------------------------------------------------
 
         case "build": {
 
             /*
-             * Build is currently retained as a compatibility command.
+             * "build" is retained as a compatibility alias for "generate".
              *
-             * Discovery is responsible for producing the registry.
+             * Historically this command built an empty registry. The actual
+             * registry is now produced by "discover", so generation should
+             * consume that registry and generate the registered geometry.
              */
 
-            const registry =
-                buildRegistry(
-                    []
-                );
-
-
-            console.log(
-                `Built registry with ${registry.entries.length} entries.`
+            await generateRegistryGeometry(
+                options
             );
 
             break;
@@ -142,6 +151,13 @@ async function main(): Promise<void> {
         // ---------------------------------------------------------------------
 
         case "geometry": {
+
+            /*
+             * Retained as an explicit geometry-only command.
+             *
+             * "generate" is the preferred command for the package data
+             * generation workflow.
+             */
 
             await generateRegistryGeometry(
                 options
@@ -274,6 +290,17 @@ async function generateRegistryGeometry(
     // Output root
     // =========================================================================
 
+    /*
+     * generatedFile paths in registry.json are relative to data/.
+     *
+     * Example:
+     *
+     *   geometry/0477000/ward.geojson
+     *
+     * becomes:
+     *
+     *   data/geometry/0477000/ward.geojson
+     */
     const outputRoot =
         path.join(
             process.cwd(),
@@ -281,9 +308,11 @@ async function generateRegistryGeometry(
         );
 
 
-    let successful = 0;
+    let successful =
+        0;
 
-    let failed = 0;
+    let failed =
+        0;
 
 
     // =========================================================================
@@ -1015,15 +1044,17 @@ Usage:
 
   npm run discover -- --placeFips 0477000 --verbose
 
-  npm run build
+  npm run generate
+
+  npm run generate -- --city Tucson --state AZ
+
+  npm run generate -- --state AZ
+
+  npm run generate -- --placeFips 0477000
 
   npm run geometry
 
   npm run geometry -- --city Tucson --state AZ
-
-  npm run geometry -- --state AZ
-
-  npm run geometry -- --placeFips 0477000
 
   npm run validate
 
@@ -1040,13 +1071,15 @@ Commands:
       select canonical municipal district sources,
       and write registry.json.
 
+  generate
+      Generate normalized GeoJSON geometry for
+      the entries currently stored in registry.json.
+
   build
-      Build the registry.
-      Retained as a compatibility command.
+      Compatibility alias for generate.
 
   geometry
-      Download GeoJSON geometry for registry entries
-      and write the normalized geometry files.
+      Compatibility alias for generate.
 
   validate
       Validate the generated municipal registry.
