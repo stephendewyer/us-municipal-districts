@@ -374,6 +374,16 @@ function validateEntry(
         errors
     );
 
+    // =========================================================================
+    // Generated geometry
+    // =========================================================================
+
+    validateGeneratedGeometryFile(
+        entry,
+        prefix,
+        errors
+    );
+
 
     // =========================================================================
     // Warnings
@@ -600,6 +610,396 @@ function validateMetadata(
 
         errors.push(
             `${prefix}.metadata.alternatives must be an array.`
+        );
+    }
+}
+
+// =============================================================================
+// Validate generated geometry
+// =============================================================================
+
+interface GeneratedGeometryFeature {
+    type?: unknown;
+    properties?: unknown;
+    geometry?: unknown;
+}
+
+interface GeneratedGeometryFeatureCollection {
+    type?: unknown;
+    features?: unknown;
+}
+
+function validateGeneratedGeometryFile(
+    entry: Partial<RegistryEntry>,
+    prefix: string,
+    errors: string[]
+): void {
+
+    if (
+        !isNonEmptyString(
+            entry.generatedFile
+        )
+    ) {
+
+        errors.push(
+            `${prefix}.generatedFile is required.`
+        );
+
+        return;
+    }
+
+
+    const dataRoot =
+        path.resolve(
+            "data"
+        );
+
+    const geometryPath =
+        path.resolve(
+            dataRoot,
+            entry.generatedFile
+        );
+
+
+    /*
+     * Prevent generatedFile from escaping the data directory.
+     */
+    const relativePath =
+        path.relative(
+            dataRoot,
+            geometryPath
+        );
+
+
+    if (
+        relativePath.startsWith("..") ||
+        path.isAbsolute(relativePath)
+    ) {
+
+        errors.push(
+            `${prefix}.generatedFile must resolve inside the data directory.`
+        );
+
+        return;
+    }
+
+
+    if (
+        !fs.existsSync(
+            geometryPath
+        )
+    ) {
+
+        errors.push(
+            `${prefix}.generatedFile does not exist: ${geometryPath}`
+        );
+
+        return;
+    }
+
+
+    let contents:
+        string;
+
+    try {
+
+        contents =
+            fs.readFileSync(
+                geometryPath,
+                "utf8"
+            );
+
+    } catch (error) {
+
+        errors.push(
+            `${prefix}.generatedFile could not be read: ${
+                error instanceof Error
+                    ? error.message
+                    : String(error)
+            }`
+        );
+
+        return;
+    }
+
+
+    let geometry:
+        unknown;
+
+    try {
+
+        geometry =
+            JSON.parse(
+                contents
+            );
+
+    } catch (error) {
+
+        errors.push(
+            `${prefix}.generatedFile contains invalid JSON: ${
+                error instanceof Error
+                    ? error.message
+                    : String(error)
+            }`
+        );
+
+        return;
+    }
+
+
+    validateGeneratedGeometry(
+        geometry,
+        entry,
+        prefix,
+        errors
+    );
+}
+
+
+// =============================================================================
+// Validate generated geometry object
+// =============================================================================
+
+function validateGeneratedGeometry(
+    value: unknown,
+    entry: Partial<RegistryEntry>,
+    prefix: string,
+    errors: string[]
+): void {
+
+    if (
+        !isObject(value)
+    ) {
+
+        errors.push(
+            `${prefix}.generatedFile must contain a JSON object.`
+        );
+
+        return;
+    }
+
+
+    const collection =
+        value as GeneratedGeometryFeatureCollection;
+
+
+    if (
+        collection.type !==
+        "FeatureCollection"
+    ) {
+
+        errors.push(
+            `${prefix}.generatedFile must contain a GeoJSON FeatureCollection.`
+        );
+
+        return;
+    }
+
+
+    if (
+        !Array.isArray(
+            collection.features
+        )
+    ) {
+
+        errors.push(
+            `${prefix}.generatedFile.features must be an array.`
+        );
+
+        return;
+    }
+
+
+    if (
+        collection.features.length === 0
+    ) {
+
+        errors.push(
+            `${prefix}.generatedFile contains no features.`
+        );
+
+        return;
+    }
+
+
+    for (
+        let i = 0;
+        i < collection.features.length;
+        i++
+    ) {
+
+        validateGeneratedFeature(
+            collection.features[i],
+            entry,
+            prefix,
+            i,
+            errors
+        );
+    }
+}
+
+
+// =============================================================================
+// Validate generated feature
+// =============================================================================
+
+function validateGeneratedFeature(
+    value: unknown,
+    entry: Partial<RegistryEntry>,
+    prefix: string,
+    index: number,
+    errors: string[]
+): void {
+
+    const featurePrefix =
+        `${prefix}.generatedFile.features[${index}]`;
+
+
+    if (
+        !isObject(value)
+    ) {
+
+        errors.push(
+            `${featurePrefix} must be an object.`
+        );
+
+        return;
+    }
+
+
+    const feature =
+        value as GeneratedGeometryFeature;
+
+
+    if (
+        feature.type !==
+        "Feature"
+    ) {
+
+        errors.push(
+            `${featurePrefix}.type must be "Feature".`
+        );
+    }
+
+
+    // =========================================================================
+    // Properties
+    // =========================================================================
+
+    if (
+        !isObject(
+            feature.properties
+        )
+    ) {
+
+        errors.push(
+            `${featurePrefix}.properties must be an object.`
+        );
+
+    } else {
+
+        const properties =
+            feature.properties;
+
+
+        if (
+            properties.placeFips !==
+            entry.placeFips
+        ) {
+
+            errors.push(
+                `${featurePrefix}.properties.placeFips must equal the registry placeFips.`
+            );
+        }
+
+
+        if (
+            properties.city !==
+            entry.city
+        ) {
+
+            errors.push(
+                `${featurePrefix}.properties.city must equal the registry city.`
+            );
+        }
+
+
+        if (
+            properties.state !==
+            entry.state
+        ) {
+
+            errors.push(
+                `${featurePrefix}.properties.state must equal the registry state.`
+            );
+        }
+
+
+        if (
+            properties.boundaryType !==
+            entry.boundaryType
+        ) {
+
+            errors.push(
+                `${featurePrefix}.properties.boundaryType must equal the registry boundaryType.`
+            );
+        }
+
+
+        if (
+            !isNonEmptyString(
+                properties.district
+            )
+        ) {
+
+            errors.push(
+                `${featurePrefix}.properties.district is required.`
+            );
+        }
+    }
+
+
+    // =========================================================================
+    // Geometry
+    // =========================================================================
+
+    if (
+        !isObject(
+            feature.geometry
+        )
+    ) {
+
+        errors.push(
+            `${featurePrefix}.geometry must be an object.`
+        );
+
+        return;
+    }
+
+
+    const geometry =
+        feature.geometry as Record<string, unknown>;
+
+
+    if (
+        geometry.type !== "Polygon" &&
+        geometry.type !== "MultiPolygon"
+    ) {
+
+        errors.push(
+            `${featurePrefix}.geometry.type must be "Polygon" or "MultiPolygon".`
+        );
+    }
+
+
+    if (
+        !Array.isArray(
+            geometry.coordinates
+        )
+    ) {
+
+        errors.push(
+            `${featurePrefix}.geometry.coordinates must be an array.`
         );
     }
 }
