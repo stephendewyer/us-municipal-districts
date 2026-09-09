@@ -3,11 +3,13 @@ import path from "node:path";
 import { generateCensusPlaces } from "./generateCensusPlaces.js";
 import { discoverArcGIS } from "./discover.js";
 import {
-    buildRegistry,
     writeRegistry,
     loadGeneratedRegistry
 } from "./registry.js";
-import { validateRegistry } from "./validate.js";
+import {
+    validateRegistry,
+    validateRegistryFile
+} from "./validate.js";
 import {
     generateGeometry
 } from "./geometry.js";
@@ -46,6 +48,8 @@ interface CliOptions {
     review?: boolean;
 
     verbose?: boolean;
+
+    registry?: string;
 }
 
 
@@ -173,7 +177,19 @@ async function main(): Promise<void> {
 
         case "validate": {
 
-            await validateRegistry();
+            if (
+                options.registry !== undefined
+            ) {
+
+                await validateRegistryFile(
+                    options.registry
+                );
+
+            } else {
+
+                await validateRegistry();
+
+            }
 
             break;
         }
@@ -301,6 +317,7 @@ async function generateRegistryGeometry(
      *
      *   data/geometry/0477000/ward.geojson
      */
+
     const outputRoot =
         path.join(
             process.cwd(),
@@ -989,6 +1006,27 @@ function parseOptions(
             }
 
 
+            case "--registry": {
+
+                const value =
+                    args[++i];
+
+
+                if (!value) {
+
+                    throw new Error(
+                        "--registry requires a value."
+                    );
+                }
+
+
+                options.registry =
+                    value;
+
+                break;
+            }
+
+
             case "--review": {
 
                 options.review =
@@ -1058,6 +1096,8 @@ Usage:
 
   npm run validate
 
+  npm run validate -- --registry data/municipalities/registry.json
+
 
 Commands:
 
@@ -1083,6 +1123,10 @@ Commands:
 
   validate
       Validate the generated municipal registry.
+      By default, validate data/municipalities/registry.json.
+
+      Use --registry <path> to validate a specific
+      registry file.
 
 
 Discover options:
@@ -1101,6 +1145,12 @@ Discover options:
 
   --verbose
       Print detailed discovery information.
+
+
+Validate options:
+
+  --registry <path>
+      Validate the specified registry file.
 `);
 }
 

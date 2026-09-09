@@ -1,5 +1,3 @@
-// generator/src/equivalence.ts
-
 import type {
     ArcGISGeometryType,
     EquivalentLayerGroup,
@@ -13,6 +11,38 @@ import type {
 // =============================================================================
 
 const DEFAULT_EQUIVALENCE_THRESHOLD = 0.60;
+
+/**
+ * Four-digit years are intentionally ignored when comparing titles.
+ *
+ * Example:
+ *   "Chicago Wards (2015)"
+ *   "Chicago Wards (2023)"
+ *
+ * These should be considered versions of the same underlying dataset family.
+ * Temporal ranking is handled separately by temporalValidation.ts / rank.ts.
+ */
+const TEMPORAL_TITLE_TOKEN_PATTERN = /^\d{4}$/;
+
+const IGNORED_TITLE_TOKENS =
+    new Set([
+        "city",
+        "county",
+        "of",
+        "the",
+        "and",
+        "open",
+        "data",
+        "gis",
+        "arcgis",
+        "layer",
+        "layers",
+        "map",
+        "service",
+        "services",
+        "boundary",
+        "boundaries"
+    ]);
 
 
 // =============================================================================
@@ -35,6 +65,28 @@ function normalize(
         .trim() || undefined;
 }
 
+function normalizeTemporalName(
+    value?: string
+): string | undefined {
+
+    const normalized =
+        normalize(value);
+
+    if (!normalized) {
+        return undefined;
+    }
+
+    return normalized
+        .split(/\s+/)
+        .filter(
+            token =>
+                !TEMPORAL_TITLE_TOKEN_PATTERN.test(
+                    token
+                )
+        )
+        .join(" ")
+        .trim() || undefined;
+}
 
 function normalizeFieldName(
     value?: string
@@ -55,16 +107,13 @@ function normalizeArray(
     values: string[] = []
 ): string[] {
 
-    return [
-        ...new Set(
-            values
-                .map(normalizeFieldName)
-                .filter(
-                    (value): value is string =>
-                        Boolean(value)
-                )
+    return values
+        .map(normalizeFieldName)
+        .filter(
+            (value): value is string =>
+                Boolean(value)
         )
-    ].sort();
+        .sort();
 }
 
 
@@ -116,20 +165,29 @@ function normalizeUrl(
 /**
  * Create a deterministic ID for an equivalence group.
  *
- * The ID is based on the first candidate's normalized layer URL.
+ * The ID is based on the complete normalized set of member URLs rather than
+ * the first candidate encountered during discovery. This makes the group ID
+ * independent of discovery order.
  */
 function createGroupId(
-    candidate: InspectedCandidate
+    candidates: InspectedCandidate[]
 ): string {
 
-    const url =
-        normalizeUrl(
-            candidate.inspection.url ||
-            candidate.candidate.url
-        );
+    const urls =
+        candidates
+            .map(
+                candidate =>
+                    normalizeUrl(
+                        candidate.inspection.url ||
+                        candidate.candidate.url
+                    )
+            )
+            .sort();
 
     return (
-        `group-${encodeURIComponent(url)}`
+        `group-${encodeURIComponent(
+            urls.join("|")
+        )}`
     );
 }
 
@@ -180,13 +238,11 @@ function normalizeGeometry(
 // =============================================================================
 
 /**
- * Only genuine political boundary polygon layers participate in
- * equivalence detection.
+ * Only genuine political boundary layers participate in equivalence
+ * detection.
  *
- * This is intentionally stricter than merely looking for fields such as
- * WARD or DISTRICT. The discovery pipeline frequently encounters thematic
- * datasets that contain political-looking fields but are not actually
- * political boundaries.
+ * This prevents thematic datasets containing fields such as WARD or
+ * DISTRICT from being grouped with actual political boundary layers.
  */
 function isEligibleForEquivalence(
     candidate: InspectedCandidate
@@ -202,6 +258,8 @@ function isEligibleForEquivalence(
 
     return (
 
+        classification.rejected !== true &&
+
         classification.isPoliticalBoundary === true &&
 
         classification.isBoundaryLayer === true &&
@@ -216,13 +274,47 @@ function isEligibleForEquivalence(
 
 
 // =============================================================================
+// Municipality equivalence
+// =============================================================================
+
+/**
+ * Candidates from different municipalities must never be considered
+ * equivalent, even if they happen to use the same URL or otherwise have
+ * identical metadata.
+ */
+function sameMunicipality(
+    a: InspectedCandidate,
+    b: InspectedCandidate
+): boolean {
+
+    const placeFipsA =
+        a.candidate.placeFips;
+
+    const placeFipsB =
+        b.candidate.placeFips;
+
+    if (
+        !placeFipsA ||
+        !placeFipsB
+    ) {
+        return false;
+    }
+
+    return (
+        placeFipsA ===
+        placeFipsB
+    );
+}
+
+
+// =============================================================================
 // Fingerprint
 // =============================================================================
 
 /**
  * Create a normalized structural fingerprint for a candidate.
  *
- * This is the single fingerprint implementation used by the project.
+ * This is the only fingerprint implementation used by the project.
  */
 export function createLayerFingerprint(
     candidate: InspectedCandidate
@@ -286,7 +378,6 @@ function compareArrays(
         a.length === 0 ||
         b.length === 0
     ) {
-
         return 0;
     }
 
@@ -305,7 +396,6 @@ function compareArrays(
         if (
             setB.has(value)
         ) {
-
             intersection++;
         }
     }
@@ -325,49 +415,6 @@ function compareArrays(
 // =============================================================================
 // Title similarity
 // =============================================================================
-
-const IGNORED_TITLE_TOKENS =
-    new Set([
-
-        "city",
-        "county",
-        "town",
-        "village",
-        "borough",
-        "municipality",
-
-        "of",
-        "the",
-        "and",
-
-        "open",
-        "data",
-        "gis",
-        "arcgis",
-
-        "layer",
-        "layers",
-        "map",
-        "maps",
-        "service",
-        "services",
-
-        "feature",
-        "features",
-        "server",
-
-        "boundary",
-        "boundaries",
-
-        "district",
-        "districts",
-
-        "ward",
-        "wards",
-
-        "council"
-    ]);
-
 
 function titleTokens(
     value?: string
@@ -389,6 +436,10 @@ function titleTokens(
                 token =>
 
                     token.length > 1 &&
+
+                    !TEMPORAL_TITLE_TOKEN_PATTERN.test(
+                        token
+                    ) &&
 
                     !IGNORED_TITLE_TOKENS.has(
                         token
@@ -413,7 +464,6 @@ function titleSimilarity(
         aTokens.size === 0 ||
         bTokens.size === 0
     ) {
-
         return 0;
     }
 
@@ -426,7 +476,6 @@ function titleSimilarity(
         if (
             bTokens.has(token)
         ) {
-
             intersection++;
         }
     }
@@ -482,12 +531,12 @@ function sameService(
 ): boolean {
 
     const serviceA =
-        normalize(
+        normalizeTemporalName(
             a.inspection.serviceName
         );
 
     const serviceB =
-        normalize(
+        normalizeTemporalName(
             b.inspection.serviceName
         );
 
@@ -495,7 +544,6 @@ function sameService(
         !serviceA ||
         !serviceB
     ) {
-
         return false;
     }
 
@@ -516,12 +564,12 @@ function sameLayerName(
 ): boolean {
 
     const layerA =
-        normalize(
+        normalizeTemporalName(
             a.inspection.layerName
         );
 
     const layerB =
-        normalize(
+        normalizeTemporalName(
             b.inspection.layerName
         );
 
@@ -529,7 +577,6 @@ function sameLayerName(
         !layerA ||
         !layerB
     ) {
-
         return false;
     }
 
@@ -559,7 +606,6 @@ function sameDistrictType(
         !typeA ||
         !typeB
     ) {
-
         return false;
     }
 
@@ -587,11 +633,10 @@ export interface EquivalenceResult {
 /**
  * Compare two inspected candidates.
  *
- * The comparison is intentionally conservative.
- *
- * The purpose of equivalence is not to decide whether two layers are
- * "similar." It is to decide whether two sources probably represent the
- * same political district system.
+ * The optional threshold controls whether the calculated confidence is
+ * sufficient for equivalence. Temporal status is deliberately NOT part of
+ * this comparison; temporal ranking determines which equivalent version
+ * should become canonical.
  */
 export function compareCandidates(
     a: InspectedCandidate,
@@ -605,12 +650,11 @@ export function compareCandidates(
 
 
     // -------------------------------------------------------------------------
-    // Basic eligibility
+    // Municipality
     // -------------------------------------------------------------------------
 
     if (
-        !isEligibleForEquivalence(a) ||
-        !isEligibleForEquivalence(b)
+        !sameMunicipality(a, b)
     ) {
 
         return {
@@ -620,7 +664,7 @@ export function compareCandidates(
             confidence: 0,
 
             reasons: [
-                "one or both candidates are not eligible political boundaries"
+                "different municipalities"
             ]
         };
     }
@@ -689,9 +733,13 @@ export function compareCandidates(
         );
 
     if (
+
         geometryA &&
+
         geometryB &&
-        geometryA === geometryB
+
+        geometryA ===
+        geometryB
     ) {
 
         score += 0.15;
@@ -699,20 +747,6 @@ export function compareCandidates(
         reasons.push(
             "same geometry type"
         );
-
-    } else {
-
-        return {
-
-            equivalent: false,
-
-            confidence: score,
-
-            reasons: [
-                ...reasons,
-                "different geometry types"
-            ]
-        };
     }
 
 
@@ -720,14 +754,11 @@ export function compareCandidates(
     // ArcGIS service
     // -------------------------------------------------------------------------
 
-    const serviceMatch =
-        sameService(a, b);
-
     if (
-        serviceMatch
+        sameService(a, b)
     ) {
 
-        score += 0.15;
+        score += 0.20;
 
         reasons.push(
             "same ArcGIS service"
@@ -739,14 +770,11 @@ export function compareCandidates(
     // Layer name
     // -------------------------------------------------------------------------
 
-    const layerMatch =
-        sameLayerName(a, b);
-
     if (
-        layerMatch
+        sameLayerName(a, b)
     ) {
 
-        score += 0.20;
+        score += 0.15;
 
         reasons.push(
             "same ArcGIS layer name"
@@ -760,10 +788,12 @@ export function compareCandidates(
 
     const titles =
         titleSimilarity(
+
             normalize(
                 a.inspection.title ??
                 a.candidate.title
             ),
+
             normalize(
                 b.inspection.title ??
                 b.candidate.title
@@ -771,27 +801,27 @@ export function compareCandidates(
         );
 
     if (
-        titles >= 0.80
+        titles >= 0.75
     ) {
 
-        score += 0.15;
+        score += 0.20;
 
         reasons.push(
             `highly similar layer titles (${titles.toFixed(2)})`
         );
 
     } else if (
-        titles >= 0.60
+        titles >= 0.50
     ) {
 
-        score += 0.10;
+        score += 0.15;
 
         reasons.push(
             `similar layer titles (${titles.toFixed(2)})`
         );
 
     } else if (
-        titles >= 0.40
+        titles >= 0.30
     ) {
 
         score += 0.05;
@@ -819,12 +849,16 @@ export function compareCandidates(
 
     const districtSimilarity =
         compareArrays(
+
             fingerprintA.districtFields,
+
             fingerprintB.districtFields
         );
 
     if (
+
         districtSimilarity === 1 &&
+
         fingerprintA.districtFields.length > 0
     ) {
 
@@ -852,12 +886,16 @@ export function compareCandidates(
 
     const nameSimilarity =
         compareArrays(
+
             fingerprintA.nameFields,
+
             fingerprintB.nameFields
         );
 
     if (
+
         nameSimilarity === 1 &&
+
         fingerprintA.nameFields.length > 0
     ) {
 
@@ -885,7 +923,9 @@ export function compareCandidates(
 
     const fieldSimilarity =
         compareArrays(
+
             fingerprintA.fields,
+
             fingerprintB.fields
         );
 
@@ -898,93 +938,6 @@ export function compareCandidates(
         reasons.push(
             "high field similarity"
         );
-
-    } else if (
-        fieldSimilarity >= 0.60
-    ) {
-
-        score += 0.05;
-
-        reasons.push(
-            "moderate field similarity"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Important safeguards
-    // -------------------------------------------------------------------------
-
-    /**
-     * Two layers from the same ArcGIS service are not automatically
-     * equivalent.
-     *
-     * For example:
-     *
-     *   FeatureServer/0 = council districts
-     *   FeatureServer/1 = neighborhoods
-     *
-     * They may share the same service and municipality, but they represent
-     * different geographic systems.
-     *
-     * Therefore a same-service match without either a same layer name,
-     * strong title similarity, or strong field similarity is deliberately
-     * capped.
-     */
-    if (
-        serviceMatch &&
-        !layerMatch &&
-        titles < 0.60 &&
-        districtSimilarity < 0.50 &&
-        fieldSimilarity < 0.80
-    ) {
-
-        return {
-
-            equivalent: false,
-
-            confidence: Math.min(
-                score,
-                threshold - 0.01
-            ),
-
-            reasons: [
-                ...reasons,
-                "same service but insufficient evidence that layers represent the same district system"
-            ]
-        };
-    }
-
-
-    /**
-     * Different ArcGIS services require stronger structural evidence.
-     *
-     * This prevents a generic "Ward" or "District" layer from one provider
-     * from being merged with an unrelated "Ward" or "District" layer from
-     * another provider merely because their titles happen to look similar.
-     */
-    if (
-        !serviceMatch &&
-        !layerMatch &&
-        titles < 0.80 &&
-        districtSimilarity < 1 &&
-        fieldSimilarity < 0.80
-    ) {
-
-        return {
-
-            equivalent: false,
-
-            confidence: Math.min(
-                score,
-                threshold - 0.01
-            ),
-
-            reasons: [
-                ...reasons,
-                "different services require stronger structural evidence"
-            ]
-        };
     }
 
 
@@ -1019,10 +972,11 @@ export function compareCandidates(
  *
  * Only eligible candidates participate.
  *
- * The supplied threshold is passed into compareCandidates(), so callers
- * can tune the grouping behavior.
+ * Temporal versions of the same dataset are intentionally grouped together.
+ * The canonical-selection stage is responsible for choosing the current
+ * version from within the group.
  *
- * Groups are built deterministically in candidate order.
+ * Every group receives a deterministic ID based on its complete membership.
  */
 export function detectEquivalentLayers(
     candidates: InspectedCandidate[],
@@ -1033,7 +987,6 @@ export function detectEquivalentLayers(
         candidates.filter(
             isEligibleForEquivalence
         );
-
 
     const groups:
         EquivalentLayerGroup[] = [];
@@ -1070,13 +1023,16 @@ export function detectEquivalentLayers(
 
                 const comparison =
                     compareCandidates(
+
                         candidate,
+
                         existing,
+
                         threshold
                     );
 
-
                 if (
+
                     comparison.equivalent &&
 
                     comparison.confidence >
@@ -1108,21 +1064,23 @@ export function detectEquivalentLayers(
                 candidate
             );
 
-
             matchedGroup.confidence =
                 Math.max(
+
                     matchedGroup.confidence,
+
                     bestConfidence
                 );
 
-
             matchedGroup.reasons = [
+
                 ...new Set([
+
                     ...matchedGroup.reasons,
+
                     ...bestReasons
                 ])
             ];
-
 
             continue;
         }
@@ -1132,12 +1090,13 @@ export function detectEquivalentLayers(
         // Create new group
         // ---------------------------------------------------------------------
 
-        groups.push({
+        const newGroup:
+            EquivalentLayerGroup = {
 
             id:
-                createGroupId(
+                createGroupId([
                     candidate
-                ),
+                ]),
 
             candidates: [
                 candidate
@@ -1149,7 +1108,26 @@ export function detectEquivalentLayers(
             reasons: [
                 "initial candidate group"
             ]
-        });
+        };
+
+        groups.push(
+            newGroup
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Rebuild deterministic group IDs after membership is finalized
+    // -------------------------------------------------------------------------
+
+    for (
+        const group of groups
+    ) {
+
+        group.id =
+            createGroupId(
+                group.candidates
+            );
     }
 
 

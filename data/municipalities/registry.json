@@ -1,31 +1,31 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-08T00:21:59.905Z",
+  "generatedAt": "2026-09-08T21:51:33.561Z",
   "entries": [
     {
-      "placeFips": "0477000",
-      "city": "Tucson",
-      "state": "AZ",
+      "placeFips": "1714000",
+      "city": "Chicago",
+      "state": "IL",
       "boundaryType": "ward",
       "source": {
         "sourceType": "arcgis",
-        "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer/156",
-        "itemId": "cbb29b7016c04c43b3b51ba60db17643",
-        "serviceType": "FeatureServer",
-        "title": "TucsonWards2022",
-        "official": false,
+        "url": "https://gis.cookcountyil.gov/traditional/rest/services/clerkTaxDistricts/MapServer/17",
+        "itemId": "9f4ca36df7d04239bb838c97616d744e",
+        "serviceType": "MapServer",
+        "title": "Chicago Wards 2015",
+        "official": true,
         "verified": true,
         "fieldMapping": {
-          "district": "Label",
-          "name": "NAME"
+          "district": "WARD",
+          "name": "WARD"
         }
       },
-      "generatedFile": "geometry/0477000/ward.geojson",
+      "generatedFile": "geometry/1714000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-08T00:21:59.905Z",
+        "generatedAt": "2026-09-08T21:51:33.561Z",
         "generatorVersion": "0.1.0",
         "alternatives": [],
-        "requiresReview": true
+        "requiresReview": false
       }
     }
   ]

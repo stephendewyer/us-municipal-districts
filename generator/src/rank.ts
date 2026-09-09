@@ -3,6 +3,10 @@ import type {
     InspectedCandidate
 } from "./types.js";
 
+import {
+    validateTemporal
+} from "./temporalValidation.js";
+
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
@@ -410,6 +414,39 @@ export function scoreCandidate(
 
         reasons.push(
             "+2 district name field detected"
+        );
+    }
+
+    // =============================================================================
+    // Temporal evidence
+    // =============================================================================
+
+    const temporal =
+        validateTemporal(
+            inspection
+        );
+
+    score +=
+        temporal.score;
+
+    reasons.push(
+        `${
+            temporal.score >= 0
+                ? "+"
+                : ""
+        }${
+            temporal.score
+        } temporal status: ${
+            temporal.status
+        }`
+    );
+
+    for (
+        const reason of
+        temporal.reasons
+    ) {
+        reasons.push(
+            `temporal evidence: ${reason}`
         );
     }
 

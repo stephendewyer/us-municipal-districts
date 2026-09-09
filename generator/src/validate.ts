@@ -32,21 +32,47 @@ export interface RegistryValidationResult {
 // =============================================================================
 
 /**
- * Validate the generated municipal district registry.
+ * Validate the production municipal district registry.
  *
- * This performs structural validation of registry.json.
+ * Uses:
  *
- * It does not make network requests. ArcGIS source validation
- * belongs to the discovery pipeline.
+ * data/municipalities/registry.json
  */
-export async function validateRegistry(): Promise<RegistryValidationResult> {
+export async function validateRegistry():
+    Promise<RegistryValidationResult> {
 
-    const registryPath =
+    return validateRegistryFile(
         path.resolve(
             "data",
             "municipalities",
             "registry.json"
+        )
+    );
+}
+
+
+/**
+ * Validate a registry at an explicit filesystem path.
+ *
+ * This is useful for:
+ *
+ * - smoke tests
+ * - temporary registries
+ * - CI validation
+ * - debugging generated datasets
+ *
+ * The registry path may be absolute or relative to the
+ * current working directory.
+ */
+export async function validateRegistryFile(
+    registryFilePath: string
+): Promise<RegistryValidationResult> {
+
+    const registryPath =
+        path.resolve(
+            registryFilePath
         );
+
 
     if (
         !fs.existsSync(
@@ -67,7 +93,8 @@ export async function validateRegistry(): Promise<RegistryValidationResult> {
         );
 
 
-    let registry: unknown;
+    let registry:
+        unknown;
 
 
     try {
@@ -89,9 +116,20 @@ export async function validateRegistry(): Promise<RegistryValidationResult> {
     }
 
 
+    /*
+     * Generated geometry paths in the registry are relative
+     * to the repository data directory.
+     */
+    const dataRoot =
+        path.resolve(
+            "data"
+        );
+
+
     const result =
-        validateRegistryData(
-            registry
+        validateRegistryDataAtPath(
+            registry,
+            dataRoot
         );
 
 
@@ -100,12 +138,10 @@ export async function validateRegistry(): Promise<RegistryValidationResult> {
     );
 
 
-    if (!result.valid) {
+    if (
+        !result.valid
+    ) {
 
-        /*
-         * Make the CLI command fail when the registry
-         * contains structural errors.
-         */
         throw new Error(
             `Registry validation failed with ${
                 result.errors.length
@@ -130,9 +166,29 @@ export function validateRegistryData(
     value: unknown
 ): RegistryValidationResult {
 
-    const errors: string[] = [];
+    return validateRegistryDataAtPath(
+        value,
+        path.resolve(
+            "data"
+        )
+    );
+}
 
-    const warnings: string[] = [];
+
+// =============================================================================
+// Validate registry object at path
+// =============================================================================
+
+function validateRegistryDataAtPath(
+    value: unknown,
+    dataRoot: string
+): RegistryValidationResult {
+
+    const errors:
+        string[] = [];
+
+    const warnings:
+        string[] = [];
 
 
     // =========================================================================
@@ -145,9 +201,11 @@ export function validateRegistryData(
 
         return {
 
-            valid: false,
+            valid:
+                false,
 
-            entries: 0,
+            entries:
+                0,
 
             errors: [
                 "Registry must be a JSON object."
@@ -172,9 +230,11 @@ export function validateRegistryData(
 
         return {
 
-            valid: false,
+            valid:
+                false,
 
-            entries: 0,
+            entries:
+                0,
 
             errors: [
                 "Registry.entries must be an array."
@@ -204,7 +264,8 @@ export function validateRegistryData(
                 index,
                 errors,
                 warnings,
-                placeFips
+                placeFips,
+                dataRoot
             );
         }
     );
@@ -234,7 +295,8 @@ function validateEntry(
     index: number,
     errors: string[],
     warnings: string[],
-    placeFips: Set<string>
+    placeFips: Set<string>,
+    dataRoot: string
 ): void {
 
     const prefix =
@@ -374,6 +436,7 @@ function validateEntry(
         errors
     );
 
+
     // =========================================================================
     // Generated geometry
     // =========================================================================
@@ -381,7 +444,8 @@ function validateEntry(
     validateGeneratedGeometryFile(
         entry,
         prefix,
-        errors
+        errors,
+        dataRoot
     );
 
 
@@ -614,6 +678,7 @@ function validateMetadata(
     }
 }
 
+
 // =============================================================================
 // Validate generated geometry
 // =============================================================================
@@ -624,15 +689,18 @@ interface GeneratedGeometryFeature {
     geometry?: unknown;
 }
 
+
 interface GeneratedGeometryFeatureCollection {
     type?: unknown;
     features?: unknown;
 }
 
+
 function validateGeneratedGeometryFile(
     entry: Partial<RegistryEntry>,
     prefix: string,
-    errors: string[]
+    errors: string[],
+    dataRoot: string
 ): void {
 
     if (
@@ -648,11 +716,6 @@ function validateGeneratedGeometryFile(
         return;
     }
 
-
-    const dataRoot =
-        path.resolve(
-            "data"
-        );
 
     const geometryPath =
         path.resolve(
@@ -672,8 +735,13 @@ function validateGeneratedGeometryFile(
 
 
     if (
-        relativePath.startsWith("..") ||
-        path.isAbsolute(relativePath)
+        relativePath === ".." ||
+        relativePath.startsWith(
+            `..${path.sep}`
+        ) ||
+        path.isAbsolute(
+            relativePath
+        )
     ) {
 
         errors.push(

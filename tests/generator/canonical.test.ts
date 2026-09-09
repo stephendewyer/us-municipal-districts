@@ -23,7 +23,8 @@ import {
 // =============================================================================
 
 function createDiscoveryCandidate(
-    url = "https://example.com/FeatureServer/0"
+    url =
+        "https://example.com/FeatureServer/0"
 ): DiscoveryCandidate {
 
     return {
@@ -55,7 +56,11 @@ function createDiscoveryCandidate(
 
 
 function createArcGISInspection(
-    url = "https://example.com/FeatureServer/0"
+    url =
+        "https://example.com/FeatureServer/0",
+
+    title =
+        "Tucson Ward Boundaries"
 ): ArcGISInspection {
 
     return {
@@ -74,8 +79,7 @@ function createArcGISInspection(
         geometryType:
             "esriGeometryPolygon",
 
-        title:
-            "Tucson Ward Boundaries",
+        title,
 
         districtFields:
             ["WARD"],
@@ -207,7 +211,10 @@ function createCandidate(
         | "invalid",
 
     url =
-        "https://example.com/FeatureServer/0"
+        "https://example.com/FeatureServer/0",
+
+    title =
+        "Tucson Ward Boundaries"
 ): InspectedCandidate {
 
     const candidate:
@@ -220,7 +227,8 @@ function createCandidate(
 
         inspection:
             createArcGISInspection(
-                url
+                url,
+                title
             ),
 
         classification:
@@ -319,7 +327,8 @@ function createCandidate(
 
 function createGroup(
     candidates: InspectedCandidate[],
-    id = "test-group"
+    id =
+        "test-group"
 ): EquivalentLayerGroup {
 
     return {
@@ -416,6 +425,7 @@ test(
          * canonical selection without incorrectly assuming that
          * DiscoveryCandidate.score is part of the ranking calculation.
          */
+
         const result =
             selectCanonicalSource(
                 createGroup([
@@ -599,6 +609,213 @@ test(
                     reason ===
                     "validation confidence: 90"
             )
+        );
+    }
+);
+
+
+// =============================================================================
+// Temporal canonical selection
+// =============================================================================
+
+test(
+    "selectCanonicalSource prefers a current candidate over a historical candidate",
+    () => {
+
+        const historical =
+            createCandidate(
+                undefined,
+                "https://example.com/historical/FeatureServer/0",
+                "Tucson Ward Boundaries (2015)"
+            );
+
+        const current =
+            createCandidate(
+                undefined,
+                "https://example.com/current/FeatureServer/0",
+                "Current Tucson Ward Boundaries"
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    historical,
+                    current
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            current.inspection.url
+        );
+
+        assert.equal(
+            result.title,
+            "Current Tucson Ward Boundaries"
+        );
+
+        assert.ok(
+            result.score >
+            0
+        );
+
+        assert.ok(
+            result.selectionReasons.some(
+                reason =>
+                    reason ===
+                    "+20 temporal status: current"
+            )
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource demotes a historical candidate in canonical selection",
+    () => {
+
+        const historical =
+            createCandidate(
+                undefined,
+                "https://example.com/historical/FeatureServer/0",
+                "Tucson Ward Boundaries (2015)"
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    historical
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            historical.inspection.url
+        );
+
+        assert.ok(
+            result.selectionReasons.some(
+                reason =>
+                    reason ===
+                    "-60 temporal status: historical"
+            )
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource prefers an undated candidate over a historical candidate",
+    () => {
+
+        const historical =
+            createCandidate(
+                undefined,
+                "https://example.com/historical/FeatureServer/0",
+                "Tucson Ward Boundaries (2015)"
+            );
+
+        const undated =
+            createCandidate(
+                undefined,
+                "https://example.com/undated/FeatureServer/0",
+                "Tucson Ward Boundaries"
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    historical,
+                    undated
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            undated.inspection.url
+        );
+
+        assert.equal(
+            result.title,
+            "Tucson Ward Boundaries"
+        );
+
+        assert.ok(
+            result.score >
+            Number.NEGATIVE_INFINITY
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource preserves the historical candidate as an alternative",
+    () => {
+
+        const historical =
+            createCandidate(
+                undefined,
+                "https://example.com/historical/FeatureServer/0",
+                "Tucson Ward Boundaries (2015)"
+            );
+
+        const current =
+            createCandidate(
+                undefined,
+                "https://example.com/current/FeatureServer/0",
+                "Current Tucson Ward Boundaries"
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    historical,
+                    current
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            current.inspection.url
+        );
+
+        assert.equal(
+            result.alternatives.length,
+            1
+        );
+
+        assert.equal(
+            result.alternatives[0]?.url,
+            historical.inspection.url
+        );
+
+        assert.equal(
+            result.alternatives[0]?.title,
+            "Tucson Ward Boundaries (2015)"
         );
     }
 );

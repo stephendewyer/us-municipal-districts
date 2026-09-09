@@ -23,8 +23,7 @@ import {
 // =============================================================================
 
 function createDiscoveryCandidate(
-    url =
-        "https://example.com/FeatureServer/0"
+    url = "https://example.com/FeatureServer/0"
 ): DiscoveryCandidate {
     return {
         placeFips: "0477000",
@@ -40,8 +39,8 @@ function createDiscoveryCandidate(
 
 
 function createInspection(
-    url =
-        "https://example.com/FeatureServer/0"
+    url = "https://example.com/FeatureServer/0",
+    title = "Tucson Ward Boundaries"
 ): ArcGISInspection {
     return {
         url,
@@ -52,8 +51,7 @@ function createInspection(
         geometryType:
             "esriGeometryPolygon",
 
-        title:
-            "Tucson Ward Boundaries",
+        title,
 
         districtFields: [
             "WARD"
@@ -152,10 +150,13 @@ function createCandidate(
         | "invalid",
 
     url =
-        "https://example.com/FeatureServer/0"
+        "https://example.com/FeatureServer/0",
+
+    title =
+        "Tucson Ward Boundaries"
 ): InspectedCandidate {
-    const candidate:
-        InspectedCandidate = {
+
+    const candidate: InspectedCandidate = {
         candidate:
             createDiscoveryCandidate(
                 url
@@ -163,7 +164,8 @@ function createCandidate(
 
         inspection:
             createInspection(
-                url
+                url,
+                title
             ),
 
         classification:
@@ -172,6 +174,7 @@ function createCandidate(
         validation:
             createValidation()
     };
+
 
     if (
         geographyStatus !==
@@ -207,7 +210,7 @@ function createCandidate(
 
             intersectionArea:
                 geographyStatus ===
-                    "strong-match"
+                "strong-match"
                     ? 100
                     : geographyStatus ===
                       "probable-match"
@@ -219,7 +222,7 @@ function createCandidate(
 
             coverageOfMunicipality:
                 geographyStatus ===
-                    "strong-match"
+                "strong-match"
                     ? 1
                     : geographyStatus ===
                       "probable-match"
@@ -231,7 +234,7 @@ function createCandidate(
 
             candidateInsideMunicipality:
                 geographyStatus ===
-                    "strong-match"
+                "strong-match"
                     ? 1
                     : geographyStatus ===
                       "probable-match"
@@ -253,6 +256,7 @@ function createCandidate(
         };
     }
 
+
     return candidate;
 }
 
@@ -264,6 +268,7 @@ function createCandidate(
 test(
     "strong geographic match adds 30 points",
     () => {
+
         const withoutGeography =
             scoreCandidate(
                 createCandidate()
@@ -294,6 +299,7 @@ test(
 test(
     "probable geographic match adds 20 points",
     () => {
+
         const withoutGeography =
             scoreCandidate(
                 createCandidate()
@@ -324,6 +330,7 @@ test(
 test(
     "weak geographic match adds 5 points",
     () => {
+
         const withoutGeography =
             scoreCandidate(
                 createCandidate()
@@ -354,6 +361,7 @@ test(
 test(
     "geographic no-match subtracts 15 points",
     () => {
+
         const withoutGeography =
             scoreCandidate(
                 createCandidate()
@@ -384,6 +392,7 @@ test(
 test(
     "invalid geographic validation adds no points",
     () => {
+
         const withoutGeography =
             scoreCandidate(
                 createCandidate()
@@ -414,6 +423,7 @@ test(
 test(
     "missing geographic validation adds no points",
     () => {
+
         const withoutGeography =
             scoreCandidate(
                 createCandidate()
@@ -451,6 +461,7 @@ test(
 test(
     "strong geographic match outranks an otherwise equivalent candidate",
     () => {
+
         const candidateWithoutGeography =
             createCandidate(
                 undefined,
@@ -485,6 +496,137 @@ test(
             ranked[1].candidate
                 .municipalityGeographyValidation,
             undefined
+        );
+
+        assert.ok(
+            ranked[0].score >
+            ranked[1].score
+        );
+    }
+);
+
+
+// =============================================================================
+// Temporal ranking
+// =============================================================================
+
+test(
+    "current temporal evidence adds 20 points",
+    () => {
+
+        const undated =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    "Tucson Ward Boundaries"
+                )
+            );
+
+        const current =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/b/FeatureServer/0",
+                    "Current Tucson Ward Boundaries"
+                )
+            );
+
+        assert.equal(
+            current.score -
+                undated.score,
+            20
+        );
+
+        assert.ok(
+            current.reasons.includes(
+                "+20 temporal status: current"
+            )
+        );
+    }
+);
+
+
+test(
+    "historical temporal evidence subtracts 60 points",
+    () => {
+
+        const undated =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    "Tucson Ward Boundaries"
+                )
+            );
+
+        const historical =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/b/FeatureServer/0",
+                    "Tucson Ward Boundaries (2015)"
+                )
+            );
+
+        assert.equal(
+            historical.score -
+                undated.score,
+            -60
+        );
+
+        assert.ok(
+            historical.reasons.includes(
+                "-60 temporal status: historical"
+            )
+        );
+    }
+);
+
+
+test(
+    "current candidate outranks an otherwise equivalent historical candidate",
+    () => {
+
+        const historical =
+            createCandidate(
+                undefined,
+                "https://example.com/a/FeatureServer/0",
+                "Tucson Ward Boundaries (2015)"
+            );
+
+        const current =
+            createCandidate(
+                undefined,
+                "https://example.com/b/FeatureServer/0",
+                "Current Tucson Ward Boundaries"
+            );
+
+        const ranked =
+            rankCandidates([
+                historical,
+                current
+            ]);
+
+        assert.equal(
+            ranked.length,
+            2
+        );
+
+        assert.equal(
+            ranked[0]
+                .candidate
+                .inspection
+                .title,
+            "Current Tucson Ward Boundaries"
+        );
+
+        assert.equal(
+            ranked[1]
+                .candidate
+                .inspection
+                .title,
+            "Tucson Ward Boundaries (2015)"
         );
 
         assert.ok(
