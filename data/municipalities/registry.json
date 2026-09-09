@@ -1,7 +1,33 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-08T21:51:33.561Z",
+  "generatedAt": "2026-09-09T22:42:33.253Z",
   "entries": [
+    {
+      "placeFips": "0477000",
+      "city": "Tucson",
+      "state": "AZ",
+      "boundaryType": "ward",
+      "source": {
+        "sourceType": "arcgis",
+        "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer/156",
+        "itemId": "cbb29b7016c04c43b3b51ba60db17643",
+        "serviceType": "FeatureServer",
+        "title": "TucsonWards2022",
+        "official": false,
+        "verified": true,
+        "fieldMapping": {
+          "district": "Label",
+          "name": "NAME"
+        }
+      },
+      "generatedFile": "geometry/0477000/ward.geojson",
+      "metadata": {
+        "generatedAt": "2026-09-09T22:42:33.253Z",
+        "generatorVersion": "0.1.0",
+        "alternatives": [],
+        "requiresReview": true
+      }
+    },
     {
       "placeFips": "1714000",
       "city": "Chicago",
@@ -9,23 +35,32 @@
       "boundaryType": "ward",
       "source": {
         "sourceType": "arcgis",
-        "url": "https://gis.cookcountyil.gov/traditional/rest/services/clerkTaxDistricts/MapServer/17",
-        "itemId": "9f4ca36df7d04239bb838c97616d744e",
-        "serviceType": "MapServer",
-        "title": "Chicago Wards 2015",
-        "official": true,
+        "url": "https://services5.arcgis.com/vpj2CFUi9GMpbJDh/arcgis/rest/services/Wards_and_Districts/FeatureServer/133",
+        "itemId": "59817b7285dd449c8e6fd3713bbfec6f",
+        "serviceType": "FeatureServer",
+        "title": "Chicago Wards",
+        "official": false,
         "verified": true,
         "fieldMapping": {
-          "district": "WARD",
-          "name": "WARD"
+          "district": "District",
+          "name": "Name"
         }
       },
       "generatedFile": "geometry/1714000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-08T21:51:33.561Z",
+        "generatedAt": "2026-09-09T22:41:42.855Z",
         "generatorVersion": "0.1.0",
-        "alternatives": [],
-        "requiresReview": false
+        "alternatives": [
+          {
+            "url": "https://gis.cookcountyil.gov/traditional/rest/services/clerkTaxDistricts/MapServer/17",
+            "itemId": "9f4ca36df7d04239bb838c97616d744e",
+            "title": "Chicago Wards 2015",
+            "serviceType": "MapServer",
+            "official": false,
+            "score": 153
+          }
+        ],
+        "requiresReview": true
       }
     }
   ]

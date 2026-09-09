@@ -286,21 +286,36 @@ export function loadMunicipalityGeoJSON(
     }
 
     /*
-     * Resolve the generated file relative to the package root.
+     * Registry generatedFile paths are relative to the package's
+     * data/ directory.
+     *
+     * Example:
+     *
+     *   geometry/1714000/ward.geojson
+     *
+     * resolves to:
+     *
+     *   <package-root>/data/geometry/1714000/ward.geojson
      */
+    const DATA_ROOT =
+        path.join(
+            PACKAGE_ROOT,
+            "data"
+        );
+
     const filePath =
         path.resolve(
-            PACKAGE_ROOT,
+            DATA_ROOT,
             entry.generatedFile
         );
 
     /*
-     * Prevent a malformed registry entry from escaping the package
-     * root through "../" path traversal.
+     * Prevent a malformed registry entry from escaping the
+     * package data directory through ../ path traversal.
      */
     const relativePath =
         path.relative(
-            PACKAGE_ROOT,
+            DATA_ROOT,
             filePath
         );
 
@@ -314,7 +329,9 @@ export function loadMunicipalityGeoJSON(
     }
 
     if (
-        !fs.existsSync(filePath)
+        !fs.existsSync(
+            filePath
+        )
     ) {
         return null;
     }

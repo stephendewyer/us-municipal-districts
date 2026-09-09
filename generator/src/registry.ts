@@ -88,6 +88,10 @@ const GENERATOR_VERSION =
  * - classification
  * - deduplication
  * - canonical selection
+ *
+ * This function builds a registry containing only the supplied discovery
+ * results. Use writeRegistry() when updating the persistent registry so
+ * existing municipalities are preserved.
  */
 export function buildRegistry(
     results: DiscoveryResult[] = []
@@ -124,8 +128,7 @@ export function buildRegistry(
         compareRegistryEntries
     );
 
-    const generatedRegistry:
-        GeneratedRegistry = {
+    return {
         version:
             GENERATOR_VERSION,
 
@@ -133,42 +136,120 @@ export function buildRegistry(
 
         entries
     };
-
-    /*
-     * If the registry already contains exactly the same substantive
-     * data, return it unchanged so that generatedAt does not create
-     * a meaningless Git diff.
-     */
-    const existingRegistry =
-        loadExistingRegistryForComparison();
-
-    if (
-        existingRegistry !== undefined &&
-        registriesAreSubstantivelyEqual(
-            existingRegistry,
-            generatedRegistry
-        )
-    ) {
-
-        return existingRegistry;
-    }
-
-    return generatedRegistry;
 }
 
-function loadExistingRegistryForComparison():
-    GeneratedRegistry | undefined {
 
-    if (
-        !fs.existsSync(
-            REGISTRY_PATH
-        )
-    ) {
+// =============================================================================
+// Persistent registry merge
+// =============================================================================
 
-        return undefined;
+/**
+ * Merge newly discovered municipalities into the existing registry.
+ *
+ * Only municipalities represented by the current discovery results are
+ * replaced. Existing entries for all other municipalities are preserved.
+ *
+ * This allows commands such as:
+ *
+ *   npm run discover -- --city "Chicago" --state "IL"
+ *
+ * followed by:
+ *
+ *   npm run discover -- --city "Tucson" --state "AZ"
+ *
+ * without deleting Chicago from the registry.
+ */
+function mergeRegistry(
+    existingRegistry:
+        GeneratedRegistry | undefined,
+    discoveredRegistry:
+        GeneratedRegistry
+): GeneratedRegistry {
+
+    /*
+     * No existing registry means there is nothing to merge with.
+     */
+    if (!existingRegistry) {
+        return discoveredRegistry;
     }
 
-    return loadGeneratedRegistry();
+    /*
+     * Determine which municipalities are represented by this discovery run.
+     *
+     * We use placeFips as the primary identity because it uniquely identifies
+     * a Census place.
+     *
+     * A municipality can potentially have more than one boundary type, so
+     * we remove entries by placeFips + boundaryType rather than placeFips
+     * alone.
+     */
+    const discoveredKeys =
+        new Set(
+            discoveredRegistry.entries.map(
+                entry =>
+                    makeRegistryEntryKey(
+                        entry
+                    )
+            )
+        );
+
+    /*
+     * Preserve existing entries that were not part of this discovery run.
+     */
+    const preservedEntries =
+        existingRegistry.entries.filter(
+            entry =>
+                !discoveredKeys.has(
+                    makeRegistryEntryKey(
+                        entry
+                    )
+                )
+        );
+
+    /*
+     * Add the newly discovered entries.
+     */
+    const mergedEntries = [
+        ...preservedEntries,
+        ...discoveredRegistry.entries
+    ];
+
+    /*
+     * Keep the complete registry deterministic.
+     */
+    mergedEntries.sort(
+        compareRegistryEntries
+    );
+
+    return {
+        version:
+            GENERATOR_VERSION,
+
+        generatedAt:
+            discoveredRegistry.generatedAt,
+
+        entries:
+            mergedEntries
+    };
+}
+
+
+/**
+ * Build a stable identity key for a registry entry.
+ *
+ * A municipality may have multiple boundary types, so placeFips alone is
+ * intentionally not sufficient.
+ */
+function makeRegistryEntryKey(
+    entry: RegistryEntry
+): string {
+
+    return [
+        entry.placeFips,
+        entry.boundaryType
+    ].join(
+        "::"
+    );
 }
 
 
@@ -238,18 +319,42 @@ function normalizeRegistryForComparison(
  * Build and write the registry to:
  *
  * data/municipalities/registry.json
+ *
+ * Newly discovered municipalities replace their existing entries while
+ * municipalities not included in the current discovery run are preserved.
  */
 export function writeRegistry(
     results: DiscoveryResult[]
 ): GeneratedRegistry {
 
+    /*
+     * Build the registry for the current discovery run.
+     */
+    const discoveredRegistry =
+        buildRegistry(
+            results
+        );
+
+    /*
+     * Load the persistent registry, if one exists.
+     */
+    const existingRegistry =
+        loadExistingRegistryForComparison();
+
+    /*
+     * Merge the current discovery results into the persistent registry.
+     */
     const registry =
-        buildRegistry(results);
+        mergeRegistry(
+            existingRegistry,
+            discoveredRegistry
+        );
 
     fs.mkdirSync(
         REGISTRY_DIR,
         {
-            recursive: true
+            recursive:
+                true
         }
     );
 
@@ -264,6 +369,22 @@ export function writeRegistry(
     );
 
     return registry;
+}
+
+
+function loadExistingRegistryForComparison():
+    GeneratedRegistry | undefined {
+
+    if (
+        !fs.existsSync(
+            REGISTRY_PATH
+        )
+    ) {
+
+        return undefined;
+    }
+
+    return loadGeneratedRegistry();
 }
 
 
