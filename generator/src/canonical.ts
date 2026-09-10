@@ -1340,22 +1340,14 @@ export function selectMunicipalityCanonicalSource(
             b
         ) => {
 
-            // 1. Prefer current sources over undated and historical sources.
-            const temporalDifference =
-                temporalPriority(
-                    b.candidate
-                ) -
-                temporalPriority(
-                    a.candidate
-                );
+            // ---------------------------------------------------------------------
+            // 1. Prefer a boundary-native source over a derived dataset.
+            //
+            // The canonical source should represent the political boundary
+            // itself, rather than a thematic/analytical dataset that happens
+            // to contain the same boundary geometry.
+            // ---------------------------------------------------------------------
 
-            if (
-                temporalDifference !== 0
-            ) {
-                return temporalDifference;
-            }
-
-            // 2. Prefer a boundary-native source over a derived dataset.
             const canonicalBonusDifference =
                 canonicalSourceBonus(
                     b.candidate
@@ -1370,7 +1362,31 @@ export function selectMunicipalityCanonicalSource(
                 return canonicalBonusDifference;
             }
 
+
+            // ---------------------------------------------------------------------
+            // 2. Among sources with the same canonical-source quality,
+            // prefer current over undated over historical.
+            // ---------------------------------------------------------------------
+
+            const temporalDifference =
+                temporalPriority(
+                    b.candidate
+                ) -
+                temporalPriority(
+                    a.candidate
+                );
+
+            if (
+                temporalDifference !== 0
+            ) {
+                return temporalDifference;
+            }
+
+
+            // ---------------------------------------------------------------------
             // 3. Fall back to the existing canonical-source comparison.
+            // ---------------------------------------------------------------------
+
             return compareCanonicalSources(
                 a.source,
                 b.source
