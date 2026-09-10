@@ -679,41 +679,113 @@ async function searchMunicipalArcGIS(
 
     const queries = [
 
-        `"${place.city}" ${place.state} city council districts`,
-        `"${place.city}" ${place.state} city council district boundaries`,
-        `"${place.city}" ${place.state} council district map`,
-        `"${place.city}" ${place.state} council districts map`,
-        `"${place.city}" ${place.state} council wards`,
-        `"${place.city}" ${place.state} city wards`,
+        // =========================================================================
+        // Tier 1: Municipality-specific searches
+        // =========================================================================
 
-        `"${place.city}" ${place.state} ward boundaries`,
-        `"${place.city}" ${place.state} ward boundary`,
-        `"${place.city}" ${place.state} ward map`,
-        `"${place.city}" ${place.state} wards`,
-        `"${place.city}" ${place.state} municipal wards`,
-        `"${place.city}" ${place.state} electoral wards`,
+        `\"${place.city}\" ${place.state} city council districts`,
+        `\"${place.city}\" ${place.state} city council district boundaries`,
+        `\"${place.city}\" ${place.state} council district map`,
+        `\"${place.city}\" ${place.state} council districts map`,
+        `\"${place.city}\" ${place.state} council wards`,
+        `\"${place.city}\" ${place.state} city wards`,
 
-        `"${place.city}" ${place.state} municipal districts`,
-        `"${place.city}" ${place.state} municipal district boundaries`,
-        `"${place.city}" ${place.state} political districts`,
-        `"${place.city}" ${place.state} political district boundaries`,
+        `\"${place.city}\" ${place.state} ward boundaries`,
+        `\"${place.city}\" ${place.state} ward boundary`,
+        `\"${place.city}\" ${place.state} ward map`,
+        `\"${place.city}\" ${place.state} wards`,
+        `\"${place.city}\" ${place.state} municipal wards`,
+        `\"${place.city}\" ${place.state} electoral wards`,
 
-        `"${place.city}" ${place.state} election districts`,
-        `"${place.city}" ${place.state} electoral districts`,
-        `"${place.city}" ${place.state} voting districts`,
+        `\"${place.city}\" ${place.state} municipal districts`,
+        `\"${place.city}\" ${place.state} municipal district boundaries`,
+        `\"${place.city}\" ${place.state} political districts`,
+        `\"${place.city}\" ${place.state} political district boundaries`,
 
-        `"${place.city}" ${place.state} official GIS wards`,
-        `"${place.city}" ${place.state} official GIS council districts`,
-        `"${place.city}" ${place.state} GIS ward boundaries`,
-        `"${place.city}" ${place.state} GIS council boundaries`,
-        `"${place.city}" ${place.state} GIS political boundaries`,
+        `\"${place.city}\" ${place.state} election districts`,
+        `\"${place.city}\" ${place.state} electoral districts`,
+        `\"${place.city}\" ${place.state} voting districts`,
 
-        `"${place.city}" ${place.state} WARD_COT`,
-        `"${place.city}" ${place.state} WARDS`,
-        `"${place.city}" ${place.state} WARD_BOUNDARIES`,
-        `"${place.city}" ${place.state} COUNCIL_DISTRICT`,
-        `"${place.city}" ${place.state} COUNCIL_DISTRICTS`,
-        `"${place.city}" ${place.state} POLITICAL_BOUNDARIES`
+        `\"${place.city}\" ${place.state} official GIS wards`,
+        `\"${place.city}\" ${place.state} official GIS council districts`,
+        `\"${place.city}\" ${place.state} GIS ward boundaries`,
+        `\"${place.city}\" ${place.state} GIS council boundaries`,
+        `\"${place.city}\" ${place.state} GIS political boundaries`,
+
+        `\"${place.city}\" ${place.state} WARD_COT`,
+        `\"${place.city}\" ${place.state} WARDS`,
+        `\"${place.city}\" ${place.state} WARD_BOUNDARIES`,
+        `\"${place.city}\" ${place.state} COUNCIL_DISTRICT`,
+        `\"${place.city}\" ${place.state} COUNCIL_DISTRICTS`,
+        `\"${place.city}\" ${place.state} POLITICAL_BOUNDARIES`,
+
+        // =========================================================================
+        // Tier 2: Municipality + dataset/service naming searches
+        //
+        // These help discover ArcGIS services whose titles use database-style
+        // names such as Council_Districts rather than natural-language titles.
+        // =========================================================================
+
+        `${place.city} Council_Districts`,
+        `${place.city} CouncilDistricts`,
+        `${place.city} Council_District`,
+        `${place.city} Districts`,
+        `${place.city} Wards`,
+        `${place.city} Ward_Boundaries`,
+        `${place.city} Political_Boundaries`,
+        `${place.city} Municipal_Districts`,
+
+        `${place.city} council_districts`,
+        `${place.city} council_district`,
+        `${place.city} ward_boundaries`,
+        `${place.city} political_boundaries`,
+
+        // =========================================================================
+        // Tier 3: Broader municipal political-boundary searches
+        //
+        // Some official ArcGIS items have generic names such as:
+        //
+        //     Council Districts
+        //     Wards
+        //     Political Boundaries
+        //
+        // The municipality may appear only in owner/description metadata.
+        // These searches intentionally relax the text query so that those items
+        // have a chance to enter the candidate set.
+        // =========================================================================
+
+        `council districts`,
+        `council district boundaries`,
+        `city council districts`,
+        `city council boundaries`,
+        `municipal council districts`,
+        `municipal council boundaries`,
+        `city wards`,
+        `ward boundaries`,
+        `municipal wards`,
+        `political district boundaries`,
+        `municipal district boundaries`,
+        `political boundaries`,
+        `city political boundaries`,
+
+        // =========================================================================
+        // Tier 4: Common ArcGIS service-name patterns
+        //
+        // This targets the naming conventions commonly used for REST services
+        // and feature classes.
+        // =========================================================================
+
+        `Council_Districts`,
+        `Council_District`,
+        `CouncilDistricts`,
+        `CouncilDistrict`,
+        `Ward_Boundaries`,
+        `Ward_Boundary`,
+        `Wards`,
+        `Political_Boundaries`,
+        `Political_Boundary`,
+        `Municipal_Districts`,
+        `Municipal_District`
     ];
 
 
