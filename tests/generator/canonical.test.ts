@@ -14,7 +14,8 @@ import type {
 } from "../../generator/src/types.js";
 
 import {
-    selectCanonicalSource
+    selectCanonicalSource,
+    selectMunicipalityCanonicalSource
 } from "../../generator/src/canonical.js";
 
 
@@ -345,6 +346,68 @@ function createGroup(
                 "Test equivalent-layer group"
             ]
     };
+}
+
+function createPhoenixCandidate(
+    url: string,
+    title: string
+): InspectedCandidate {
+
+    const candidate =
+        createCandidate(
+            undefined,
+            url,
+            title
+        );
+
+    candidate.candidate.city =
+        "Phoenix";
+
+    candidate.candidate.state =
+        "AZ";
+
+    candidate.candidate.placeFips =
+        "0455000";
+
+    candidate.candidate.title =
+        title;
+
+    candidate.classification.districtType =
+        "council-district";
+
+    candidate.classification.officialMunicipalSource =
+        true;
+
+    candidate.inspection.districtFields =
+        [
+            "DISTRICT"
+        ];
+
+    candidate.inspection.districtField =
+        "DISTRICT";
+
+    candidate.validation =
+        createValidation();
+
+    candidate.validation.districtField =
+        "DISTRICT";
+
+    candidate.validation.distinctDistrictValues =
+        [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+        ];
+
+    candidate.validation.confidence =
+        100;
+
+    return candidate;
 }
 
 
@@ -816,6 +879,125 @@ test(
         assert.equal(
             result.alternatives[0]?.title,
             "Tucson Ward Boundaries (2015)"
+        );
+    }
+);
+
+// =============================================================================
+// Phoenix municipality-wide canonical selection regression
+// =============================================================================
+
+test(
+    "Phoenix prefers the boundary-native Council Districts source over the derived Eviction Filings source",
+    () => {
+
+        const councilDistricts =
+            createPhoenixCandidate(
+                "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0",
+                "Council Districts and Members"
+            );
+
+        const evictionFilings =
+            createPhoenixCandidate(
+                "https://maps.phoenix.gov/pub/rest/services/Public/Eviction_Filings_HSD/MapServer/1",
+                "Eviction Filings by Council Districts"
+            );
+
+
+        /*
+         * These candidates intentionally belong to separate equivalence
+         * groups.
+         *
+         * This reproduces the real Phoenix situation where:
+         *
+         *     Council Districts
+         *         ↓
+         *     equivalence group 1
+         *
+         *     Eviction Filings by Council Districts
+         *         ↓
+         *     equivalence group 2
+         *
+         * The municipality-wide selector must still choose the
+         * boundary-native source.
+         */
+
+        const councilGroup =
+            createGroup(
+                [
+                    councilDistricts
+                ],
+                "phoenix-council-districts"
+            );
+
+        const evictionGroup =
+            createGroup(
+                [
+                    evictionFilings
+                ],
+                "phoenix-eviction-filings"
+            );
+
+
+        const result =
+            selectMunicipalityCanonicalSource(
+                [
+                    councilGroup,
+                    evictionGroup
+                ]
+            );
+
+
+        assert.ok(
+            result
+        );
+
+
+        assert.equal(
+            result.url,
+            "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0"
+        );
+
+
+        assert.equal(
+            result.title,
+            "Council Districts and Members"
+        );
+
+
+        assert.equal(
+            result.city,
+            "Phoenix"
+        );
+
+
+        assert.equal(
+            result.state,
+            "AZ"
+        );
+
+
+        assert.equal(
+            result.placeFips,
+            "0455000"
+        );
+
+
+        assert.equal(
+            result.districtType,
+            "council-district"
+        );
+
+
+        assert.equal(
+            result.districtField,
+            "DISTRICT"
+        );
+
+
+        assert.equal(
+            result.officialMunicipalSource,
+            true
         );
     }
 );
