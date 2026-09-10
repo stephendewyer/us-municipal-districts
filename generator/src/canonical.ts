@@ -347,6 +347,239 @@ function districtFieldScore(
 
 
 // =============================================================================
+// Canonical source bonus
+// =============================================================================
+
+/**
+ * Return a moderate canonical-source preference.
+ *
+ * This does NOT determine whether a candidate is valid.
+ *
+ * It is only used when candidates are already reasonably close according
+ * to the main scoreCandidate() ranking.
+ *
+ * The goal is to prefer a boundary-native dataset such as:
+ *
+ *   "Council Districts"
+ *   "Ward Boundaries"
+ *
+ * over a derived or thematic dataset such as:
+ *
+ *   "Eviction Filings by Council Districts"
+ *
+ * without allowing this preference to override major ranking signals such
+ * as current vs. historical temporal evidence.
+ */
+function canonicalSourceBonus(
+    candidate: EquivalentLayerGroup["candidates"][number]
+): number {
+
+    const identityText =
+        [
+            candidate.inspection.title,
+            candidate.inspection.layerName,
+            candidate.inspection.serviceName,
+            candidate.candidate.title
+        ]
+            .filter(
+                (
+                    value
+                ): value is string =>
+                    Boolean(
+                        value
+                    )
+            )
+            .map(
+                value =>
+                    normalizeField(
+                        value
+                    )
+            )
+            .join(" ");
+
+
+    let bonus = 0;
+
+
+    // -------------------------------------------------------------------------
+    // Boundary-native terminology.
+    // -------------------------------------------------------------------------
+
+    if (
+        /\bcouncil\s+districts?\b/.test(
+            identityText
+        )
+    ) {
+        bonus += 25;
+    }
+
+
+    if (
+        /\bcouncil\s+district\s+boundar(?:y|ies)\b/.test(
+            identityText
+        )
+    ) {
+        bonus += 10;
+    }
+
+
+    if (
+        /\bward\s+boundar(?:y|ies)\b/.test(
+            identityText
+        )
+    ) {
+        bonus += 25;
+    }
+
+
+    if (
+        /\baldermanic\s+districts?\b/.test(
+            identityText
+        )
+    ) {
+        bonus += 25;
+    }
+
+
+    if (
+        /\bmunicipal\s+districts?\b/.test(
+            identityText
+        )
+    ) {
+        bonus += 25;
+    }
+
+
+    if (
+        /\bpolitical\s+districts?\b/.test(
+            identityText
+        )
+    ) {
+        bonus += 25;
+    }
+
+
+    if (
+        /\belection\s+districts?\b/.test(
+            identityText
+        ) ||
+        /\belectoral\s+districts?\b/.test(
+            identityText
+        )
+    ) {
+        bonus += 20;
+    }
+
+
+    if (
+        /\bboundar(?:y|ies)\b/.test(
+            identityText
+        )
+    ) {
+        bonus += 10;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Derived analytical datasets.
+    //
+    // These remain valid if the underlying candidate really is a political
+    // boundary. They simply receive a modest canonical-selection penalty.
+    // -------------------------------------------------------------------------
+
+    const derivedTerms = [
+        "eviction",
+        "evictions",
+        "filing",
+        "filings",
+        "crime",
+        "incidents",
+        "complaints",
+        "cases",
+        "violations",
+        "permits",
+        "inspections",
+        "properties",
+        "parcels",
+        "housing",
+        "households",
+        "population",
+        "demographics",
+        "transactions",
+        "sales",
+        "applications",
+        "requests",
+        "service calls",
+        "statistics",
+        "counts"
+    ];
+
+
+    for (
+        const term of derivedTerms
+    ) {
+
+        if (
+            identityText.includes(
+                term
+            )
+        ) {
+            bonus -= 25;
+        }
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Thematic datasets.
+    // -------------------------------------------------------------------------
+
+    const thematicTerms = [
+        "charging",
+        "libraries",
+        "parks",
+        "schools",
+        "transit",
+        "roads",
+        "streets",
+        "water",
+        "sewer",
+        "utility",
+        "zoning"
+    ];
+
+
+    for (
+        const term of thematicTerms
+    ) {
+
+        if (
+            identityText.includes(
+                term
+            )
+        ) {
+            bonus -= 15;
+        }
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Official municipal ownership is a modest positive signal.
+    // -------------------------------------------------------------------------
+
+    if (
+        candidate
+            .classification
+            .officialMunicipalSource
+    ) {
+        bonus += 10;
+    }
+
+
+    return bonus;
+}
+
+
+// =============================================================================
 // Find district field
 // =============================================================================
 
@@ -655,17 +888,134 @@ export function selectCanonicalSource(
 
 
     // -------------------------------------------------------------------------
-    // Rank candidates.
+    // First calculate the normal candidate score.
+    //
+    // scoreCandidate() remains the primary ranking system.
     // -------------------------------------------------------------------------
 
-    const ranked:
-        CandidateScore[] =
-        eligibleCandidates
+    const scoredCandidates =
+        eligibleCandidates.map(
+            scoreCandidate
+        );
+
+
+    // -------------------------------------------------------------------------
+    // Find the strongest normal candidate.
+    //
+    // This establishes the baseline around which the moderate canonical
+    // preference may operate.
+    // -------------------------------------------------------------------------
+
+    const normallyRanked =
+        [
+            ...scoredCandidates
+        ].sort(
+            compareCandidateScores
+        );
+
+
+    const strongest =
+        normallyRanked[0];
+
+
+    if (
+        !strongest
+    ) {
+        return undefined;
+    }
+
+
+    if (
+        strongest.score ===
+        Number.NEGATIVE_INFINITY
+    ) {
+        return undefined;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Only apply canonical-source bonuses when candidates are reasonably
+    // close to the strongest candidate.
+    //
+    // A 40-point window ensures that a strong signal such as current-vs-
+    // historical data can still dominate canonical-source naming preferences.
+    // -------------------------------------------------------------------------
+
+    const CANONICAL_COMPARISON_WINDOW =
+        40;
+
+
+    const ranked =
+        scoredCandidates
             .map(
-                scoreCandidate
+                candidateScore => {
+
+                    const canonicalBonus =
+                        canonicalSourceBonus(
+                            candidateScore.candidate
+                        );
+
+
+                    const withinComparisonWindow =
+                        (
+                            strongest.score -
+                            candidateScore.score
+                        ) <=
+                        CANONICAL_COMPARISON_WINDOW;
+
+
+                    return {
+
+                        candidateScore,
+
+                        canonicalBonus,
+
+                        canonicalSelectionScore:
+                            withinComparisonWindow
+                                ? candidateScore.score +
+                                  canonicalBonus
+                                : candidateScore.score,
+
+                        withinComparisonWindow
+                    };
+                }
             )
             .sort(
-                compareCandidateScores
+                (
+                    a,
+                    b
+                ) => {
+
+                    // -----------------------------------------------------------------
+                    // Primary ranking:
+                    //
+                    // Use the canonical-adjusted score only for candidates that
+                    // are close enough to the strongest normal candidate.
+                    // -----------------------------------------------------------------
+
+                    if (
+                        b.canonicalSelectionScore !==
+                        a.canonicalSelectionScore
+                    ) {
+
+                        return (
+                            b.canonicalSelectionScore -
+                            a.canonicalSelectionScore
+                        );
+                    }
+
+
+                    // -----------------------------------------------------------------
+                    // Secondary ranking:
+                    //
+                    // Preserve the complete original candidate comparison logic.
+                    // -----------------------------------------------------------------
+
+                    return compareCandidateScores(
+                        a.candidateScore,
+                        b.candidateScore
+                    );
+                }
             );
 
 
@@ -680,8 +1030,12 @@ export function selectCanonicalSource(
     }
 
 
+    const bestScore =
+        best.candidateScore;
+
+
     if (
-        best.score ===
+        bestScore.score ===
         Number.NEGATIVE_INFINITY
     ) {
         return undefined;
@@ -689,7 +1043,7 @@ export function selectCanonicalSource(
 
 
     const candidate =
-        best.candidate;
+        bestScore.candidate;
 
 
     const inspection =
@@ -745,14 +1099,17 @@ export function selectCanonicalSource(
             .slice(1)
             .filter(
                 item =>
-                    item.score !==
+                    item
+                        .candidateScore
+                        .score !==
                     Number.NEGATIVE_INFINITY
             )
             .map(
                 item => {
 
                     const alternative =
-                        item.candidate;
+                        item.candidateScore
+                            .candidate;
 
 
                     return {
@@ -789,7 +1146,9 @@ export function selectCanonicalSource(
                                 .officialMunicipalSource,
 
                         score:
-                            item.score
+                            item
+                                .candidateScore
+                                .score
                     };
                 }
             );
@@ -828,7 +1187,23 @@ export function selectCanonicalSource(
 
     const selectionReasons =
         [
-            ...best.reasons,
+            ...bestScore.reasons,
+
+            `canonical source bonus: ${
+                best.canonicalBonus >= 0
+                    ? "+"
+                    : ""
+            }${best.canonicalBonus}`,
+
+            `canonical selection score: ${
+                best.canonicalSelectionScore
+            }`,
+
+            `canonical bonus comparison window: ${
+                best.withinComparisonWindow
+                    ? "applied"
+                    : "not applied"
+            }`,
 
             `district type: ${
                 classification.districtType
@@ -908,7 +1283,7 @@ export function selectCanonicalSource(
             "unknown",
 
         score:
-            best.score,
+            bestScore.score,
 
         alternatives,
 

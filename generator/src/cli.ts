@@ -645,10 +645,162 @@ function printDiscoverySummary(
         }
     }
 
+    printValidCandidates( 
+        results 
+    );
 
     printRejectionReport(
         results
     );
+}
+
+function printValidCandidates(
+    results: DiscoveryResult[]
+): void {
+
+    const validResults =
+        results.filter(
+            result =>
+                result.validCandidates.length > 0
+        );
+
+    if (
+        validResults.length === 0
+    ) {
+        return;
+    }
+
+    console.log(
+        "\nValid candidates:"
+    );
+
+    for (
+        const result of validResults
+    ) {
+
+        console.log(
+            `\n  ${result.place.city}, ${result.place.state}`
+        );
+
+        for (
+            const valid of
+            result.validCandidates
+        ) {
+
+            const inspection =
+                valid.inspection;
+
+            const classification =
+                valid.classification;
+
+            const validation =
+                valid.validation;
+
+            console.log(
+                `\n    ✓ ${
+                    inspection.title ??
+                    inspection.layerName ??
+                    inspection.serviceName ??
+                    "(untitled)"
+                }`
+            );
+
+            console.log(
+                `      ${inspection.url}`
+            );
+
+            console.log(
+                `      Geometry: ${
+                    inspection.geometryType ??
+                    "(unknown)"
+                }`
+            );
+
+            console.log(
+                `      District type: ${
+                    classification.districtType ??
+                    "(unknown)"
+                }`
+            );
+
+            console.log(
+                `      District field: ${
+                    validation?.districtField ??
+                    inspection.districtField ??
+                    "(unknown)"
+                }`
+            );
+
+            console.log(
+                `      Validation confidence: ${
+                    validation?.confidence ??
+                    "(unknown)"
+                }`
+            );
+
+            console.log(
+                `      Distinct district values: ${
+                    validation?.distinctDistrictValues.length ??
+                    0
+                }`
+            );
+
+            if (
+                validation &&
+                validation.distinctDistrictValues.length > 0
+            ) {
+                console.log(
+                    `      District values: ${
+                        validation.distinctDistrictValues.join(
+                            ", "
+                        )
+                    }`
+                );
+            }
+
+            console.log(
+                `      Political matches: ${
+                    classification.matches.political.length > 0
+                        ? classification.matches.political.join(", ")
+                        : "(none)"
+                }`
+            );
+
+            console.log(
+                `      Thematic matches: ${
+                    classification.matches.thematic.length > 0
+                        ? classification.matches.thematic.join(", ")
+                        : "(none)"
+                }`
+            );
+
+            console.log(
+                `      Official municipal source: ${
+                    classification.officialMunicipalSource
+                }`
+            );
+
+            if (
+                valid.municipalityValidation
+            ) {
+                console.log(
+                    `      Municipality validation: ${
+                        valid.municipalityValidation.score
+                    }`
+                );
+            }
+
+            if (
+                valid.municipalityGeographyValidation
+            ) {
+                console.log(
+                    `      Geography validation: ${
+                        valid.municipalityGeographyValidation.status
+                    }`
+                );
+            }
+        }
+    }
 }
 
 
