@@ -1,7 +1,33 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-10T03:50:11.965Z",
+  "generatedAt": "2026-09-10T12:30:20.113Z",
   "entries": [
+    {
+      "placeFips": "0455000",
+      "city": "Phoenix",
+      "state": "AZ",
+      "boundaryType": "council-district",
+      "source": {
+        "sourceType": "arcgis",
+        "url": "https://maps.phoenix.gov/pub/rest/services/Public/Eviction_Filings_HSD/MapServer/1",
+        "itemId": "b7916169f30048d69772b226d6eb8476",
+        "serviceType": "MapServer",
+        "title": "Eviction Filings by Council Districts",
+        "official": true,
+        "verified": true,
+        "fieldMapping": {
+          "district": "DISTRICT",
+          "name": "REP_NAME"
+        }
+      },
+      "generatedFile": "geometry/0455000/council-district.geojson",
+      "metadata": {
+        "generatedAt": "2026-09-10T12:30:20.113Z",
+        "generatorVersion": "0.1.0",
+        "alternatives": [],
+        "requiresReview": false
+      }
+    },
     {
       "placeFips": "0477000",
       "city": "Tucson",

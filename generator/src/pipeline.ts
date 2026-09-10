@@ -271,16 +271,31 @@ function isValidatedPoliticalBoundary(
     // =========================================================================
 
     /*
-     * These classifications are strong evidence that the dataset is
-     * not itself a political-boundary layer.
+     * Census, parcel, and housing terminology can appear in otherwise
+     * legitimate political-boundary datasets because descriptions,
+     * metadata, or related fields may reference those concepts.
      *
-     * We intentionally inspect both the boolean classifications and
-     * the underlying thematic matches.
+     * Therefore these classifications are only strong negative evidence
+     * when there is no explicit political identity.
+     *
+     * A candidate explicitly identified as a political boundary should
+     * continue through to the actual geometry/data validation stage.
      */
+
+    const explicitPoliticalMatches =
+        classification.matches
+            .political ?? [];
+
+    const hasStrongPoliticalIdentity =
+        explicitPoliticalMatches.length > 0;
+
     if (
-        classification.isCensusDataset ||
-        classification.isParcelDataset ||
-        classification.isHousingDataset
+        !hasStrongPoliticalIdentity &&
+        (
+            classification.isCensusDataset ||
+            classification.isParcelDataset ||
+            classification.isHousingDataset
+        )
     ) {
         return false;
     }
@@ -311,15 +326,8 @@ function isValidatedPoliticalBoundary(
         candidate.classification.matches
             .thematic ?? [];
 
-    const explicitPoliticalMatches =
-        candidate.classification.matches
-            .political ?? [];
-
     const hasThematicEvidence =
         thematicMatches.length > 0;
-
-    const hasStrongPoliticalIdentity =
-        explicitPoliticalMatches.length > 0;
 
 
     if (
