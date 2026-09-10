@@ -316,132 +316,105 @@ A registry entry contains information such as:
 
 The registry provides a stable interface between external GIS sources and the normalized data distributed by this package.
 
-## CLI
+## Usage
 
-The project provides several development and data-generation commands.
-
-### Generate Census Places
+### Commands
 
 ```bash
+# Download the Census National Places Gazetteer
+# and generate the Census places data
 npm run places
+
+# Discover municipal district boundary sources
+npm run discover
+
+# Discover a specific municipality
+npm run discover -- --city Tucson --state AZ
+
+# Discover all municipalities in a state
+npm run discover -- --state AZ
+
+# Discover a specific Census place
+npm run discover -- --placeFips 0477000
+
+# Discover with detailed output
+npm run discover -- --placeFips 0477000 --verbose
+
+# Generate the municipal registry
+npm run generate
+
+# Generate the registry for a specific municipality
+npm run generate -- --city Tucson --state AZ
+
+# Generate the registry for all municipalities in a state
+npm run generate -- --state AZ
+
+# Generate the registry for a specific Census place
+npm run generate -- --placeFips 0477000
+
+# Generate normalized GeoJSON geometry
+npm run geometry
+
+# Generate geometry for a specific municipality
+npm run geometry -- --city Tucson --state AZ
+
+# Validate the municipal registry
+npm run validate
+
+# Validate a specific registry file
+npm run validate -- --registry data/municipalities/registry.json
 ```
 
-Generates the municipality/place data used by the discovery pipeline.
+### Command descriptions
 
-### Discover a Municipality
+#### `places`
 
-The discovery command accepts a city and state abbreviation:
+Downloads the Census National Places Gazetteer and generates the Census municipality/place data used by the discovery pipeline.
 
-```bash
-npm run discover -- Tucson AZ
+#### `discover`
+
+Searches for municipal district boundary sources, inspects discovered ArcGIS layers, classifies candidates, detects equivalent layers, selects canonical sources, and writes the municipal registry.
+
+#### `generate`
+
+Generates or updates the municipal registry using the discovered and selected canonical municipal district sources.
+
+#### `geometry`
+
+Downloads and normalizes the GeoJSON geometry for registry entries and writes the resulting geometry files under `data/geometry/`.
+
+#### `validate`
+
+Validates the generated municipal registry and its entries.
+
+### Discovery and generation options
+
+The `discover` and `generate` commands support the following filters:
+
+```text
+--city <city>
+    Process only municipalities matching this city name.
+
+--state <state>
+    Process only municipalities in this state.
+
+--placeFips <fips>
+    Process only the specified Census place.
+
+--review
+    Enable manual-review handling.
+
+--verbose
+    Print detailed discovery information.
 ```
 
 For example:
 
 ```bash
-npm run discover -- Phoenix AZ
+npm run discover -- --city Tucson --state AZ
+npm run generate -- --city Tucson --state AZ
 ```
 
-The state should currently be supplied using its two-letter abbreviation.
-
-### Inspect ArcGIS Sources
-
-```bash
-npm run inspect
-```
-
-Used during development to inspect and evaluate ArcGIS services and layers.
-
-### Generate Geometry
-
-```bash
-npm run generate
-```
-
-Generates normalized municipal boundary geometry from configured sources.
-
-### Validate Registry Data
-
-```bash
-npm run validate
-```
-
-Validates registry entries and generated geometry.
-
-Validation checks include:
-
-* Registry structure
-* Generated-file paths
-* Geometry validity
-* Feature properties
-* District values
-* Municipality identity
-* State
-* Place FIPS
-* Boundary type
-* Geometry type
-
-### Run the Complete Check
-
-```bash
-npm run check
-```
-
-This runs:
-
-```text
-build
-  ↓
-typecheck
-  ↓
-tests
-```
-
-## Testing
-
-The project uses Node's built-in test runner through `tsx`.
-
-Run the generator test suite with:
-
-```bash
-npm test
-```
-
-The current test suite contains **207 automated tests**, covering areas including:
-
-* ArcGIS geometry normalization
-* Polygon and MultiPolygon conversion
-* ArcGIS inspection
-* ArcGIS querying
-* Candidate classification
-* Candidate ranking
-* Municipality validation
-* Geographic validation
-* Temporal validation
-* Equivalent-layer detection
-* Canonical-source selection
-* Geometry generation
-* Registry validation
-* Tucson discovery
-* Phoenix discovery
-* Chicago temporal/equivalence behavior
-
-The current validation status is:
-
-```text
-207 tests
-207 passed
-0 failed
-0 skipped
-```
-
-The full project check is:
-
-```bash
-npm run check
-```
-
-and currently completes successfully.
 
 ## Technology
 

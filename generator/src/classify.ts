@@ -12,6 +12,7 @@ import type {
 
 function normalize(value?: string): string {
     return (value ?? "")
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
         .toLowerCase()
         .replace(/[_-]+/g, " ")
         .replace(/\s+/g, " ")
@@ -499,46 +500,122 @@ function detectDistrictType(
 // Official municipal source
 // =============================================================================
 
+function escapeRegex(value: string): string {
+    return value.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+    );
+}
+
 function isOfficialMunicipalSource(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection
 ): boolean {
 
-    const url =
-        normalize(
-            inspection.url
-        );
+    const url = normalize(inspection.url);
+    const candidateUrl = normalize(candidate.url);
+    const serviceUrl = normalize(inspection.serviceUrl);
 
-    const candidateUrl =
-        normalize(
-            candidate.url
-        );
+    const owner = normalize(inspection.owner);
+    const organization = normalize(inspection.organization);
+    const title = normalize(inspection.title);
+    const serviceName = normalize(inspection.serviceName);
 
-    const serviceUrl =
-        normalize(
-            inspection.serviceUrl
-        );
+    const city = normalize(candidate.city);
 
     const text = [
         url,
         candidateUrl,
         serviceUrl,
-        normalize(inspection.owner),
-        normalize(inspection.organization),
-        normalize(inspection.title),
-        normalize(inspection.serviceName)
-    ].join(" ");
+        owner,
+        organization,
+        title,
+        serviceName
+    ]
+        .filter(Boolean)
+        .join(" ");
 
-    return (
-        candidate.source === "municipal" ||
-        /\b(city|town|village|municipal)\b/i.test(text) ||
-        /\.gov\b/i.test(text) ||
+    /*
+     * Explicit discovery provenance.
+     *
+     * A discovery adapter may already know that the candidate
+     * came from a municipal source.
+     */
+    if (candidate.source === "municipal") {
+        return true;
+    }
+
+    /*
+     * Official government domains are strong evidence.
+     */
+    if (/\.gov\b/i.test(text)) {
+        return true;
+    }
+
+    /*
+     * Explicit municipal organization identity.
+     *
+     * Examples:
+     *
+     *   City of Tucson
+     *   Town of Example
+     *   Village of Example
+     *   Municipality of Example
+     *
+     * Requiring the candidate city prevents an unrelated
+     * municipal organization from making the source official.
+     */
+    if (city) {
+
+        const municipalityIdentity = new RegExp(
+            `\\b(city|town|village|municipality)\\s+of\\s+${escapeRegex(city)}\\b`,
+            "i"
+        );
+
+        if (
+            municipalityIdentity.test(owner) ||
+            municipalityIdentity.test(organization)
+        ) {
+            return true;
+        }
+    }
+
+    /*
+     * Municipal identity appearing in the source metadata.
+     *
+     * This handles sources such as:
+     *
+     *   City of Tucson Wards
+     *   Tucson Municipal Wards
+     *
+     * We intentionally do NOT use the candidate city name alone
+     * as proof of official ownership.
+     */
+    if (
+        /\b(city|town|village|municipal)\b/i.test(
+            `${owner} ${organization}`
+        )
+    ) {
+        return true;
+    }
+
+    /*
+     * Existing Tucson/Pima government-source handling.
+     *
+     * Keep these explicit domain checks because some ArcGIS
+     * services may not expose useful organization metadata.
+     */
+    if (
         /tucsonaz\.gov/i.test(text) ||
         /gis\.tucsonaz\.gov/i.test(text) ||
         /mapdata\.tucsonaz\.gov/i.test(text) ||
         /gisdata\.pima\.gov/i.test(text) ||
         /pima\s+county/i.test(text)
-    );
+    ) {
+        return true;
+    }
+
+    return false;
 }
 
 // =============================================================================
