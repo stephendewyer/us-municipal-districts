@@ -44,6 +44,10 @@ export function validateMunicipality(
     const city =
         normalize(place.city);
 
+    // =========================================================================
+    // Metadata text
+    // =========================================================================
+
     const metadataText =
         normalize([
             inspection.title,
@@ -54,6 +58,10 @@ export function validateMunicipality(
         ]
             .filter(Boolean)
             .join(" "));
+
+    // =========================================================================
+    // Field text
+    // =========================================================================
 
     const fieldText =
         normalize([
@@ -71,6 +79,10 @@ export function validateMunicipality(
             ...inspection.nameFields
         ].join(" "));
 
+    // =========================================================================
+    // Owner / organization text
+    // =========================================================================
+
     const ownerText =
         normalize([
             inspection.owner,
@@ -79,11 +91,85 @@ export function validateMunicipality(
             .filter(Boolean)
             .join(" "));
 
+    // =========================================================================
+    // Tags / type keywords
+    // =========================================================================
+
     const tagText =
         normalize([
             ...(inspection.tags ?? []),
             ...(inspection.typeKeywords ?? [])
         ].join(" "));
+
+
+    // =========================================================================
+    // URL text
+    // =========================================================================
+    //
+    // The municipality name may appear in:
+    //
+    // - the inspected layer URL
+    // - the ArcGIS service URL
+    //
+    // This is particularly important for municipal ArcGIS Server
+    // installations such as:
+    //
+    // https://maps.phoenix.gov/pub/rest/services/...
+    // =========================================================================
+
+    const urlText =
+        normalize([
+            inspection.url,
+            inspection.serviceUrl
+        ]
+            .filter(Boolean)
+            .join(" "));
+
+
+    // =========================================================================
+    // Municipality URL evidence
+    // =========================================================================
+
+    if (
+        city &&
+        containsPhrase(urlText, city)
+    ) {
+
+        /*
+        * Give stronger evidence when the candidate comes from a
+        * municipality-specific .gov hostname such as:
+        *
+        *   maps.phoenix.gov
+        *
+        * Shared ArcGIS infrastructure such as:
+        *
+        *   services.arcgis.com
+        *
+        * receives weaker evidence.
+        */
+
+        if (
+            isMunicipalitySpecificDomain(
+                inspection.url,
+                place.city
+            )
+        ) {
+
+            score += 30;
+
+            reasons.push(
+                `+30: municipality name "${place.city}" appears in municipality-specific URL`
+            );
+
+        } else {
+
+            score += 15;
+
+            reasons.push(
+                `+15: municipality name "${place.city}" appears in candidate URL`
+            );
+        }
+    }
 
 
     // =========================================================================
@@ -328,6 +414,107 @@ function containsPhrase(
     ).includes(
         ` ${normalizedPhrase} `
     );
+}
+
+
+// =============================================================================
+// Municipality-specific URL detection
+// =============================================================================
+
+/**
+ * Determine whether a URL appears to belong to an official
+ * municipality-specific government domain.
+ *
+ * Examples:
+ *
+ *   https://maps.phoenix.gov/...
+ *   https://gis.somecity.gov/...
+ *
+ * are considered municipality-specific.
+ *
+ * Shared ArcGIS infrastructure such as:
+ *
+ *   https://services.arcgis.com/...
+ *
+ * is intentionally excluded from the stronger score.
+ */
+function isMunicipalitySpecificDomain(
+    url: string | undefined,
+    city: string
+): boolean {
+
+    if (!url) {
+        return false;
+    }
+
+    try {
+
+        const parsed =
+            new URL(url);
+
+        const hostname =
+            parsed.hostname.toLowerCase();
+
+        const normalizedCity =
+            normalize(city)
+                .replace(/\s+/g, "");
+
+        if (
+            !hostname ||
+            !normalizedCity
+        ) {
+            return false;
+        }
+
+        // Shared Esri / ArcGIS infrastructure should not
+        // receive the strongest municipality-specific score.
+        if (
+            hostname === "arcgis.com" ||
+            hostname.endsWith(".arcgis.com") ||
+            hostname === "esri.com" ||
+            hostname.endsWith(".esri.com")
+        ) {
+            return false;
+        }
+
+        const hostnameWithoutWww =
+            hostname.startsWith("www.")
+                ? hostname.slice(4)
+                : hostname;
+
+        const cityToken =
+            normalizedCity
+                .replace(/[^a-z0-9]/g, "");
+
+        /*
+         * Check whether the municipality name appears somewhere
+         * in the hostname.
+         *
+         * Examples:
+         *
+         *   maps.phoenix.gov
+         *   phoenix.gov
+         *   maps.tucsonaz.gov
+         */
+        const containsCity =
+            hostnameWithoutWww
+                .replace(/[^a-z0-9]/g, "")
+                .includes(cityToken);
+
+        if (!containsCity) {
+            return false;
+        }
+
+        const isGovernmentDomain =
+            hostname.endsWith(".gov") ||
+            hostname.includes(".gov.");
+
+        return isGovernmentDomain;
+
+    } catch {
+
+        return false;
+    }
 }
 
 

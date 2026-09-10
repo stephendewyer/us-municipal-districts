@@ -58,7 +58,7 @@ export async function searchArcGIS(
 
     const limit =
         Math.min(
-            options.limit ?? 50,
+            options.limit ?? 10,
             100
         );
 

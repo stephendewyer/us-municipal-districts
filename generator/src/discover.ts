@@ -9,6 +9,11 @@ import type {
 } from "./types.js";
 
 import {
+    discoverArcGISServer,
+    type ArcGISServerServiceResult
+} from "./discoverArcGISServer.js";
+
+import {
     validateMunicipalityGeography
 } from "./validateMunicipalityGeography.js";
 
@@ -54,6 +59,7 @@ import {
     queryArcGISLayerGeometry
 } from "./queryArcGISLayerGeometry.js";
 
+
 // =============================================================================
 // Options
 // =============================================================================
@@ -88,6 +94,51 @@ export interface DiscoverOptions {
 
 
 // =============================================================================
+// Search configuration
+// =============================================================================
+
+interface SearchTier {
+
+    /**
+     * Human-readable tier name.
+     */
+    name: string;
+
+    /**
+     * Search queries executed during this tier.
+     */
+    queries: string[];
+
+    /**
+     * Strongest search relevance score needed to stop searching.
+     */
+    stopScore: number;
+}
+
+
+/**
+ * Maximum number of unique ArcGIS search candidates allowed to proceed
+ * into ArcGIS item resolution.
+ *
+ * Keeping this bounded prevents a broad search tier from creating a large
+ * downstream inspection workload.
+ */
+const MAX_SEARCH_CANDIDATES =
+    20;
+
+
+/**
+ * Number of ArcGIS search results requested per query.
+ *
+ * The search stage only needs the highest-ranked results. Deeper filtering
+ * happens later through inspection, municipality validation, geographic
+ * validation, classification, and political-boundary validation.
+ */
+const SEARCH_RESULT_LIMIT =
+    10;
+
+
+// =============================================================================
 // Main discovery pipeline
 // =============================================================================
 
@@ -98,7 +149,7 @@ export interface DiscoverOptions {
  *
  *     Census places
  *          ↓
- *     ArcGIS search
+ *     tiered ArcGIS search
  *          ↓
  *     search relevance filtering
  *          ↓
@@ -198,10 +249,50 @@ export async function discoverArcGIS(
 // Discover one municipality
 // =============================================================================
 
+function isExternalArcGISServerRoot(
+    root: string
+): boolean {
+
+    try {
+
+        const url =
+            new URL(
+                root
+            );
+
+        const hostname =
+            url.hostname.toLowerCase();
+
+
+        /*
+         * ArcGIS Online-hosted services are already covered by the
+         * ArcGIS Online search pipeline. Do not crawl their REST
+         * directories again.
+         */
+        if (
+            hostname === "services.arcgis.com" ||
+            hostname.endsWith(
+                ".arcgis.com"
+            )
+        ) {
+
+            return false;
+        }
+
+
+        return true;
+
+    } catch {
+
+        return false;
+    }
+}
+
 async function discoverMunicipality(
     place: CensusPlace,
     options: DiscoverOptions
 ): Promise<DiscoveryResult> {
+
 
     // =========================================================================
     // 1. Search ArcGIS Online
@@ -214,11 +305,177 @@ async function discoverMunicipality(
         );
 
 
-    if (options.verbose) {
+    // =========================================================================
+    // 2. Discover ArcGIS Server roots from search results
+    //
+    // ArcGIS Online search does not always index services hosted directly
+    // by municipal ArcGIS Server installations. The search results often
+    // still contain URLs pointing to those servers, however.
+    //
+    // Example:
+    //
+    //     https://maps.phoenix.gov/pub/rest/services/Public/SomeLayer/MapServer/0
+    //
+    // becomes:
+    //
+    //     https://maps.phoenix.gov/pub/rest/services
+    //
+    // We then inspect that REST directory for additional services such as:
+    //
+    //     Public/Council_Districts/MapServer
+    // =========================================================================
+
+    const serverRoots =
+        discoverArcGISServerRoots(
+            searchCandidates
+        )
+        .filter(
+            isExternalArcGISServerRoot
+        );
+
+    const serverCandidates:
+        DiscoveryCandidate[] = [];
+
+
+    for (
+        const serverRoot of serverRoots
+    ) {
+
+        try {
+
+            const services:
+                ArcGISServerServiceResult[] =
+                await discoverArcGISServer(
+                    serverRoot,
+                    place
+                );
+
+
+            for (
+                const service of services
+            ) {
+
+                serverCandidates.push({
+
+                    placeFips:
+                        place.placeFips,
+
+                    city:
+                        place.city,
+
+                    state:
+                        place.state,
+
+                    url:
+                        service.url,
+
+                    title:
+                        service.name,
+
+                    /*
+                     * This is retrieval relevance, not the final
+                     * candidate ranking score. The existing ranking
+                     * pipeline remains responsible for final selection.
+                     */
+                    score:
+                        service.score,
+
+                    requiresReview:
+                        false,
+
+                    reasons: [
+                        "ArcGIS Server discovery",
+                        `server root: ${serverRoot}`,
+                        ...service.reasons
+                    ]
+                });
+            }
+
+
+            if (
+                options.verbose
+            ) {
+
+                console.log(
+                    `    ArcGIS Server: ${serverRoot}`
+                );
+
+                console.log(
+                    `      Services discovered: ` +
+                    `${services.length}`
+                );
+            }
+
+        } catch (error) {
+
+            if (
+                options.verbose
+            ) {
+
+                console.warn(
+                    `    ArcGIS Server discovery failed:`
+                );
+
+                console.warn(
+                    `      ${serverRoot}`
+                );
+
+                console.warn(
+                    error
+                );
+            }
+        }
+    }
+
+
+    // =========================================================================
+    // 3. Merge ArcGIS Online and ArcGIS Server candidates
+    // =========================================================================
+
+    const allSearchCandidates =
+        deduplicateSearchCandidates(
+            [
+                ...searchCandidates,
+                ...serverCandidates
+            ]
+        );
+
+    const prioritizedCandidates =
+        allSearchCandidates
+            .sort(
+                (a, b) =>
+                    b.score - a.score ||
+                    a.url.localeCompare(
+                        b.url
+                    )
+            )
+            .slice(
+                0,
+                12
+            );
+
+    if (
+        options.verbose
+    ) {
 
         console.log(
-            `    Relevant search candidates: ` +
+            `    ArcGIS Online candidates: ` +
             `${searchCandidates.length}`
+        );
+
+        console.log(
+            `    ArcGIS Server roots: ` +
+            `${serverRoots.length}`
+        );
+
+        console.log(
+            `    ArcGIS Server candidates: ` +
+            `${serverCandidates.length}`
+        );
+
+        console.log(
+            `    Combined unique candidates: ` +
+            `${allSearchCandidates.length}`
         );
     }
 
@@ -232,7 +489,7 @@ async function discoverMunicipality(
 
 
     for (
-        const candidate of searchCandidates
+        const candidate of prioritizedCandidates
     ) {
 
         if (!candidate.itemId) {
@@ -669,7 +926,108 @@ async function discoverMunicipality(
 
 
 // =============================================================================
-// ArcGIS search
+// Tiered ArcGIS search
+// =============================================================================
+
+function getSearchTiers(
+    place: CensusPlace
+): SearchTier[] {
+
+    const city =
+        place.city;
+
+    const state =
+        place.state;
+
+
+    return [
+
+        // =====================================================================
+        // Tier 1: highest-signal municipality-specific searches
+        //
+        // These should find most official sources whose ArcGIS metadata
+        // explicitly contains the municipality name.
+        // =====================================================================
+
+        {
+            name:
+                "municipality-specific",
+
+            queries: [
+
+                `"${city}" ${state} city council districts`,
+                `"${city}" ${state} council district boundaries`,
+                `"${city}" ${state} ward boundaries`,
+                `"${city}" ${state} political district boundaries`
+
+            ],
+
+            stopScore:
+                60
+        },
+
+
+        // =====================================================================
+        // Tier 2: municipality + common ArcGIS dataset/service naming
+        //
+        // This catches sources such as Phoenix's:
+        //
+        //     Council_Districts
+        //
+        // where the dataset/service name is more important than the natural
+        // language title.
+        // =====================================================================
+
+        {
+            name:
+                "service-name",
+
+            queries: [
+
+                `${city} Council_Districts`,
+                `${city} CouncilDistricts`,
+                `${city} Ward_Boundaries`,
+                `${city} Political_Boundaries`
+
+            ],
+
+            stopScore:
+                45
+        },
+
+
+        // =====================================================================
+        // Tier 3: broad political-boundary fallback searches
+        //
+        // These are intentionally limited because they are noisier.
+        // Municipality validation and geographic validation are responsible
+        // for determining whether a generic result actually belongs to the
+        // requested municipality.
+        // =====================================================================
+
+        {
+            name:
+                "broad-political",
+
+            queries: [
+
+                `council districts`,
+                `council district boundaries`,
+                `ward boundaries`,
+                `political district boundaries`
+
+            ],
+
+            stopScore:
+                30
+        }
+
+    ];
+}
+
+
+// =============================================================================
+// Execute tiered ArcGIS search
 // =============================================================================
 
 async function searchMunicipalArcGIS(
@@ -677,152 +1035,118 @@ async function searchMunicipalArcGIS(
     options: DiscoverOptions
 ): Promise<DiscoveryCandidate[]> {
 
-    const queries = [
-
-        // =========================================================================
-        // Tier 1: Municipality-specific searches
-        // =========================================================================
-
-        `\"${place.city}\" ${place.state} city council districts`,
-        `\"${place.city}\" ${place.state} city council district boundaries`,
-        `\"${place.city}\" ${place.state} council district map`,
-        `\"${place.city}\" ${place.state} council districts map`,
-        `\"${place.city}\" ${place.state} council wards`,
-        `\"${place.city}\" ${place.state} city wards`,
-
-        `\"${place.city}\" ${place.state} ward boundaries`,
-        `\"${place.city}\" ${place.state} ward boundary`,
-        `\"${place.city}\" ${place.state} ward map`,
-        `\"${place.city}\" ${place.state} wards`,
-        `\"${place.city}\" ${place.state} municipal wards`,
-        `\"${place.city}\" ${place.state} electoral wards`,
-
-        `\"${place.city}\" ${place.state} municipal districts`,
-        `\"${place.city}\" ${place.state} municipal district boundaries`,
-        `\"${place.city}\" ${place.state} political districts`,
-        `\"${place.city}\" ${place.state} political district boundaries`,
-
-        `\"${place.city}\" ${place.state} election districts`,
-        `\"${place.city}\" ${place.state} electoral districts`,
-        `\"${place.city}\" ${place.state} voting districts`,
-
-        `\"${place.city}\" ${place.state} official GIS wards`,
-        `\"${place.city}\" ${place.state} official GIS council districts`,
-        `\"${place.city}\" ${place.state} GIS ward boundaries`,
-        `\"${place.city}\" ${place.state} GIS council boundaries`,
-        `\"${place.city}\" ${place.state} GIS political boundaries`,
-
-        `\"${place.city}\" ${place.state} WARD_COT`,
-        `\"${place.city}\" ${place.state} WARDS`,
-        `\"${place.city}\" ${place.state} WARD_BOUNDARIES`,
-        `\"${place.city}\" ${place.state} COUNCIL_DISTRICT`,
-        `\"${place.city}\" ${place.state} COUNCIL_DISTRICTS`,
-        `\"${place.city}\" ${place.state} POLITICAL_BOUNDARIES`,
-
-        // =========================================================================
-        // Tier 2: Municipality + dataset/service naming searches
-        //
-        // These help discover ArcGIS services whose titles use database-style
-        // names such as Council_Districts rather than natural-language titles.
-        // =========================================================================
-
-        `${place.city} Council_Districts`,
-        `${place.city} CouncilDistricts`,
-        `${place.city} Council_District`,
-        `${place.city} Districts`,
-        `${place.city} Wards`,
-        `${place.city} Ward_Boundaries`,
-        `${place.city} Political_Boundaries`,
-        `${place.city} Municipal_Districts`,
-
-        `${place.city} council_districts`,
-        `${place.city} council_district`,
-        `${place.city} ward_boundaries`,
-        `${place.city} political_boundaries`,
-
-        // =========================================================================
-        // Tier 3: Broader municipal political-boundary searches
-        //
-        // Some official ArcGIS items have generic names such as:
-        //
-        //     Council Districts
-        //     Wards
-        //     Political Boundaries
-        //
-        // The municipality may appear only in owner/description metadata.
-        // These searches intentionally relax the text query so that those items
-        // have a chance to enter the candidate set.
-        // =========================================================================
-
-        `council districts`,
-        `council district boundaries`,
-        `city council districts`,
-        `city council boundaries`,
-        `municipal council districts`,
-        `municipal council boundaries`,
-        `city wards`,
-        `ward boundaries`,
-        `municipal wards`,
-        `political district boundaries`,
-        `municipal district boundaries`,
-        `political boundaries`,
-        `city political boundaries`,
-
-        // =========================================================================
-        // Tier 4: Common ArcGIS service-name patterns
-        //
-        // This targets the naming conventions commonly used for REST services
-        // and feature classes.
-        // =========================================================================
-
-        `Council_Districts`,
-        `Council_District`,
-        `CouncilDistricts`,
-        `CouncilDistrict`,
-        `Ward_Boundaries`,
-        `Ward_Boundary`,
-        `Wards`,
-        `Political_Boundaries`,
-        `Political_Boundary`,
-        `Municipal_Districts`,
-        `Municipal_District`
-    ];
+    const tiers =
+        getSearchTiers(
+            place
+        );
 
 
     const discovered:
         DiscoveryCandidate[] = [];
 
-    let searchResultCount = 0;
-    let relevantResultCount = 0;
-    let rejectedResultCount = 0;
+
+    let searchResultCount =
+        0;
+
+    let relevantResultCount =
+        0;
+
+    let rejectedResultCount =
+        0;
 
 
     for (
-        const query of queries
+        const tier
+        of tiers
     ) {
 
         if (options.verbose) {
 
             console.log(
-                `    Searching: "${query}"`
+                `    Search tier: ${tier.name}`
+            );
+
+            console.log(
+                `    Queries: ${tier.queries.length}`
             );
         }
 
 
-        try {
+        // ---------------------------------------------------------------------
+        // Run queries in the current tier concurrently.
+        // ---------------------------------------------------------------------
 
-            const searchResults =
-                await searchArcGIS(
-                    query
-                );
+        const tierResults =
+            await Promise.all(
+                tier.queries.map(
+                    async query => {
 
+                        if (options.verbose) {
+
+                            console.log(
+                                `      Searching: "${query}"`
+                            );
+                        }
+
+
+                        try {
+
+                            const results =
+                                await searchArcGIS(
+                                    query,
+                                    {
+                                        limit:
+                                            SEARCH_RESULT_LIMIT
+                                    }
+                                );
+
+
+                            return {
+                                query,
+                                results
+                            };
+
+                        } catch (error) {
+
+                            if (options.verbose) {
+
+                                console.warn(
+                                    `      Search failed: "${query}"`
+                                );
+
+                                console.warn(
+                                    error
+                                );
+                            }
+
+
+                            return {
+                                query,
+                                results:
+                                    []
+                            };
+                        }
+                    }
+                )
+            );
+
+
+        // ---------------------------------------------------------------------
+        // Score results from this tier.
+        // ---------------------------------------------------------------------
+
+        for (
+            const tierResult
+            of tierResults
+        ) {
 
             searchResultCount +=
-                searchResults.length;
+                tierResult.results.length;
 
 
             for (
-                const result of searchResults
+                const result
+                of tierResult.results
             ) {
 
                 if (!result.id) {
@@ -837,9 +1161,7 @@ async function searchMunicipalArcGIS(
                     );
 
 
-                if (
-                    options.verbose
-                ) {
+                if (options.verbose) {
 
                     console.log(
                         `      Search relevance: ` +
@@ -904,34 +1226,97 @@ async function searchMunicipalArcGIS(
 
                     reasons: [
 
-                        `search query: ${query}`,
+                        `search tier: ${tier.name}`,
+
+                        `search query: ${tierResult.query}`,
 
                         ...relevance.reasons
+
                     ],
 
                     source:
                         "arcgis",
 
                     searchQuery:
-                        query
+                        tierResult.query
                 });
             }
+        }
 
-        } catch (error) {
+
+        // ---------------------------------------------------------------------
+        // Deduplicate after each tier.
+        //
+        // This lets the stop condition operate on the actual candidate set
+        // instead of counting duplicate search hits.
+        // ---------------------------------------------------------------------
+
+        const tierCandidates =
+            deduplicateSearchCandidates(
+                discovered
+            );
+
+
+        // ---------------------------------------------------------------------
+        // Identify the strongest search candidate so far.
+        // ---------------------------------------------------------------------
+
+        const strongestCandidate =
+            tierCandidates.reduce<number>(
+                (
+                    highest,
+                    candidate
+                ) =>
+                    Math.max(
+                        highest,
+                        candidate.score
+                    ),
+                0
+            );
+
+
+        if (options.verbose) {
+
+            console.log(
+                `    Strongest search relevance: ` +
+                `${strongestCandidate}`
+            );
+
+            console.log(
+                `    Tier stop score: ` +
+                `${tier.stopScore}`
+            );
+        }
+
+
+        // ---------------------------------------------------------------------
+        // Early exit.
+        //
+        // A very strong municipality-specific result does not need broader
+        // searching.
+        // ---------------------------------------------------------------------
+
+        if (
+            strongestCandidate >=
+            tier.stopScore
+        ) {
 
             if (options.verbose) {
 
-                console.warn(
-                    `    Search failed: "${query}"`
-                );
-
-                console.warn(
-                    error
+                console.log(
+                    `    Search stopping after tier: ` +
+                    `${tier.name}`
                 );
             }
+
+            break;
         }
     }
 
+
+    // =========================================================================
+    // Final deduplication and candidate limit
+    // =========================================================================
 
     const deduplicated =
         deduplicateSearchCandidates(
@@ -939,27 +1324,80 @@ async function searchMunicipalArcGIS(
         );
 
 
+    /*
+     * Sort candidates by search relevance before applying the maximum.
+     *
+     * This preserves the strongest candidates while preventing a broad
+     * fallback search from flooding the downstream inspection pipeline.
+     */
+    deduplicated.sort(
+        (
+            a,
+            b
+        ) => {
+
+            if (
+                b.score !==
+                a.score
+            ) {
+
+                return (
+                    b.score -
+                    a.score
+                );
+            }
+
+
+            return (
+                normalizeUrl(
+                    a.url
+                ).localeCompare(
+                    normalizeUrl(
+                        b.url
+                    )
+                )
+            );
+        }
+    );
+
+
+    const limited =
+        deduplicated.slice(
+            0,
+            MAX_SEARCH_CANDIDATES
+        );
+
+
     if (options.verbose) {
 
         console.log(
-            `    ArcGIS search results: ${searchResultCount}`
+            `    ArcGIS search results: ` +
+            `${searchResultCount}`
         );
 
         console.log(
-            `    Relevant results: ${relevantResultCount}`
+            `    Relevant results: ` +
+            `${relevantResultCount}`
         );
 
         console.log(
-            `    Rejected results: ${rejectedResultCount}`
+            `    Rejected results: ` +
+            `${rejectedResultCount}`
         );
 
         console.log(
-            `    Unique relevant candidates: ${deduplicated.length}`
+            `    Unique relevant candidates: ` +
+            `${deduplicated.length}`
+        );
+
+        console.log(
+            `    Candidates proceeding to inspection: ` +
+            `${limited.length}`
         );
     }
 
 
-    return deduplicated;
+    return limited;
 }
 
 
@@ -1038,7 +1476,7 @@ async function expandArcGISLayers(
 
 
     if (
-        !/\/(?:FeatureServer|MapServer)$/i.test(
+        !/(?:\/FeatureServer|\/MapServer)$/i.test(
             url
         )
     ) {
@@ -1106,7 +1544,8 @@ async function expandArcGISLayers(
 
 
         for (
-            const layer of layers
+            const layer
+            of layers
         ) {
 
             if (!isRecord(layer)) {
@@ -1120,7 +1559,9 @@ async function expandArcGISLayers(
                     : undefined;
 
 
-            if (id === undefined) {
+            if (
+                id === undefined
+            ) {
                 continue;
             }
 
@@ -1178,7 +1619,8 @@ function deduplicateSearchCandidates(
 
 
     for (
-        const candidate of candidates
+        const candidate
+        of candidates
     ) {
 
         const key =
@@ -1198,12 +1640,38 @@ function deduplicateSearchCandidates(
 
             unique.set(
                 key,
-                candidate
+                {
+                    ...candidate,
+                    reasons: [
+                        ...candidate.reasons
+                    ]
+                }
             );
 
             continue;
         }
 
+
+        /*
+         * Preserve the highest observed relevance score for the candidate.
+         */
+        const previousScore =
+            existing.score;
+
+        existing.score =
+            Math.max(
+                existing.score,
+                candidate.score
+            );
+
+        if (
+            candidate.score >
+            previousScore
+        ) {
+
+            existing.searchQuery =
+                candidate.searchQuery;
+        }
 
         existing.reasons = [
 
@@ -1239,7 +1707,8 @@ function deduplicateCandidates(
 
 
     for (
-        const candidate of candidates
+        const candidate
+        of candidates
     ) {
 
         const normalizedUrl =
@@ -1406,6 +1875,7 @@ function normalizeUrl(
             );
 
         parsed.hash = "";
+
         parsed.search = "";
 
         parsed.hostname =
@@ -1828,4 +2298,94 @@ function printMunicipalitySummary(
             `\n      CANONICAL: none`
         );
     }
+}
+
+function discoverArcGISServerRoots(
+    candidates: DiscoveryCandidate[]
+): string[] {
+
+    const roots =
+        new Set<string>();
+
+
+    for (
+        const candidate of candidates
+    ) {
+
+        const root =
+            extractArcGISServerRoot(
+                candidate.url
+            );
+
+        if (
+            root
+        ) {
+
+            roots.add(
+                root
+            );
+        }
+    }
+
+
+    return Array.from(
+        roots
+    ).sort();
+}
+
+
+function extractArcGISServerRoot(
+    url: string
+): string | undefined {
+
+    let parsed: URL;
+
+    try {
+
+        parsed =
+            new URL(
+                url
+            );
+
+    } catch {
+
+        return undefined;
+    }
+
+
+    const pathname =
+        parsed.pathname;
+
+
+    /*
+     * We only want genuine ArcGIS Server REST service URLs.
+     *
+     * Examples:
+     *
+     *     /pub/rest/services/Public/Wards/MapServer
+     *     /pub/rest/services/Public/Wards/MapServer/0
+     *     /gis/rest/services/Wards/FeatureServer
+     *
+     * The server root ends immediately after /rest/services.
+     */
+    const match =
+        pathname.match(
+            /^(.*\/rest\/services)(?:\/.*)?$/i
+        );
+
+
+    if (
+        !match ||
+        !match[1]
+    ) {
+
+        return undefined;
+    }
+
+
+    return (
+        `${parsed.protocol}//` +
+        `${parsed.host}` +
+        match[1]
+    );
 }
