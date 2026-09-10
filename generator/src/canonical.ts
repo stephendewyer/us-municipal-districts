@@ -28,6 +28,18 @@ function normalizeField(
     return (
         value ?? ""
     )
+        // Split camelCase / PascalCase.
+        //
+        // Examples:
+        //
+        //   TucsonWards2022 -> Tucson Wards2022
+        //   CityCouncilDistrict -> City Council District
+        //   WardBoundary -> Ward Boundary
+        //
+        .replace(
+            /([a-z0-9])([A-Z])/g,
+            "$1 $2"
+        )
         .toLowerCase()
         .replace(/[_-]+/g, " ")
         .replace(/\s+/g, " ")
@@ -397,50 +409,60 @@ function districtFieldScore(
  *
  * This adjustment is intentionally much smaller than the major ranking
  * signals in rank.ts, especially temporal evidence. Therefore a current
- * versus historical distinction remains much more important than whether
- * the dataset title sounds more boundary-native.
+ * versus historical distinction remains more important than whether the
+ * dataset title sounds more boundary-native.
  */
 function canonicalSourceBonus(
     candidate: EquivalentLayerGroup["candidates"][number]
 ): number {
 
-    const identityText =
-        [
-            candidate.inspection.title,
-            candidate.inspection.layerName,
-            candidate.inspection.serviceName,
-            candidate.candidate.title
-        ]
-            .filter(
-                (
+    const identityText = [
+        candidate.inspection.title,
+        candidate.inspection.layerName,
+        candidate.inspection.serviceName,
+        candidate.candidate.title
+    ]
+        .filter(
+            (value): value is string =>
+                Boolean(value)
+        )
+        .map(
+            value =>
+                normalizeField(
                     value
-                ): value is string =>
-                    Boolean(
-                        value
-                    )
-            )
-            .map(
-                value =>
-                    normalizeField(
-                        value
-                    )
-            )
-            .join(" ");
+                )
+        )
+        .join(" ");
 
 
     let bonus = 0;
 
 
+    /*
+     * Prefer datasets whose identity clearly indicates that they are
+     * the actual political boundary dataset rather than a thematic
+     * dataset that merely contains ward/district information.
+     *
+     * Because normalizeField() now splits camelCase, names such as:
+     *
+     *   TucsonWards2022
+     *   CityCouncilDistricts
+     *   WardBoundaries
+     *
+     * become:
+     *
+     *   tucson wards2022
+     *   city council districts
+     *   ward boundaries
+     */
     const boundaryNative =
-        (
-            /\bcouncil\s+districts?\b/.test(
-                identityText
-            ) &&
-            !/\b(eviction|filings?|crime|incidents|complaints)\b/.test(
-                identityText
-            )
+        /\bcouncil\s+districts?\b/.test(
+            identityText
         ) ||
         /\bward\s+boundar(?:y|ies)\b/.test(
+            identityText
+        ) ||
+        /\bwards?(?:\d{2,4})?\b/.test(
             identityText
         ) ||
         /\baldermanic\s+districts?\b/.test(
@@ -461,8 +483,12 @@ function canonicalSourceBonus(
     }
 
 
+    /*
+     * Penalize datasets that use political terminology as attributes
+     * of another thematic dataset rather than representing the boundary.
+     */
     const derived =
-        /\b(eviction|filings?|crime|incidents|complaints|violations|permits|inspections|parcels|housing|population|demographics)\b/
+        /\b(eviction|filings?|crime|incidents?|complaints?|violations?|permits?|inspections?|parcels?|housing|population|demographics)\b/
             .test(
                 identityText
             );
@@ -475,12 +501,16 @@ function canonicalSourceBonus(
     }
 
 
+    /*
+     * Official municipal provenance should be a meaningful canonical
+     * preference, but not so large that it overwhelms boundary quality.
+     */
     if (
         candidate
             .classification
             .officialMunicipalSource
     ) {
-        bonus += 5;
+        bonus += 15;
     }
 
 
@@ -854,7 +884,9 @@ export function selectCanonicalSource(
                     // 2. Canonical-source preference.
                     //
                     // Among candidates with the same temporal status, prefer
-                    // boundary-native sources.
+                    // sources that represent the political boundary itself,
+                    // with official municipal sources receiving additional
+                    // provenance weight.
                     // -------------------------------------------------------------
 
                     if (
@@ -881,7 +913,8 @@ export function selectCanonicalSource(
             );
 
 
-        const best = ranked[0];
+    const best =
+        ranked[0];
 
 
     if (
@@ -1268,6 +1301,7 @@ export function compareCanonicalSources(
     );
 }
 
+
 // =============================================================================
 // Select one municipality-wide canonical source
 // =============================================================================
@@ -1281,6 +1315,7 @@ export function selectMunicipalityCanonicalSource(
     ) {
         return undefined;
     }
+
 
     const groupWinners =
         groups
@@ -1296,6 +1331,7 @@ export function selectMunicipalityCanonicalSource(
                         return undefined;
                     }
 
+
                     /*
                      * Recover the candidate that produced the canonical
                      * source so municipality-level selection can still use
@@ -1308,9 +1344,11 @@ export function selectMunicipalityCanonicalSource(
                                 source.url
                         );
 
+
                     if (!candidate) {
                         return undefined;
                     }
+
 
                     return {
                         source,
@@ -1323,16 +1361,19 @@ export function selectMunicipalityCanonicalSource(
                     item
                 ): item is {
                     source: CanonicalSource;
-                    candidate: EquivalentLayerGroup["candidates"][number];
+                    candidate:
+                        EquivalentLayerGroup["candidates"][number];
                 } =>
                     item !== undefined
             );
+
 
     if (
         groupWinners.length === 0
     ) {
         return undefined;
     }
+
 
     groupWinners.sort(
         (
@@ -1356,6 +1397,7 @@ export function selectMunicipalityCanonicalSource(
                     a.candidate
                 );
 
+
             if (
                 canonicalBonusDifference !== 0
             ) {
@@ -1376,6 +1418,7 @@ export function selectMunicipalityCanonicalSource(
                     a.candidate
                 );
 
+
             if (
                 temporalDifference !== 0
             ) {
@@ -1394,6 +1437,6 @@ export function selectMunicipalityCanonicalSource(
         }
     );
 
+
     return groupWinners[0]?.source;
 }
-

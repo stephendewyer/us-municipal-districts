@@ -1,0 +1,43 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "placeFips": "0000000",
+        "city": "Testville",
+        "state": "TS",
+        "boundaryType": "ward",
+        "district": "1",
+        "name": "Ward 1"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -1,
+              -1
+            ],
+            [
+              1,
+              -1
+            ],
+            [
+              1,
+              1
+            ],
+            [
+              -1,
+              1
+            ],
+            [
+              -1,
+              -1
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -39,7 +39,7 @@ function hasValidatedPoliticalBoundary(
     return Boolean(
         validation &&
         validation.isLikelyPoliticalBoundary &&
-        validation.confidence >= 60 &&
+        validation.confidence >= 0.60 &&
         validation.districtField &&
         validation.distinctDistrictValues.length >= 2 &&
         (
@@ -307,14 +307,14 @@ export function scoreCandidate(
             "+25 validated political boundary"
         );
 
-        if (validation.confidence >= 90) {
+        if (validation.confidence >= 0.90) {
             score += 20;
 
             reasons.push(
                 "+20 validation confidence >= 0.90"
             );
         } else if (
-            validation.confidence >= 80
+            validation.confidence >= 0.80
         ) {
             score += 15;
 
@@ -322,7 +322,7 @@ export function scoreCandidate(
                 "+15 validation confidence >= 0.80"
             );
         } else if (
-            validation.confidence >= 70
+            validation.confidence >= 0.70
         ) {
             score += 8;
 

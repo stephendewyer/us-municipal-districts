@@ -1,411 +1,301 @@
 # U.S. Municipal Districts
 
-A TypeScript/Node.js package for identifying and working with **U.S. municipal political districts**, including city wards, city council districts, aldermanic districts, and other municipal district boundaries.
+A TypeScript/Node.js package and data-generation pipeline for discovering, validating, and resolving **U.S. municipal wards and city council district boundaries**.
 
-The package combines Census place data with municipal GIS sources to create a normalized, machine-readable registry of municipal district boundaries.
+The project is designed to provide a reliable nationwide source of municipal political-division geometry that can be queried by address or geographic coordinates.
 
-## Status
+> **Status:** Active development — currently building and validating the nationwide discovery pipeline.
 
-**Version:** `0.1.0`
+## Overview
 
-This project is currently in active development.
+Municipal political boundaries are difficult to obtain consistently across the United States. Cities and municipalities publish their ward and council-district data using different names, schemas, geographic services, and data providers.
 
-The initial implementation focuses on:
+`@stephendewyer/us-municipal-districts` is being developed to solve this problem by combining:
 
-* U.S. Census place identification
-* ArcGIS discovery
-* ArcGIS service inspection
+* U.S. Census municipal-place data
+* ArcGIS service discovery
+* Layer inspection
 * Political-boundary classification
-* Candidate scoring and deduplication
-* Canonical municipal source selection
-* Municipal registry generation
-* GeoJSON geometry generation
-* Registry validation
+* Attribute validation
+* Geographic validation
+* Candidate ranking
+* Equivalent-layer detection
+* Canonical-source selection
+* Normalized GeoJSON generation
+* Registry-based data management
+* Automated validation and testing
 
-The long-term goal is to provide a nationwide dataset that can be used by applications that need to determine a user's municipal political district from geographic coordinates or an address.
+The goal is to turn heterogeneous municipal GIS data into a consistent dataset that software applications can use to determine the municipal district associated with a geographic location.
 
----
+## Project Goals
 
-# Features
+The long-term goal is to support queries such as:
 
-## Municipal district registry
+```ts
+const district = await findMunicipalDistrict({
+  latitude: 32.2226,
+  longitude: -110.9747
+});
+```
 
-The package maintains a normalized registry containing information such as:
+and return information such as:
 
-* Census place FIPS
-* municipality name
-* state
-* district/boundary type
-* authoritative municipal source
-* ArcGIS service information
-* field mappings
-* alternative sources
-* generation metadata
-* review status
-
-Example:
-
-```json
+```ts
 {
-  "placeFips": "0477000",
-  "city": "Tucson",
-  "state": "AZ",
-  "boundaryType": "ward",
-  "source": {
-    "sourceType": "arcgis",
-    "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/Tree_Equity_Score__City_of_Tucson_2020_/FeatureServer/158",
-    "itemId": "1e60a4c5892340579cbf16808fcfab45",
-    "serviceType": "FeatureServer",
-    "title": "Tree Equity Score (City of Tucson 2020)",
-    "official": true,
-    "verified": true,
-    "fieldMapping": {
-      "district": "WARD",
-      "name": "NAME"
-    }
-  },
-  "generatedFile": "geometry/0477000/ward.geojson"
+  city: "Tucson",
+  state: "AZ",
+  districtType: "ward",
+  district: "6"
 }
 ```
 
----
+The underlying data-generation system is intended to identify the appropriate municipal boundary source automatically rather than requiring every municipality to be configured manually.
 
-# Architecture
+## Current Coverage
 
-The project is divided into two primary areas:
+The project is currently being developed against real municipal GIS data, including:
 
-```text
-src/
-    Public package API
-    Registry loading
-    Registry types
-    District lookup
+* **Tucson, Arizona** — municipal wards
+* **Phoenix, Arizona** — city council districts
+* **Chicago, Illinois** — current and historical ward layers
 
-generator/
-    Census data generation
-    ArcGIS discovery
-    ArcGIS inspection
-    Classification
-    Deduplication
-    Canonical source selection
-    Registry generation
-    GeoJSON generation
-    Validation
-```
+These municipalities are being used as representative test cases for different discovery, temporal, geographic, and data-source scenarios.
 
-The separation is intentional.
+The current Census-place generation pipeline has successfully generated municipal records for Tucson and Phoenix.
 
-The `src/` directory contains the runtime package that applications consume.
+## Architecture
 
-The `generator/` directory contains the tools used to discover, evaluate, validate, and generate the package's data.
-
----
-
-# Data Pipeline
-
-The generator follows this general pipeline:
+The data pipeline follows this general process:
 
 ```text
 Census Places
      │
      ▼
-ArcGIS Discovery
+Municipality Discovery
      │
      ▼
-ArcGIS Item Resolution
+ArcGIS Candidate Discovery
      │
      ▼
-ArcGIS Inspection
+Layer Inspection
      │
      ▼
 Classification
      │
      ▼
-Validation
+Attribute Validation
      │
      ▼
-Deduplication
+Geographic Validation
+     │
+     ▼
+Candidate Ranking
+     │
+     ▼
+Equivalent Layer Detection
      │
      ▼
 Canonical Source Selection
      │
      ▼
-Registry Generation
+Geometry Generation
      │
      ▼
-GeoJSON Generation
+Registry
      │
      ▼
-Registry Validation
+Final Validation
 ```
 
-This allows the project to distinguish between:
+### 1. Census Places
 
-1. discovering a possible GIS source,
-2. determining whether it actually represents a political district,
-3. selecting the best source when multiple datasets exist, and
-4. generating stable package data.
+The project starts with Census municipal-place data to establish the municipalities that need to be resolved.
 
----
+Each municipality is represented using information such as:
 
-# Installation
+* Place FIPS
+* City name
+* State abbreviation
+* State FIPS
+* Census place metadata
 
-Install the package from npm:
+### 2. Municipality Discovery
 
-```bash
-npm install @stephendewyer/us-municipal-districts
-```
+For each municipality, the discovery system searches for potential GIS datasets containing municipal political boundaries.
 
-For development, clone the repository and install dependencies:
+The discovery process uses multiple search strategies and candidate-scoring criteria rather than assuming that municipalities use the same terminology.
 
-```bash
-git clone https://github.com/stephendewyer/us-municipal-districts.git
+For example, municipal boundaries may be described as:
 
-cd us-municipal-districts
+* Wards
+* City wards
+* Council districts
+* City council districts
+* Aldermanic districts
+* Municipal districts
+* Political districts
 
-npm install
-```
+### 3. ArcGIS Inspection
 
----
+Potential ArcGIS services are inspected to determine whether they actually contain usable boundary layers.
 
-# Package API
+Inspection can identify:
 
-The main package API is exported from:
-
-```text
-src/index.ts
-```
-
-The current public API includes functionality for:
-
-* ArcGIS discovery
-* candidate classification
-* ArcGIS inspection
-* candidate deduplication
-* canonical source selection
-* Census place lookup
-* municipal registry access
-* package types
-
-The registry-related functions include:
-
-```ts
-loadRegistry()
-findRegistryEntry()
-findRegistryEntries()
-```
-
-For example:
-
-```ts
-import {
-    findRegistryEntry
-} from "@stephendewyer/us-municipal-districts";
-
-const entry =
-    findRegistryEntry({
-        city: "Tucson",
-        state: "AZ"
-    });
-
-console.log(entry);
-```
-
-A registry entry contains information about the municipality's available district boundary source.
-
----
-
-# Census Places
-
-The generator uses U.S. Census place information as the geographic foundation for municipality identification.
-
-Each Census place contains information including:
-
-```ts
-interface CensusPlace {
-    placeFips: string;
-    city: string;
-    state: string;
-    stateFips?: string;
-    placeName?: string;
-    placeType?: string;
-}
-```
-
-The generated Census place data is used to associate municipal GIS sources with stable Census place identifiers.
-
----
-
-# Municipal District Types
-
-The generator currently recognizes municipal district classifications including:
-
-```ts
-type DistrictType =
-    | "ward"
-    | "council-district"
-    | "aldermanic-district"
-    | "municipal-district";
-```
-
-The public registry uses `BoundaryType` for the final normalized boundary classification.
-
-This distinction allows the generator's internal classification system to evolve independently from the public registry format.
-
----
-
-# ArcGIS Discovery
-
-Municipal district data is frequently published through ArcGIS Online and ArcGIS REST services.
-
-The discovery system searches for potentially relevant municipal GIS datasets and produces discovery candidates.
-
-Candidates may include:
-
-* ArcGIS Feature Services
-* ArcGIS Map Services
-* municipal ward layers
-* city council district layers
-* aldermanic district layers
-* other potential political boundary datasets
-
-Discovery alone does not make a source authoritative.
-
-Each candidate is subsequently inspected and classified.
-
----
-
-# ArcGIS Inspection
-
-Discovered ArcGIS sources are inspected to determine information such as:
-
-* service type
-* layer name
-* service name
-* geometry type
-* fields
-* district fields
-* representative/name fields
-* feature count
+* FeatureServer vs. MapServer
+* Layer IDs
+* Geometry type
+* District fields
+* Name fields
+* Feature counts
+* Object IDs
+* Spatial reference
 * GeoJSON support
-* query support
-* ArcGIS item information
-* organization information
+* Pagination support
+* ArcGIS item metadata
+* Organization and ownership information
+* Tags and type keywords
 
-For example:
+This prevents a search result from being treated as a valid municipal boundary simply because its title contains words such as "ward" or "district."
 
-```ts
-interface ArcGISInspection {
-    url: string;
-    isArcGIS: boolean;
-    serviceType:
-        | "FeatureServer"
-        | "MapServer"
-        | "unknown";
-    isLayer: boolean;
-    districtFields: string[];
-    nameFields: string[];
-    fieldSamples: ArcGISFieldSample[];
-}
-```
+### 4. Classification
 
----
+Candidates are classified according to the type of dataset they represent.
 
-# Candidate Classification
+The pipeline distinguishes political boundary datasets from unrelated datasets such as:
 
-Not every GIS layer discovered through an ArcGIS search represents a political boundary.
+* Housing datasets
+* Parcel datasets
+* Census datasets
+* Crime or incident datasets
+* Transit datasets
+* School districts
+* Other thematic datasets
 
-The classification system evaluates evidence indicating whether a candidate is:
+A dataset can contain the word "ward" or "district" without actually representing municipal political boundaries, so classification is an important part of the discovery process.
 
-* a political boundary
-* a thematic dataset
-* a Census dataset
-* a parcel dataset
-* a housing dataset
-* a generic boundary
-* an official municipal source
+### 5. Attribute Validation
 
-This prevents datasets such as tree equity, parcels, housing, or demographic data from automatically being treated as municipal district boundaries merely because they contain geographic polygons.
+Candidate layers are examined for evidence that their attributes actually represent political districts.
 
----
+Validation considers:
 
-# Deduplication
+* District fields
+* District field names and aliases
+* Number of distinct district values
+* District-value patterns
+* Polygon geometry
+* Sample features
+* Political-boundary classification
 
-Municipalities may publish the same district boundaries through multiple ArcGIS layers.
+For example, a field named `WARD` containing multiple ward values is substantially stronger evidence than a generic field containing unrelated geographic information.
 
-The generator therefore compares candidates using layer fingerprints.
+### 6. Geographic Validation
 
-Relevant information includes:
+A candidate can also be compared geographically with the Census municipality geometry.
 
-* title
-* service name
-* layer name
-* geometry type
-* field names
-* district fields
-* name fields
-* feature count
+The geographic validation system evaluates:
 
-Equivalent candidates are grouped before canonical source selection.
+* Municipality area
+* Candidate area
+* Intersection area
+* Percentage of municipality covered
+* Percentage of candidate contained within the municipality
+* Number of candidate features
+* Valid candidate geometry
 
----
+Candidates are categorized as:
 
-# Canonical Source Selection
+* `strong-match`
+* `probable-match`
+* `weak-match`
+* `no-match`
+* `invalid`
 
-When multiple valid sources exist, the generator selects a canonical source.
+This helps prevent an otherwise convincing GIS layer from being selected when it represents the wrong geography.
 
-Selection considers factors such as:
+### 7. Candidate Ranking
 
-* official municipal ownership
-* political-boundary classification
-* district fields
-* geometry
-* source quality
-* candidate score
-* inspection results
+Valid candidates receive relevance scores based on multiple signals, including:
 
-Alternative sources are retained in registry metadata rather than discarded.
+* Political-boundary validation
+* Official municipal ownership
+* District type
+* District fields
+* Polygon geometry
+* Attribute validation confidence
+* Number of district values
+* District naming patterns
+* Geographic match
+* Municipality metadata
+* Temporal information
 
-For example:
+Negative evidence is also considered. For example, datasets primarily representing housing, parcels, or other thematic information can be rejected or substantially penalized even if they contain ward-related attributes.
 
-```json
-"alternatives": [
-  {
-    "url": "...",
-    "itemId": "...",
-    "title": "COT_wards",
-    "serviceType": "FeatureServer",
-    "official": false,
-    "score": 138
-  }
-]
-```
+### 8. Equivalent Layer Detection
 
-This makes it possible to audit and replace the canonical source later.
+Municipalities can publish the same boundary data through multiple ArcGIS services or publish different temporal versions of the same boundaries.
 
----
+The project groups equivalent candidates so that multiple copies of the same underlying boundary system do not become competing municipal sources.
 
-# Generated GeoJSON
+For example, current and historical Chicago ward layers can be recognized as different versions of the same municipal ward system.
 
-After a canonical source has been selected, the generator can retrieve the municipal boundary layer and normalize it into GeoJSON.
+### 9. Canonical Source Selection
+
+Once equivalent candidates have been identified, the pipeline selects a canonical source.
+
+Canonical selection considers:
+
+1. Temporal status
+2. Whether the source is boundary-native
+3. Official municipal provenance
+4. Existing candidate ranking
+5. Geographic and attribute evidence
+
+This is intentionally different from simply selecting the candidate with the highest raw discovery score.
+
+For example, the Phoenix tests verify that a boundary-native **Council Districts** dataset is selected over a derived **Eviction Filings** dataset even when raw candidate scores alone could produce a different result.
+
+Canonical selection is also deterministic and independent of the order in which discovery results are returned.
+
+## Generated Geometry
+
+Validated municipal boundary sources can be converted into normalized GeoJSON.
 
 Generated geometry is stored under:
 
 ```text
-geometry/
-    <placeFips>/
-        <boundaryType>.geojson
+data/municipalities/geometry/
 ```
 
 For example:
 
 ```text
-geometry/
-    0477000/
-        ward.geojson
+data/
+└── municipalities/
+    └── geometry/
+        └── 0477000/
+            └── ward.geojson
 ```
 
-The normalized GeoJSON contains standardized properties such as:
+The generated GeoJSON contains normalized municipal district features with consistent district information.
+
+Both `Polygon` and `MultiPolygon` geometries are supported.
+
+The geometry-generation pipeline also handles ArcGIS-specific geometry concerns such as:
+
+* Rings
+* Holes
+* Disjoint polygons
+* Ring ordering
+* Unclosed rings
+* Zero-area rings
+* MultiPolygon construction
+
+## Municipal Registry
+
+The project maintains a registry describing the canonical municipal district source.
+
+A registry entry contains information such as:
 
 ```json
 {
@@ -413,453 +303,277 @@ The normalized GeoJSON contains standardized properties such as:
   "city": "Tucson",
   "state": "AZ",
   "boundaryType": "ward",
-  "district": "1",
-  "name": "..."
+  "source": {
+    "title": "Tree Equity Score (City of Tucson 2020)"
+  },
+  "generatedFile": "geometry/0477000/ward.geojson",
+  "fieldMapping": {
+    "district": "WARD",
+    "name": "NAME"
+  }
 }
 ```
 
-The original ArcGIS field names are mapped to normalized package fields using the registry's `fieldMapping`.
+The registry provides a stable interface between external GIS sources and the normalized data distributed by this package.
 
----
+## CLI
 
-# Generator CLI
+The project provides several development and data-generation commands.
 
-The generator can be run through the npm scripts defined in `package.json`.
-
-## Generate Census places
+### Generate Census Places
 
 ```bash
 npm run places
 ```
 
-This downloads and processes the Census National Places Gazetteer and generates the package's Census place dataset.
+Generates the municipality/place data used by the discovery pipeline.
 
----
+### Discover a Municipality
 
-## Discover municipal district sources
-
-Run discovery for all available municipalities:
+The discovery command accepts a city and state abbreviation:
 
 ```bash
-npm run discover
+npm run discover -- Tucson AZ
 ```
 
-Run discovery for one municipality:
+For example:
 
 ```bash
-npm run discover -- --city Tucson --state AZ
+npm run discover -- Phoenix AZ
 ```
 
-Run discovery for a state:
+The state should currently be supplied using its two-letter abbreviation.
+
+### Inspect ArcGIS Sources
 
 ```bash
-npm run discover -- --state AZ
+npm run inspect
 ```
 
-Run discovery for a specific Census place:
+Used during development to inspect and evaluate ArcGIS services and layers.
+
+### Generate Geometry
 
 ```bash
-npm run discover -- --placeFips 0477000
+npm run generate
 ```
 
-Enable verbose output:
+Generates normalized municipal boundary geometry from configured sources.
 
-```bash
-npm run discover -- --placeFips 0477000 --verbose
-```
-
-Discovery performs:
-
-```text
-ArcGIS search
-    ↓
-candidate inspection
-    ↓
-classification
-    ↓
-validation
-    ↓
-deduplication
-    ↓
-canonical selection
-    ↓
-registry generation
-```
-
-The resulting registry is written to:
-
-```text
-data/municipalities/registry.json
-```
-
----
-
-# Generate Geometry
-
-After the registry has been generated, municipal GeoJSON geometry can be generated with:
-
-```bash
-npm run geometry
-```
-
-For a specific municipality:
-
-```bash
-npm run geometry -- --city Tucson --state AZ
-```
-
-For a specific Census place:
-
-```bash
-npm run geometry -- --placeFips 0477000
-```
-
-For a state:
-
-```bash
-npm run geometry -- --state AZ
-```
-
-The geometry generator retrieves the selected ArcGIS source and writes normalized GeoJSON to the package geometry directory.
-
-Example:
-
-```text
-geometry/
-    0477000/
-        ward.geojson
-```
-
----
-
-# Validate the Registry
-
-Validate the generated registry with:
+### Validate Registry Data
 
 ```bash
 npm run validate
 ```
 
-Validation checks the structure of the generated registry and verifies required fields such as:
+Validates registry entries and generated geometry.
 
-* version
-* generated timestamp
-* registry entries
-* Census place FIPS
-* city
-* state
-* boundary type
-* source
-* source URL
-* source type
-* verification information
-* field mapping
-* generated geometry path
-* metadata
-* alternatives
+Validation checks include:
 
----
+* Registry structure
+* Generated-file paths
+* Geometry validity
+* Feature properties
+* District values
+* Municipality identity
+* State
+* Place FIPS
+* Boundary type
+* Geometry type
 
-# Build
-
-Compile the TypeScript source:
-
-```bash
-npm run build
-```
-
-The project uses TypeScript to produce the compiled package.
-
----
-
-# Testing
-
-Run the complete project check:
+### Run the Complete Check
 
 ```bash
 npm run check
 ```
 
-The check currently performs:
+This runs:
 
 ```text
-npm run build
-    ↓
-npm run typecheck
-    ↓
-npm test
+build
+  ↓
+typecheck
+  ↓
+tests
 ```
 
-You can also run the test suite directly:
+## Testing
+
+The project uses Node's built-in test runner through `tsx`.
+
+Run the generator test suite with:
 
 ```bash
 npm test
 ```
 
-Type-check the source:
+The current test suite contains **207 automated tests**, covering areas including:
 
-```bash
-npx tsc --noEmit
-```
+* ArcGIS geometry normalization
+* Polygon and MultiPolygon conversion
+* ArcGIS inspection
+* ArcGIS querying
+* Candidate classification
+* Candidate ranking
+* Municipality validation
+* Geographic validation
+* Temporal validation
+* Equivalent-layer detection
+* Canonical-source selection
+* Geometry generation
+* Registry validation
+* Tucson discovery
+* Phoenix discovery
+* Chicago temporal/equivalence behavior
 
----
-
-# Example Registry
-
-A municipality entry has the following general structure:
-
-```json
-{
-  "placeFips": "0477000",
-  "city": "Tucson",
-  "state": "AZ",
-  "boundaryType": "ward",
-
-  "source": {
-    "sourceType": "arcgis",
-    "url": "...",
-    "itemId": "...",
-    "serviceType": "FeatureServer",
-    "title": "...",
-    "official": true,
-    "verified": true,
-
-    "fieldMapping": {
-      "district": "WARD",
-      "name": "NAME"
-    }
-  },
-
-  "generatedFile": "geometry/0477000/ward.geojson",
-
-  "metadata": {
-    "generatedAt": "...",
-    "generatorVersion": "0.1.0",
-    "alternatives": [],
-    "requiresReview": false
-  }
-}
-```
-
----
-
-# Directory Structure
-
-The current project is organized approximately as follows:
+The current validation status is:
 
 ```text
-us-municipal-districts/
-│
+207 tests
+207 passed
+0 failed
+0 skipped
+```
+
+The full project check is:
+
+```bash
+npm run check
+```
+
+and currently completes successfully.
+
+## Technology
+
+The project is built with:
+
+* TypeScript
+* Node.js 20+
+* Turf.js
+* ArcGIS REST services
+* U.S. Census geographic data
+* GeoJSON
+* Shapefile processing
+* Node's built-in test runner
+* `tsx`
+
+### Dependencies
+
+Key geographic dependencies include:
+
+* `@turf/turf`
+* `@turf/boolean-point-in-polygon`
+* `@turf/helpers`
+* `shapefile`
+* `adm-zip`
+
+## Repository Structure
+
+The repository is organized approximately as follows:
+
+```text
+.
 ├── data/
 │   └── municipalities/
-│       └── registry.json
-│
-├── geometry/
-│   └── <placeFips>/
-│       └── <boundaryType>.geojson
+│       └── geometry/
 │
 ├── generator/
 │   └── src/
-│       ├── canonical.ts
-│       ├── classify.ts
 │       ├── cli.ts
-│       ├── dedupe.ts
-│       ├── discover.ts
-│       ├── generateCensusPlaces.ts
-│       ├── geometry.ts
-│       ├── inspectArcGIS.ts
-│       ├── registry.ts
-│       ├── types.ts
-│       └── validate.ts
+│       ├── discovery
+│       ├── inspection
+│       ├── classification
+│       ├── validation
+│       ├── ranking
+│       ├── canonical
+│       ├── geometry
+│       └── registry
 │
 ├── src/
-│   ├── index.ts
-│   ├── registry.ts
-│   └── types.ts
+│   └── package source
 │
 ├── tests/
-│   └── package/
-│       └── registry.test.ts
+│   ├── generator/
+│   └── integration/
 │
 ├── package.json
 ├── tsconfig.json
 └── README.md
 ```
 
----
+The exact implementation is evolving as the nationwide discovery system develops.
 
-# Design Principles
+## Design Principles
 
-## 1. Use authoritative municipal data when possible
+### Accuracy over simple keyword matching
 
-The project prefers official municipal GIS sources over third-party datasets.
+A GIS layer should not be considered a municipal political boundary merely because its title contains "ward" or "district."
 
-## 2. Keep discovery separate from runtime data
+The pipeline combines metadata, fields, attributes, geometry, geographic coverage, provenance, and temporal evidence.
 
-The discovery system is responsible for finding and evaluating sources.
+### Deterministic results
 
-The published package should contain stable, validated data rather than requiring every consumer to perform ArcGIS searches.
+Given the same candidate data, canonical-source selection should produce the same result regardless of discovery order.
 
-## 3. Preserve alternatives
+This is explicitly tested.
 
-When multiple sources appear to represent the same district boundaries, alternatives are retained for auditing and future source replacement.
+### Prefer authoritative sources
 
-## 4. Normalize different municipal schemas
+Official municipal GIS sources receive additional consideration when selecting canonical datasets.
 
-Different municipalities use different field names.
+### Preserve alternatives
 
-For example:
+Selecting a canonical source does not discard other valid sources. Equivalent and alternative candidates can be retained for auditing, review, and future source changes.
 
-```text
-WARD
-WARD_NUM
-WARDNO
-DISTRICT
-DISTRICT_ID
-COUNCIL_DIST
-```
+### Separate discovery from generated data
 
-The registry maps these municipal-specific fields into a consistent package-level representation.
+External GIS services are treated as discovery sources. Generated GeoJSON provides a normalized representation that applications can consume consistently.
 
-## 5. Generate deterministic data
+### Validate geography, not just metadata
 
-Registry entries are sorted deterministically so that repeated generation does not produce unnecessary Git diffs.
+A candidate that looks correct in metadata can still represent the wrong geographic area. Geographic overlap and containment therefore form an independent validation layer.
 
-## 6. Make the data auditable
+## Current Development Status
 
-The registry retains information about:
+This project is in active development.
 
-* source URLs
-* ArcGIS item IDs
-* source titles
-* verification
-* field mappings
-* alternative sources
-* generator version
-* review requirements
+The discovery and validation architecture is currently being expanded from a small set of real municipalities toward nationwide coverage.
 
-This is particularly important for political-boundary data, which can change after elections or municipal redistricting.
+Current work includes improving:
 
----
+* Search-query discovery
+* Candidate ranking
+* Municipal-source detection
+* ArcGIS service inspection
+* Geographic validation
+* Temporal source selection
+* Equivalent-layer detection
+* Canonical source selection
+* Automated geometry generation
+* Nationwide municipality coverage
 
-# Intended Use
+The immediate objective is to make the discovery pipeline robust enough to process a large number of U.S. municipalities with minimal manual intervention.
 
-This package is intended to support applications such as:
+## Package
 
-* voter-information applications
-* civic technology
-* election-information interfaces
-* municipal information systems
-* political campaign applications
-* address-based political lookups
-* geospatial applications
-* civic data analysis
-
-A typical application could use an address or latitude/longitude to determine:
+The npm package is:
 
 ```text
-Address
-   ↓
-Geocode
-   ↓
-Latitude / Longitude
-   ↓
-Municipality
-   ↓
-Municipal district geometry
-   ↓
-Point-in-polygon lookup
-   ↓
-Ward / Council District
+@stephendewyer/us-municipal-districts
 ```
 
-The package is designed to work particularly well alongside a geocoder and a geospatial library such as Turf.
+Current version:
 
----
-
-# Accuracy and Verification
-
-Municipal political boundaries can change.
-
-Sources may also:
-
-* move to a new ArcGIS service
-* change layer IDs
-* change field names
-* change service URLs
-* be replaced following redistricting
-* become unavailable
-
-For this reason, the package treats source discovery and verification as an ongoing data-generation process.
-
-Entries that cannot be confidently verified can be marked for review rather than silently treated as authoritative.
-
----
-
-# Contributing
-
-Contributions are welcome.
-
-Useful contributions include:
-
-* identifying municipal GIS sources
-* improving ArcGIS discovery
-* improving political-boundary classification
-* improving canonical-source scoring
-* adding tests
-* improving GeoJSON normalization
-* identifying municipalities requiring manual review
-* improving documentation
-* improving geographic lookup performance
-
-Before submitting changes, run:
-
-```bash
-npm run check
+```text
+0.1.0
 ```
 
-If you modify the generator, it is also useful to test the relevant pipeline manually:
+The package is intended to provide a normalized, reusable source of U.S. municipal district information for applications that need to associate geographic locations with municipal political divisions.
 
-```bash
-npm run places
-npm run discover -- --city Tucson --state AZ
-npm run geometry -- --city Tucson --state AZ
-npm run validate
-```
+## Author
 
----
-
-# Roadmap
-
-Potential future development includes:
-
-* [ ] Nationwide municipal district coverage
-* [ ] Automated scheduled source verification
-* [ ] Automatic detection of changed ArcGIS services
-* [ ] Redistricting/change detection
-* [ ] Point-in-polygon municipal district lookup
-* [ ] Latitude/longitude lookup API
-* [ ] Address-to-district lookup
-* [ ] Improved non-ArcGIS source discovery
-* [ ] Support for additional municipal GIS platforms
-* [ ] More municipal boundary types
-* [ ] Automated quality scoring
-* [ ] Expanded test coverage
-* [ ] Published npm package data
-* [ ] Versioned historical municipal boundaries
-
-
----
-
-# Author
-
-**Stephen Dewyer**
+Stephen Dewyer
 
 GitHub:
 
-https://github.com/stephendewyer
-
-Repository:
-
 https://github.com/stephendewyer/us-municipal-districts
-

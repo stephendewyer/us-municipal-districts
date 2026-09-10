@@ -356,7 +356,7 @@ function isValidatedPoliticalBoundary(
     // =========================================================================
 
     if (
-        validation.confidence < 60
+        validation.confidence < 0.60
     ) {
         return false;
     }
