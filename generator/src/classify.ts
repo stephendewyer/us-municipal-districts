@@ -10,12 +10,13 @@ import type {
 // Helpers
 // =============================================================================
 
-function normalize(value?: string): string {
+function normalize(value: string | undefined): string {
     return (value ?? "")
-        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-        .toLowerCase()
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/([a-zA-Z])(\d+)/g, "$1 $2")
         .replace(/[_-]+/g, " ")
         .replace(/\s+/g, " ")
+        .toLowerCase()
         .trim();
 }
 
@@ -163,12 +164,10 @@ const POLITICAL_PATTERNS: Pattern[] = [
     ...ALDERMANIC_PATTERNS,
     ...MUNICIPAL_PATTERNS,
     ...ELECTION_PATTERNS,
-
     {
         label: "political district",
         regex: /\bpolitical\s+districts?\b/i
     },
-
     {
         label: "legislative district",
         regex: /\blegislative\s+districts?\b/i
@@ -281,7 +280,7 @@ const THEMATIC_PATTERNS: Pattern[] = [
     },
     {
         label: "stormdrain",
-        regex: /\bstormdrain\b/i
+        regex: /\bstorm\s*drains?\b/i
     },
     {
         label: "water",
@@ -309,7 +308,7 @@ const THEMATIC_PATTERNS: Pattern[] = [
     },
     {
         label: "airport",
-        regex: /\bairport\b/i
+        regex: /\bairports?\b/i
     },
     {
         label: "parcel",
@@ -397,16 +396,14 @@ const HOUSING_PATTERNS: Pattern[] = [
 function isPoliticalField(
     value?: string
 ): boolean {
-
-    const normalized =
-        normalize(value);
+    const normalized = normalize(value);
 
     if (!normalized) {
         return false;
     }
 
     return (
-        /\bward\b/i.test(normalized) ||
+        /\bwards?\b/i.test(normalized) ||
         /\bcouncil\b/i.test(normalized) ||
         /\balderman/i.test(normalized) ||
         /\bmunicipal\s+district\b/i.test(normalized) ||
@@ -421,9 +418,7 @@ function isPoliticalField(
 function isGenericDistrictField(
     value?: string
 ): boolean {
-
-    const normalized =
-        normalize(value);
+    const normalized = normalize(value);
 
     return (
         /\bdistrict\b/i.test(normalized) &&
@@ -434,7 +429,6 @@ function isGenericDistrictField(
 function isWardField(
     value?: string
 ): boolean {
-
     return /\bward\b/i.test(
         normalize(value)
     );
@@ -447,7 +441,6 @@ function isWardField(
 function detectDistrictType(
     text: string
 ): DistrictType | undefined {
-
     if (
         matchesAny(
             text,
@@ -511,16 +504,13 @@ function isOfficialMunicipalSource(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection
 ): boolean {
-
     const url = normalize(inspection.url);
     const candidateUrl = normalize(candidate.url);
     const serviceUrl = normalize(inspection.serviceUrl);
-
     const owner = normalize(inspection.owner);
     const organization = normalize(inspection.organization);
     const title = normalize(inspection.title);
     const serviceName = normalize(inspection.serviceName);
-
     const city = normalize(candidate.city);
 
     const text = [
@@ -537,9 +527,6 @@ function isOfficialMunicipalSource(
 
     /*
      * Explicit discovery provenance.
-     *
-     * A discovery adapter may already know that the candidate
-     * came from a municipal source.
      */
     if (candidate.source === "municipal") {
         return true;
@@ -548,7 +535,7 @@ function isOfficialMunicipalSource(
     /*
      * Official government domains are strong evidence.
      */
-    if (/\.gov\b/i.test(text)) {
+    if (/\b[a-z0-9.-]+\.gov\b/i.test(text)) {
         return true;
     }
 
@@ -562,11 +549,10 @@ function isOfficialMunicipalSource(
      *   Village of Example
      *   Municipality of Example
      *
-     * Requiring the candidate city prevents an unrelated
-     * municipal organization from making the source official.
+     * Requiring the candidate city prevents an unrelated municipal
+     * organization from making the source official.
      */
     if (city) {
-
         const municipalityIdentity = new RegExp(
             `\\b(city|town|village|municipality)\\s+of\\s+${escapeRegex(city)}\\b`,
             "i"
@@ -581,15 +567,7 @@ function isOfficialMunicipalSource(
     }
 
     /*
-     * Municipal identity appearing in the source metadata.
-     *
-     * This handles sources such as:
-     *
-     *   City of Tucson Wards
-     *   Tucson Municipal Wards
-     *
-     * We intentionally do NOT use the candidate city name alone
-     * as proof of official ownership.
+     * Municipal identity appearing in source metadata.
      */
     if (
         /\b(city|town|village|municipal)\b/i.test(
@@ -600,10 +578,7 @@ function isOfficialMunicipalSource(
     }
 
     /*
-     * Existing Tucson/Pima government-source handling.
-     *
-     * Keep these explicit domain checks because some ArcGIS
-     * services may not expose useful organization metadata.
+     * Explicit Tucson/Pima government-source handling.
      */
     if (
         /tucsonaz\.gov/i.test(text) ||
@@ -692,10 +667,21 @@ export function classifyCandidate(
     ].join(" ");
 
     /*
-     * Identity text describes what the dataset IS.
+     * =========================================================================
+     * Dataset identity
+     * =========================================================================
      *
-     * This is the strongest text for deciding whether the layer
-     * represents a political boundary.
+     * Identity text describes what the dataset actually IS.
+     *
+     * This is the most important distinction in the classifier:
+     *
+     *     "Tucson Ward Boundaries"
+     *
+     * is politically identifiable.
+     *
+     *     "Tucson Golf Courses"
+     *
+     * is not politically identifiable merely because it has a WARD field.
      */
     const identityText = [
         title,
@@ -707,10 +693,19 @@ export function classifyCandidate(
         .join(" ");
 
     /*
-     * Dataset metadata describes the actual dataset.
+     * Political identity may also appear in dataset metadata.
      *
-     * Search queries and URLs are deliberately excluded here.
-     * They are discovery/source evidence, not dataset identity.
+     * Example:
+     *
+     *     "City of Tucson ward boundary districts"
+     */
+    const politicalIdentityText = identityText;
+
+    /*
+     * Dataset metadata is used for thematic/census/parcel/housing
+     * classification.
+     *
+     * Search queries and URLs are intentionally excluded.
      */
     const datasetText = [
         description,
@@ -721,9 +716,7 @@ export function classifyCandidate(
         .join(" ");
 
     /*
-     * Search text remains useful for broad supporting evidence,
-     * but it must not by itself make a candidate a census,
-     * parcel, housing, or other non-political dataset.
+     * Discovery text is weaker evidence.
      */
     const discoveryText = [
         searchQuery,
@@ -733,16 +726,11 @@ export function classifyCandidate(
         .join(" ");
 
     /*
-     * Political identity may legitimately appear in:
+     * Political searching can use discovery evidence because a search
+     * result may have political terminology in its query or URL.
      *
-     * - title
-     * - service name
-     * - layer name
-     * - dataset metadata
-     * - URL
-     * - search query
-     *
-     * We therefore retain the broader text for political detection.
+     * However, explicit political identity is calculated separately
+     * from politicalIdentityText.
      */
     const politicalSearchableText = [
         identityText,
@@ -753,12 +741,8 @@ export function classifyCandidate(
         .join(" ");
 
     /*
-     * Negative dataset classification should rely primarily on
-     * identity + actual dataset metadata.
-     *
-     * In particular, a search query containing "census" or an
-     * incidental URL term should not turn a council-district
-     * layer into a census dataset.
+     * Negative dataset classification should not depend on the search
+     * query or URL.
      */
     const datasetClassificationText = [
         identityText,
@@ -767,8 +751,11 @@ export function classifyCandidate(
         .filter(Boolean)
         .join(" ");
 
-    const matches: ClassificationMatches = {
+    // =========================================================================
+    // Matches
+    // =========================================================================
 
+    const matches: ClassificationMatches = {
         thematic:
             findMatches(
                 datasetClassificationText,
@@ -805,8 +792,8 @@ export function classifyCandidate(
     };
 
     /*
-     * Non-political district identities are restricted to the
-     * actual layer/service identity and metadata.
+     * Non-political district identities are intentionally based on
+     * dataset identity/metadata rather than search-query evidence.
      */
     const nonPoliticalMatches =
         findMatches(
@@ -814,25 +801,38 @@ export function classifyCandidate(
             NON_POLITICAL_PATTERNS
         );
 
+    // =========================================================================
+    // Official source
+    // =========================================================================
+
     const officialMunicipalSource =
         isOfficialMunicipalSource(
             candidate,
             inspection
         );
 
-    if (
-        officialMunicipalSource
-    ) {
+    if (officialMunicipalSource) {
         matches.official.push(
             "official municipal source"
         );
     }
 
+    // =========================================================================
+    // Geometry
+    // =========================================================================
+
+    const geometryType =
+        normalize(
+            inspection.geometryType
+        );
+
     const isPolygon =
-        inspection.geometryType ===
-            "esriGeometryPolygon" ||
-        inspection.geometryType ===
-            "polygon";
+        geometryType === "esri geometry polygon" ||
+        geometryType === "polygon";
+
+    // =========================================================================
+    // Fields
+    // =========================================================================
 
     const districtFields =
         inspection.districtFields ?? [];
@@ -869,9 +869,7 @@ export function classifyCandidate(
     const councilField =
         allDistrictFields.some(
             field =>
-                /\bcouncil\b/i.test(
-                    field
-                )
+                /\bcouncil\b/i.test(field)
         );
 
     const genericDistrictField =
@@ -879,8 +877,23 @@ export function classifyCandidate(
             isGenericDistrictField
         );
 
+    const politicalIdentityMatches =
+        findMatches(
+            politicalIdentityText,
+            POLITICAL_PATTERNS
+        );
+
+    /*
+     * IMPORTANT:
+     *
+     * explicitPoliticalIdentity means the dataset itself is identifiable
+     * as political through its title, service name, layer name, description,
+     * or service description.
+     *
+     * A field named WARD does NOT establish explicitPoliticalIdentity.
+     */
     const explicitPoliticalIdentity =
-        matches.political.length > 0;
+        politicalIdentityMatches.length > 0;
 
     const explicitNonPoliticalIdentity =
         nonPoliticalMatches.length > 0;
@@ -895,23 +908,53 @@ export function classifyCandidate(
         districtFields.length > 0 ||
         allDistrictFields.length > 0;
 
+    /*
+     * =========================================================================
+     * Critical thematic-vs-political distinction
+     * =========================================================================
+     *
+     * A thematic layer can contain a political field without being a
+     * political boundary.
+     *
+     * Example:
+     *
+     *     TPRD_GOLF
+     *     ----------------
+     *     title: Golf Courses
+     *     field: WARD
+     *
+     * This is not a ward boundary.
+     *
+     * Conversely:
+     *
+     *     Tucson Ward Boundaries
+     *     ----------------------
+     *     field: WARD
+     *
+     * is a genuine political boundary.
+     */
+    const thematicAttributeLayer =
+        matches.thematic.length > 0 &&
+        !explicitPoliticalIdentity &&
+        hasPoliticalField;
+
+    /*
+     * District type must be inferred from political identity text,
+     * not from a political field alone.
+     *
+     * Therefore:
+     *
+     *     Golf Courses + WARD
+     *
+     * does not become districtType = "ward".
+     */
     const districtType =
         detectDistrictType(
-            identityText
-        ) ??
-        detectDistrictType(
-            datasetText
-        ) ??
-        (
-            hasWardField
-                ? "ward"
-                : councilField
-                    ? "council-district"
-                    : undefined
+            politicalIdentityText
         );
 
     // =========================================================================
-    // Structural evidence
+    // Structural evidence / score
     // =========================================================================
 
     let score = 0;
@@ -924,12 +967,15 @@ export function classifyCandidate(
         score += 40;
     }
 
+    /*
+     * Field evidence remains useful, but it is weaker than dataset identity.
+     */
     if (hasPoliticalField) {
-        score += 35;
+        score += 20;
     }
 
     if (hasWardField) {
-        score += 25;
+        score += 15;
     }
 
     if (councilField) {
@@ -957,10 +1003,7 @@ export function classifyCandidate(
     // =========================================================================
 
     /*
-     * Parcel evidence should not penalize a clearly political candidate.
-     *
-     * Some municipal political datasets contain fields or descriptions
-     * involving property information.
+     * Parcel evidence should not defeat an explicitly political dataset.
      */
     if (
         matches.parcel.length > 0 &&
@@ -972,15 +1015,7 @@ export function classifyCandidate(
     }
 
     /*
-     * Census evidence should not penalize a clearly political candidate.
-     *
-     * This is an important distinction between:
-     *
-     *   "this dataset contains census-related information"
-     *
-     * and:
-     *
-     *   "this dataset IS a census boundary dataset".
+     * Census evidence should not defeat an explicitly political dataset.
      */
     if (
         matches.census.length > 0 &&
@@ -992,9 +1027,8 @@ export function classifyCandidate(
     }
 
     /*
-     * Explicitly non-political district identities remain strong
-     * negative evidence, but only when the candidate lacks a
-     * stronger political identity.
+     * Explicitly non-political district identity is strong negative
+     * evidence when there is no stronger political identity.
      */
     if (
         explicitNonPoliticalIdentity &&
@@ -1006,7 +1040,10 @@ export function classifyCandidate(
     }
 
     /*
-     * Thematic terms are weak negative evidence only.
+     * Thematic evidence is only weak negative evidence here.
+     *
+     * The actual rejection of a thematic political-field layer is
+     * handled by thematicAttributeLayer below.
      */
     if (
         matches.thematic.length > 0 &&
@@ -1025,11 +1062,6 @@ export function classifyCandidate(
      * Rule 1:
      *
      * Polygon + explicit political identity.
-     *
-     * This is the cleanest discovery case.
-     *
-     * A clear political identity takes precedence over incidental
-     * census/parcel/thematic terms.
      */
     const explicitIdentityPath =
         isPolygon &&
@@ -1041,22 +1073,26 @@ export function classifyCandidate(
      *
      * Polygon + WARD field.
      *
-     * This is extremely important for real-world municipal GIS.
+     * Thematic layers with political fields are explicitly excluded.
      */
     const wardFieldPath =
         isPolygon &&
         hasWardField &&
-        !explicitNonPoliticalIdentity;
+        !explicitNonPoliticalIdentity &&
+        !thematicAttributeLayer;
 
     /*
      * Rule 3:
      *
-     * Polygon + political field.
+     * Polygon + other political field.
+     *
+     * Again, thematic attribute layers are excluded.
      */
     const politicalFieldPath =
         isPolygon &&
         hasPoliticalField &&
-        !explicitNonPoliticalIdentity;
+        !explicitNonPoliticalIdentity &&
+        !thematicAttributeLayer;
 
     /*
      * Rule 4:
@@ -1067,6 +1103,7 @@ export function classifyCandidate(
         isPolygon &&
         officialMunicipalSource &&
         hasDistrictField &&
+        !thematicAttributeLayer &&
         (
             hasPoliticalField ||
             hasWardField ||
@@ -1077,8 +1114,7 @@ export function classifyCandidate(
     /*
      * Rule 5:
      *
-     * Some municipal datasets have a generic DISTRICT field but
-     * an unmistakably political layer title.
+     * Explicit political identity + generic DISTRICT field.
      */
     const politicalIdentityWithGenericField =
         isPolygon &&
@@ -1087,27 +1123,29 @@ export function classifyCandidate(
         !explicitNonPoliticalIdentity;
 
     /*
-     * Rule 6:
-     *
-     * Polygon + explicit political identity should still be accepted
-     * when census/parcel/thematic evidence exists, provided that the
-     * candidate does not have an explicit non-political district identity.
-     *
-     * This makes political identity dominant instead of allowing
-     * incidental metadata to defeat a legitimate municipal boundary.
+     * A candidate is political only if it passes one of the explicit
+     * acceptance paths above.
      */
-    const strongPoliticalIdentityPath =
-        isPolygon &&
-        explicitPoliticalIdentity &&
-        !explicitNonPoliticalIdentity;
-
+    console.log("\nCLASSIFIER DEBUG:", {
+        title,
+        serviceName,
+        layerName,
+        politicalIdentityText,
+        explicitPoliticalIdentity,
+        explicitNonPoliticalIdentity,
+        hasPoliticalField,
+        hasWardField,
+        thematicAttributeLayer,
+        politicalFieldPath,
+        politicalIdentityMatches,
+        thematicMatches: matches.thematic,
+    });
     const isPoliticalBoundary =
         explicitIdentityPath ||
         wardFieldPath ||
         politicalFieldPath ||
         officialDistrictPath ||
-        politicalIdentityWithGenericField ||
-        strongPoliticalIdentityPath;
+        politicalIdentityWithGenericField;
 
     const isBoundaryLayer =
         isPoliticalBoundary;
@@ -1116,11 +1154,19 @@ export function classifyCandidate(
         matches.thematic.length > 0 &&
         !isPoliticalBoundary;
 
+    // =========================================================================
+    // Boundary matches
+    // =========================================================================
+
     if (isBoundaryLayer) {
         matches.boundary.push(
             "political boundary"
         );
     }
+
+    // =========================================================================
+    // Rejection reasons
+    // =========================================================================
 
     const rejectionReasons: string[] = [];
 
@@ -1168,9 +1214,15 @@ export function classifyCandidate(
         );
     }
 
-    if (!isPoliticalBoundary) {
+    /*
+     * This is useful diagnostic output for exactly the TPRD_GOLF case.
+     */
+    if (
+        hasPoliticalField &&
+        !isPoliticalBoundary
+    ) {
         rejectionReasons.push(
-            `political evidence score: ${score}`
+            "political field evidence does not establish the dataset as a political boundary"
         );
     }
 
@@ -1183,10 +1235,22 @@ export function classifyCandidate(
         );
     }
 
+    if (thematicAttributeLayer) {
+        rejectionReasons.push(
+            "political district field appears to be an attribute on a thematic layer rather than the layer's boundary identity"
+        );
+    }
+
+    // =========================================================================
+    // Review status
+    // =========================================================================
+
     /*
-     * Explicit political identity is high confidence.
+     * Explicit political identity is stronger than field-only evidence.
      *
-     * Field-based matches should remain reviewable.
+     * Field-only candidates remain reviewable because a field such as
+     * WARD can be legitimate evidence but can also occur on thematic
+     * datasets.
      */
     const requiresReview =
         isPoliticalBoundary &&
@@ -1195,6 +1259,10 @@ export function classifyCandidate(
             !explicitPoliticalIdentity ||
             !districtType
         );
+
+    // =========================================================================
+    // Return
+    // =========================================================================
 
     return {
         isBoundaryLayer,
