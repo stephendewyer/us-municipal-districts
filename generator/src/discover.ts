@@ -1,3 +1,12 @@
+import {
+    mkdir,
+    readFile,
+    stat,
+    writeFile
+} from "node:fs/promises";
+import { createHash } from "node:crypto";
+import path from "node:path";
+
 import type {
     ArcGISItemResolution,
     ArcGISCandidateValidation,
@@ -113,6 +122,8 @@ interface SearchTier {
      * Strongest search relevance score needed to stop searching.
      */
     stopScore: number;
+
+    maxQueries: number;
 }
 
 
@@ -125,8 +136,6 @@ interface SearchTier {
  */
 const MAX_SEARCH_CANDIDATES =
     20;
-
-
 /**
  * Number of ArcGIS search results requested per query.
  *
@@ -136,6 +145,15 @@ const MAX_SEARCH_CANDIDATES =
  */
 const SEARCH_RESULT_LIMIT =
     10;
+
+const SEARCH_CACHE_DIR = path.resolve(
+    process.cwd(),
+    ".cache",
+    "arcgis-search"
+);
+
+const SEARCH_CACHE_TTL_MS =
+    7 * 24 * 60 * 60 * 1000;
 
 
 // =============================================================================
@@ -451,7 +469,7 @@ async function discoverMunicipality(
             )
             .slice(
                 0,
-                12
+                MAX_SEARCH_CANDIDATES
             );
 
     if (
@@ -929,99 +947,73 @@ async function discoverMunicipality(
 // Tiered ArcGIS search
 // =============================================================================
 
-function getSearchTiers(
+export function getSearchTiers(
     place: CensusPlace
 ): SearchTier[] {
-
-    const city =
-        place.city;
-
-    const state =
-        place.state;
-
+    const city = place.city;
+    const state = place.state;
 
     return [
-
-        // =====================================================================
-        // Tier 1: highest-signal municipality-specific searches
-        //
-        // These should find most official sources whose ArcGIS metadata
-        // explicitly contains the municipality name.
-        // =====================================================================
-
         {
-            name:
-                "municipality-specific",
-
+            name: "municipality-specific",
             queries: [
-
+                `"${city}" ${state} ward boundaries`,
                 `"${city}" ${state} city council districts`,
                 `"${city}" ${state} council district boundaries`,
-                `"${city}" ${state} ward boundaries`,
-                `"${city}" ${state} political district boundaries`
-
+                `"${city}" ${state} city wards`,
+                `"${city}" ${state} council wards`,
+                `"${city}" ${state} political district boundaries`,
+                `"${city}" ${state} municipal districts`
             ],
-
-            stopScore:
-                60
+            stopScore: 60,
+            maxQueries: 4
         },
-
-
-        // =====================================================================
-        // Tier 2: municipality + common ArcGIS dataset/service naming
-        //
-        // This catches sources such as Phoenix's:
-        //
-        //     Council_Districts
-        //
-        // where the dataset/service name is more important than the natural
-        // language title.
-        // =====================================================================
-
         {
-            name:
-                "service-name",
-
+            name: "service-name",
             queries: [
-
-                `${city} Council_Districts`,
-                `${city} CouncilDistricts`,
                 `${city} Ward_Boundaries`,
-                `${city} Political_Boundaries`
-
+                `${city} Council_Districts`,
+                `${city} WardBoundaries`,
+                `${city} CouncilDistricts`,
+                `${city} Wards`,
+                `${city} Council_District`,
+                `${city} CouncilDistrict`,
+                `${city} Political_Boundaries`,
+                `${city} Political_Districts`,
+                `${city} Municipal_Districts`
             ],
-
-            stopScore:
-                45
+            stopScore: 45,
+            maxQueries: 4
         },
-
-
-        // =====================================================================
-        // Tier 3: broad political-boundary fallback searches
-        //
-        // These are intentionally limited because they are noisier.
-        // Municipality validation and geographic validation are responsible
-        // for determining whether a generic result actually belongs to the
-        // requested municipality.
-        // =====================================================================
-
         {
-            name:
-                "broad-political",
-
+            name: "municipality-gis",
             queries: [
-
-                `council districts`,
-                `council district boundaries`,
-                `ward boundaries`,
-                `political district boundaries`
-
+                `"${city}" ${state} GIS wards`,
+                `"${city}" ${state} GIS council`,
+                `"${city}" ${state} GIS districts`,
+                `"${city}" ${state} ArcGIS wards`,
+                `"${city}" ${state} ArcGIS council`,
+                `"${city}" ${state} GIS boundaries`,
+                `"${city}" ${state} GIS political`,
+                `"${city}" ${state} GIS municipal`
             ],
-
-            stopScore:
-                30
+            stopScore: 35,
+            maxQueries: 3
+        },
+        {
+            name: "broad-political",
+            queries: [
+                `ward boundaries`,
+                `council districts`,
+                `city council districts`,
+                `council district boundaries`,
+                `municipal districts`,
+                `municipal district boundaries`,
+                `political district boundaries`
+            ],
+            stopScore: 30,
+            maxQueries: 3
         }
-
     ];
 }
 
@@ -1029,6 +1021,74 @@ function getSearchTiers(
 // =============================================================================
 // Execute tiered ArcGIS search
 // =============================================================================
+
+async function searchArcGISCached(
+    query: string,
+    limit: number,
+    verbose = false
+) {
+    const cacheKey = createHash("sha256")
+        .update(
+            JSON.stringify({
+                query,
+                limit
+            })
+        )
+        .digest("hex");
+
+    const cachePath = path.join(
+        SEARCH_CACHE_DIR,
+        `${cacheKey}.json`
+    );
+
+    try {
+        const fileStat = await stat(cachePath);
+
+        if (
+            Date.now() - fileStat.mtimeMs <
+            SEARCH_CACHE_TTL_MS
+        ) {
+            if (verbose) {
+                console.log(
+                    `      Search cache: HIT "${query}"`
+                );
+            }
+
+            return JSON.parse(
+                await readFile(
+                    cachePath,
+                    "utf8"
+                )
+            );
+        }
+    } catch {
+        // Cache miss.
+    }
+
+    if (verbose) {
+        console.log(
+            `      Search cache: MISS "${query}"`
+        );
+    }
+
+    const results = await searchArcGIS(
+        query,
+        { limit }
+    );
+
+    await mkdir(
+        SEARCH_CACHE_DIR,
+        { recursive: true }
+    );
+
+    await writeFile(
+        cachePath,
+        JSON.stringify(results),
+        "utf8"
+    );
+
+    return results;
+}
 
 async function searchMunicipalArcGIS(
     place: CensusPlace,
@@ -1067,86 +1127,90 @@ async function searchMunicipalArcGIS(
             );
 
             console.log(
-                `    Queries: ${tier.queries.length}`
+                `    Queries available: ` +
+                `${tier.queries.length}`
+            );
+
+            console.log(
+                `    Queries allowed: ` +
+                `${Math.min(
+                    tier.maxQueries,
+                    tier.queries.length
+                )}`
             );
         }
 
 
         // ---------------------------------------------------------------------
-        // Run queries in the current tier concurrently.
+        // Run a limited number of queries sequentially.
+        //
+        // Sequential execution allows the existing stop condition to prevent
+        // unnecessary searches once enough strong candidates have been found.
         // ---------------------------------------------------------------------
 
-        const tierResults =
-            await Promise.all(
-                tier.queries.map(
-                    async query => {
-
-                        if (options.verbose) {
-
-                            console.log(
-                                `      Searching: "${query}"`
-                            );
-                        }
-
-
-                        try {
-
-                            const results =
-                                await searchArcGIS(
-                                    query,
-                                    {
-                                        limit:
-                                            SEARCH_RESULT_LIMIT
-                                    }
-                                );
-
-
-                            return {
-                                query,
-                                results
-                            };
-
-                        } catch (error) {
-
-                            if (options.verbose) {
-
-                                console.warn(
-                                    `      Search failed: "${query}"`
-                                );
-
-                                console.warn(
-                                    error
-                                );
-                            }
-
-
-                            return {
-                                query,
-                                results:
-                                    []
-                            };
-                        }
-                    }
-                )
+        const queries =
+            tier.queries.slice(
+                0,
+                tier.maxQueries
             );
 
 
-        // ---------------------------------------------------------------------
-        // Score results from this tier.
-        // ---------------------------------------------------------------------
-
         for (
-            const tierResult
-            of tierResults
+            const query
+            of queries
         ) {
 
-            searchResultCount +=
-                tierResult.results.length;
+            if (options.verbose) {
 
+                console.log(
+                    `      Searching: "${query}"`
+                );
+            }
+
+
+            let results:
+                Awaited<
+                    ReturnType<
+                        typeof searchArcGIS
+                    >
+                > = [];
+
+
+            try {
+
+                results =
+                    await searchArcGISCached(
+                        query,
+                        SEARCH_RESULT_LIMIT,
+                        options.verbose
+                    );
+
+            } catch (error) {
+
+                if (options.verbose) {
+
+                    console.warn(
+                        `      Search failed: "${query}"`
+                    );
+
+                    console.warn(
+                        error
+                    );
+                }
+            }
+
+
+            searchResultCount +=
+                results.length;
+
+
+            // -----------------------------------------------------------------
+            // Score results from this query.
+            // -----------------------------------------------------------------
 
             for (
                 const result
-                of tierResult.results
+                of results
             ) {
 
                 if (!result.id) {
@@ -1228,7 +1292,7 @@ async function searchMunicipalArcGIS(
 
                         `search tier: ${tier.name}`,
 
-                        `search query: ${tierResult.query}`,
+                        `search query: ${query}`,
 
                         ...relevance.reasons
 
@@ -1238,17 +1302,68 @@ async function searchMunicipalArcGIS(
                         "arcgis",
 
                     searchQuery:
-                        tierResult.query
+                        query
                 });
+            }
+
+
+            // -----------------------------------------------------------------
+            // Deduplicate after each query.
+            //
+            // This allows the stop condition to respond immediately when a
+            // query discovers strong candidates.
+            // -----------------------------------------------------------------
+
+            const currentCandidates =
+                deduplicateSearchCandidates(
+                    discovered
+                );
+
+
+            // -----------------------------------------------------------------
+            // Identify strong candidates discovered so far.
+            // -----------------------------------------------------------------
+
+            const strongCandidateCount =
+                currentCandidates.filter(
+                    candidate =>
+                        candidate.score >=
+                        tier.stopScore
+                ).length;
+
+
+            if (
+                strongCandidateCount >= 2
+            ) {
+
+                if (options.verbose) {
+
+                    console.log(
+                        `    Search stopping within tier: ` +
+                        `${tier.name}`
+                    );
+
+                    console.log(
+                        `    Strong candidates: ` +
+                        `${strongCandidateCount}`
+                    );
+
+                    console.log(
+                        `    Stopping after query: ` +
+                        `"${query}"`
+                    );
+                }
+
+                break;
             }
         }
 
 
         // ---------------------------------------------------------------------
-        // Deduplicate after each tier.
+        // Check whether this tier produced enough strong candidates to stop
+        // the entire tiered search.
         //
-        // This lets the stop condition operate on the actual candidate set
-        // instead of counting duplicate search hits.
+        // This preserves your existing behavior.
         // ---------------------------------------------------------------------
 
         const tierCandidates =
@@ -1257,48 +1372,16 @@ async function searchMunicipalArcGIS(
             );
 
 
-        // ---------------------------------------------------------------------
-        // Identify the strongest search candidate so far.
-        // ---------------------------------------------------------------------
+        const strongCandidateCount =
+            tierCandidates.filter(
+                candidate =>
+                    candidate.score >=
+                    tier.stopScore
+            ).length;
 
-        const strongestCandidate =
-            tierCandidates.reduce<number>(
-                (
-                    highest,
-                    candidate
-                ) =>
-                    Math.max(
-                        highest,
-                        candidate.score
-                    ),
-                0
-            );
-
-
-        if (options.verbose) {
-
-            console.log(
-                `    Strongest search relevance: ` +
-                `${strongestCandidate}`
-            );
-
-            console.log(
-                `    Tier stop score: ` +
-                `${tier.stopScore}`
-            );
-        }
-
-
-        // ---------------------------------------------------------------------
-        // Early exit.
-        //
-        // A very strong municipality-specific result does not need broader
-        // searching.
-        // ---------------------------------------------------------------------
 
         if (
-            strongestCandidate >=
-            tier.stopScore
+            strongCandidateCount >= 2
         ) {
 
             if (options.verbose) {

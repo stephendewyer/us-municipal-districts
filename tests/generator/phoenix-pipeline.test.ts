@@ -46,6 +46,9 @@ const PHOENIX_PLACE:
 const PHOENIX_COUNCIL_DISTRICTS_URL =
     "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0";
 
+const PHOENIX_COUNCIL_DISTRICTS_HASH_URL =
+    "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/1";
+
 const PHOENIX_EVICTION_DISTRICTS_URL =
     "https://maps.phoenix.gov/pub/rest/services/Public/Eviction_Filings_HSD/MapServer/1";
 
@@ -237,6 +240,7 @@ function createInspection(
             "FeatureServer" |
             "MapServer";
         itemId: string;
+        layerId?: number;
     }
 ):
     ArcGISInspection {
@@ -256,6 +260,7 @@ function createInspection(
             true,
 
         layerId:
+            options.layerId ??
             0,
 
         title:
@@ -325,6 +330,7 @@ function createInspectedCandidate(
             "FeatureServer" |
             "MapServer";
         itemId: string;
+        layerId?: number;
         score?: number;
         classification:
             CandidateClassification;
@@ -369,7 +375,10 @@ function createInspectedCandidate(
                     options.serviceType,
 
                 itemId:
-                    options.itemId
+                    options.itemId,
+
+                layerId:
+                    options.layerId
             }),
 
         classification:
@@ -408,8 +417,50 @@ function createPhoenixCouncilCandidate():
         itemId:
             "phoenix-council-districts",
 
+        layerId:
+            0,
+
         score:
             200,
+
+        classification:
+            createClassification({
+
+                officialMunicipalSource:
+                    true
+            })
+    });
+}
+
+
+function createPhoenixCouncilHashCandidate():
+    InspectedCandidate {
+
+    return createInspectedCandidate({
+
+        url:
+            PHOENIX_COUNCIL_DISTRICTS_HASH_URL,
+
+        title:
+            "Council Districts and Members Hash",
+
+        serviceName:
+            "Council_Districts",
+
+        layerName:
+            "Council Districts and Members Hash",
+
+        serviceType:
+            "MapServer",
+
+        itemId:
+            "phoenix-council-districts-hash",
+
+        layerId:
+            1,
+
+        score:
+            190,
 
         classification:
             createClassification({
@@ -444,6 +495,9 @@ function createPhoenixEvictionCandidate():
         itemId:
             "phoenix-eviction-districts",
 
+        layerId:
+            1,
+
         /*
          * Deliberately give the derived analytical dataset a higher
          * raw discovery score.
@@ -475,6 +529,9 @@ test(
         const council =
             createPhoenixCouncilCandidate();
 
+        const hash =
+            createPhoenixCouncilHashCandidate();
+
         const eviction =
             createPhoenixEvictionCandidate();
 
@@ -483,6 +540,7 @@ test(
                 PHOENIX_PLACE,
                 [
                     council,
+                    hash,
                     eviction
                 ]
             );
@@ -490,7 +548,7 @@ test(
 
         assert.equal(
             result.validCandidates.length,
-            2
+            3
         );
 
 
@@ -507,7 +565,73 @@ test(
             result.validCandidates.some(
                 candidate =>
                     candidate.inspection.url ===
+                    PHOENIX_COUNCIL_DISTRICTS_HASH_URL
+            )
+        );
+
+
+        assert.ok(
+            result.validCandidates.some(
+                candidate =>
+                    candidate.inspection.url ===
                     PHOENIX_EVICTION_DISTRICTS_URL
+            )
+        );
+    }
+);
+
+
+test(
+    "Phoenix pipeline groups equivalent council-district sources",
+    () => {
+
+        const council =
+            createPhoenixCouncilCandidate();
+
+        const hash =
+            createPhoenixCouncilHashCandidate();
+
+        const eviction =
+            createPhoenixEvictionCandidate();
+
+        const result =
+            buildDiscoveryResult(
+                PHOENIX_PLACE,
+                [
+                    council,
+                    hash,
+                    eviction
+                ]
+            );
+
+
+        assert.equal(
+            result.validCandidates.length,
+            3
+        );
+
+
+        const councilGroup =
+            result.equivalentGroups.find(
+                group =>
+                    group.candidates.some(
+                        candidate =>
+                            candidate.inspection.url ===
+                            PHOENIX_COUNCIL_DISTRICTS_URL
+                    )
+            );
+
+
+        assert.ok(
+            councilGroup
+        );
+
+
+        assert.ok(
+            councilGroup?.candidates.some(
+                candidate =>
+                    candidate.inspection.url ===
+                    PHOENIX_COUNCIL_DISTRICTS_HASH_URL
             )
         );
     }
@@ -521,6 +645,9 @@ test(
         const council =
             createPhoenixCouncilCandidate();
 
+        const hash =
+            createPhoenixCouncilHashCandidate();
+
         const eviction =
             createPhoenixEvictionCandidate();
 
@@ -529,6 +656,7 @@ test(
                 PHOENIX_PLACE,
                 [
                     council,
+                    hash,
                     eviction
                 ]
             );

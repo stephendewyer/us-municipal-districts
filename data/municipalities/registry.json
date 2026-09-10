@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-10T22:39:01.027Z",
+  "generatedAt": "2026-09-10T23:43:04.007Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-10T20:10:50.516Z",
+        "generatedAt": "2026-09-10T23:40:58.193Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -42,23 +42,40 @@
       "boundaryType": "ward",
       "source": {
         "sourceType": "arcgis",
-        "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer/156",
-        "itemId": "cbb29b7016c04c43b3b51ba60db17643",
-        "serviceType": "FeatureServer",
-        "title": "TucsonWards2022",
-        "official": false,
+        "url": "https://gisdata.pima.gov/arcgis1/rest/services/GISOpenData/Boundaries2/MapServer/3",
+        "itemId": "025e8235c2ab4b09ba4e202d28cc2fc1",
+        "serviceType": "MapServer",
+        "title": "Wards - City of Tucson",
+        "official": true,
         "verified": true,
         "fieldMapping": {
-          "district": "Label",
+          "district": "WARD",
           "name": "NAME"
         }
       },
       "generatedFile": "geometry/0477000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-10T22:39:01.027Z",
+        "generatedAt": "2026-09-10T23:38:41.353Z",
         "generatorVersion": "0.1.0",
-        "alternatives": [],
-        "requiresReview": true
+        "alternatives": [
+          {
+            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards_SubsidizedHousing/FeatureServer/0",
+            "itemId": "8e3fbdbf55da4ac7a836324f161ca649",
+            "title": "Wards_SubsidizedHousing",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 168
+          },
+          {
+            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Boundaries_2000/FeatureServer/9",
+            "itemId": "6d32fef8867b4cf3beb47659db4b797a",
+            "title": "Wards_2000",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 108
+          }
+        ],
+        "requiresReview": false
       }
     },
     {
@@ -68,29 +85,37 @@
       "boundaryType": "ward",
       "source": {
         "sourceType": "arcgis",
-        "url": "https://services5.arcgis.com/vpj2CFUi9GMpbJDh/arcgis/rest/services/Wards_and_Districts/FeatureServer/133",
-        "itemId": "59817b7285dd449c8e6fd3713bbfec6f",
+        "url": "https://services.arcgis.com/aScBVpZOvioggfOZ/arcgis/rest/services/Summarize_Business_Licenses_within_Chicago_Ward_Boundaries/FeatureServer/0",
+        "itemId": "879167ddd75f4fe68bf812d678ea2c9d",
         "serviceType": "FeatureServer",
-        "title": "Chicago Wards",
+        "title": "Summarize_Business_Licenses_within_Chicago_Ward_Boundaries",
         "official": false,
         "verified": true,
         "fieldMapping": {
-          "district": "District",
-          "name": "Name"
+          "district": "ward",
+          "name": "ward"
         }
       },
       "generatedFile": "geometry/1714000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-09T22:41:42.855Z",
+        "generatedAt": "2026-09-10T23:43:04.007Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
-            "url": "https://gis.cookcountyil.gov/traditional/rest/services/clerkTaxDistricts/MapServer/17",
-            "itemId": "9f4ca36df7d04239bb838c97616d744e",
-            "title": "Chicago Wards 2015",
-            "serviceType": "MapServer",
+            "url": "https://services.arcgis.com/aScBVpZOvioggfOZ/arcgis/rest/services/Enriched_Chicago_Ward_Boundaries/FeatureServer/0",
+            "itemId": "fd9171e5af14466ba2ba752a1140234a",
+            "title": "Enriched_Chicago_Ward_Boundaries",
+            "serviceType": "FeatureServer",
             "official": false,
-            "score": 153
+            "score": 143
+          },
+          {
+            "url": "https://services.arcgis.com/F7DSX1DSNSiWmOqh/arcgis/rest/services/ChicagoWards/FeatureServer/18",
+            "itemId": "ad95d589171246e8ae92f30c8d25d6ef",
+            "title": "ChicagoWards",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 108
           }
         ],
         "requiresReview": true
