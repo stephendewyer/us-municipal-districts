@@ -19,9 +19,8 @@ import {
 
 import {
     selectCanonicalSources,
-    compareCanonicalSources
+    selectMunicipalityCanonicalSource
 } from "./canonical.js";
-
 
 // =============================================================================
 // Options
@@ -166,13 +165,9 @@ export function buildDiscoveryResult(
     // =========================================================================
 
     const canonical =
-        canonicalSources.length > 0
-            ? [
-                ...canonicalSources
-            ].sort(
-                compareCanonicalSources
-            )[0]
-            : undefined;
+        selectMunicipalityCanonicalSource(
+            equivalentGroups
+        );
 
 
     // =========================================================================

@@ -1268,7 +1268,6 @@ export function compareCanonicalSources(
     );
 }
 
-
 // =============================================================================
 // Select one municipality-wide canonical source
 // =============================================================================
@@ -1277,23 +1276,108 @@ export function selectMunicipalityCanonicalSource(
     groups: EquivalentLayerGroup[]
 ): CanonicalSource | undefined {
 
-    const sources =
-        selectCanonicalSources(
-            groups
-        );
-
-
     if (
-        sources.length === 0
+        groups.length === 0
     ) {
         return undefined;
     }
 
+    const groupWinners =
+        groups
+            .map(
+                group => {
 
-    return [
-        ...sources
-    ].sort(
-        compareCanonicalSources
-    )[0];
+                    const source =
+                        selectCanonicalSource(
+                            group
+                        );
+
+                    if (!source) {
+                        return undefined;
+                    }
+
+                    /*
+                     * Recover the candidate that produced the canonical
+                     * source so municipality-level selection can still use
+                     * temporal priority and canonical-source preference.
+                     */
+                    const candidate =
+                        group.candidates.find(
+                            item =>
+                                item.inspection.url ===
+                                source.url
+                        );
+
+                    if (!candidate) {
+                        return undefined;
+                    }
+
+                    return {
+                        source,
+                        candidate
+                    };
+                }
+            )
+            .filter(
+                (
+                    item
+                ): item is {
+                    source: CanonicalSource;
+                    candidate: EquivalentLayerGroup["candidates"][number];
+                } =>
+                    item !== undefined
+            );
+
+    if (
+        groupWinners.length === 0
+    ) {
+        return undefined;
+    }
+
+    groupWinners.sort(
+        (
+            a,
+            b
+        ) => {
+
+            // 1. Prefer current sources over undated and historical sources.
+            const temporalDifference =
+                temporalPriority(
+                    b.candidate
+                ) -
+                temporalPriority(
+                    a.candidate
+                );
+
+            if (
+                temporalDifference !== 0
+            ) {
+                return temporalDifference;
+            }
+
+            // 2. Prefer a boundary-native source over a derived dataset.
+            const canonicalBonusDifference =
+                canonicalSourceBonus(
+                    b.candidate
+                ) -
+                canonicalSourceBonus(
+                    a.candidate
+                );
+
+            if (
+                canonicalBonusDifference !== 0
+            ) {
+                return canonicalBonusDifference;
+            }
+
+            // 3. Fall back to the existing canonical-source comparison.
+            return compareCanonicalSources(
+                a.source,
+                b.source
+            );
+        }
+    );
+
+    return groupWinners[0]?.source;
 }
 
