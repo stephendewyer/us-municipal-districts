@@ -396,7 +396,9 @@ const HOUSING_PATTERNS: Pattern[] = [
 function isPoliticalField(
     value?: string
 ): boolean {
-    const normalized = normalize(value);
+
+    const normalized =
+        normalize(value);
 
     if (!normalized) {
         return false;
@@ -418,7 +420,9 @@ function isPoliticalField(
 function isGenericDistrictField(
     value?: string
 ): boolean {
-    const normalized = normalize(value);
+
+    const normalized =
+        normalize(value);
 
     return (
         /\bdistrict\b/i.test(normalized) &&
@@ -429,6 +433,7 @@ function isGenericDistrictField(
 function isWardField(
     value?: string
 ): boolean {
+
     return /\bward\b/i.test(
         normalize(value)
     );
@@ -499,17 +504,25 @@ function isOfficialMunicipalSource(
     inspection: ArcGISInspection
 ): boolean {
 
-    const url = normalize(
-        inspection.url
-    );
+    const url =
+        normalize(
+            inspection.url
+        );
 
-    const candidateUrl = normalize(
-        candidate.url
-    );
+    const candidateUrl =
+        normalize(
+            candidate.url
+        );
+
+    const serviceUrl =
+        normalize(
+            inspection.serviceUrl
+        );
 
     const text = [
         url,
         candidateUrl,
+        serviceUrl,
         normalize(inspection.owner),
         normalize(inspection.organization),
         normalize(inspection.title),
@@ -537,54 +550,76 @@ export function classifyCandidate(
     inspection: ArcGISInspection
 ): CandidateClassification {
 
-    const title = normalize(
-        inspection.title
-    );
+    const title =
+        normalize(
+            inspection.title
+        );
 
-    const serviceName = normalize(
-        inspection.serviceName
-    );
+    const serviceName =
+        normalize(
+            inspection.serviceName
+        );
 
-    const layerName = normalize(
-        inspection.layerName
-    );
+    const layerName =
+        normalize(
+            inspection.layerName
+        );
 
-    const description = normalize(
-        inspection.description
-    );
+    const description =
+        normalize(
+            inspection.description
+        );
 
-    const serviceDescription = normalize(
-        inspection.serviceDescription
-    );
+    const serviceDescription =
+        normalize(
+            inspection.serviceDescription
+        );
 
-    const url = normalize(
-        inspection.url
-    );
+    const url =
+        normalize(
+            inspection.url
+        );
 
-    const candidateTitle = normalize(
-        candidate.title
-    );
+    const candidateTitle =
+        normalize(
+            candidate.title
+        );
 
-    const searchQuery = normalize(
-        candidate.searchQuery
-    );
+    const searchQuery =
+        normalize(
+            candidate.searchQuery
+        );
 
     const fields =
         inspection.fields ?? [];
 
-    const fieldNames = fields
-        .map(field => normalize(field.name))
-        .filter(Boolean);
+    const fieldNames =
+        fields
+            .map(
+                field =>
+                    normalize(field.name)
+            )
+            .filter(Boolean);
 
-    const fieldAliases = fields
-        .map(field => normalize(field.alias))
-        .filter(Boolean);
+    const fieldAliases =
+        fields
+            .map(
+                field =>
+                    normalize(field.alias)
+            )
+            .filter(Boolean);
 
     const fieldText = [
         ...fieldNames,
         ...fieldAliases
     ].join(" ");
 
+    /*
+     * Identity text describes what the dataset IS.
+     *
+     * This is the strongest text for deciding whether the layer
+     * represents a political boundary.
+     */
     const identityText = [
         title,
         candidateTitle,
@@ -594,57 +629,111 @@ export function classifyCandidate(
         .filter(Boolean)
         .join(" ");
 
-    const metadataText = [
+    /*
+     * Dataset metadata describes the actual dataset.
+     *
+     * Search queries and URLs are deliberately excluded here.
+     * They are discovery/source evidence, not dataset identity.
+     */
+    const datasetText = [
         description,
         serviceDescription,
-        fieldText,
-        searchQuery
+        fieldText
     ]
         .filter(Boolean)
         .join(" ");
 
-    const searchableText = [
-        identityText,
-        metadataText,
+    /*
+     * Search text remains useful for broad supporting evidence,
+     * but it must not by itself make a candidate a census,
+     * parcel, housing, or other non-political dataset.
+     */
+    const discoveryText = [
+        searchQuery,
         url
     ]
         .filter(Boolean)
         .join(" ");
 
+    /*
+     * Political identity may legitimately appear in:
+     *
+     * - title
+     * - service name
+     * - layer name
+     * - dataset metadata
+     * - URL
+     * - search query
+     *
+     * We therefore retain the broader text for political detection.
+     */
+    const politicalSearchableText = [
+        identityText,
+        datasetText,
+        discoveryText
+    ]
+        .filter(Boolean)
+        .join(" ");
+
+    /*
+     * Negative dataset classification should rely primarily on
+     * identity + actual dataset metadata.
+     *
+     * In particular, a search query containing "census" or an
+     * incidental URL term should not turn a council-district
+     * layer into a census dataset.
+     */
+    const datasetClassificationText = [
+        identityText,
+        datasetText
+    ]
+        .filter(Boolean)
+        .join(" ");
+
     const matches: ClassificationMatches = {
-        thematic: findMatches(
-            searchableText,
-            THEMATIC_PATTERNS
-        ),
 
-        census: findMatches(
-            searchableText,
-            CENSUS_PATTERNS
-        ),
+        thematic:
+            findMatches(
+                datasetClassificationText,
+                THEMATIC_PATTERNS
+            ),
 
-        parcel: findMatches(
-            searchableText,
-            PARCEL_PATTERNS
-        ),
+        census:
+            findMatches(
+                datasetClassificationText,
+                CENSUS_PATTERNS
+            ),
 
-        housing: findMatches(
-            searchableText,
-            HOUSING_PATTERNS
-        ),
+        parcel:
+            findMatches(
+                datasetClassificationText,
+                PARCEL_PATTERNS
+            ),
 
-        political: findMatches(
-            searchableText,
-            POLITICAL_PATTERNS
-        ),
+        housing:
+            findMatches(
+                datasetClassificationText,
+                HOUSING_PATTERNS
+            ),
+
+        political:
+            findMatches(
+                politicalSearchableText,
+                POLITICAL_PATTERNS
+            ),
 
         boundary: [],
 
         official: []
     };
 
+    /*
+     * Non-political district identities are restricted to the
+     * actual layer/service identity and metadata.
+     */
     const nonPoliticalMatches =
         findMatches(
-            searchableText,
+            datasetClassificationText,
             NON_POLITICAL_PATTERNS
         );
 
@@ -716,14 +805,8 @@ export function classifyCandidate(
     const explicitPoliticalIdentity =
         matches.political.length > 0;
 
-    const nonPoliticalIdentity =
-        findMatches(
-            identityText,
-            NON_POLITICAL_PATTERNS
-        );
-
     const explicitNonPoliticalIdentity =
-        nonPoliticalIdentity.length > 0;
+        nonPoliticalMatches.length > 0;
 
     const hasPoliticalField =
         politicalFieldNames.length > 0;
@@ -740,7 +823,7 @@ export function classifyCandidate(
             identityText
         ) ??
         detectDistrictType(
-            metadataText
+            datasetText
         ) ??
         (
             hasWardField
@@ -796,22 +879,46 @@ export function classifyCandidate(
     // Negative evidence
     // =========================================================================
 
+    /*
+     * Parcel evidence should not penalize a clearly political candidate.
+     *
+     * Some municipal political datasets contain fields or descriptions
+     * involving property information.
+     */
     if (
         matches.parcel.length > 0 &&
+        !explicitPoliticalIdentity &&
         !hasPoliticalField &&
         !hasWardField
     ) {
         score -= 35;
     }
 
+    /*
+     * Census evidence should not penalize a clearly political candidate.
+     *
+     * This is an important distinction between:
+     *
+     *   "this dataset contains census-related information"
+     *
+     * and:
+     *
+     *   "this dataset IS a census boundary dataset".
+     */
     if (
         matches.census.length > 0 &&
         !explicitPoliticalIdentity &&
-        !hasPoliticalField
+        !hasPoliticalField &&
+        !hasWardField
     ) {
         score -= 25;
     }
 
+    /*
+     * Explicitly non-political district identities remain strong
+     * negative evidence, but only when the candidate lacks a
+     * stronger political identity.
+     */
     if (
         explicitNonPoliticalIdentity &&
         !explicitPoliticalIdentity &&
@@ -821,7 +928,9 @@ export function classifyCandidate(
         score -= 50;
     }
 
-    // Thematic terms are weak negative evidence only.
+    /*
+     * Thematic terms are weak negative evidence only.
+     */
     if (
         matches.thematic.length > 0 &&
         !explicitPoliticalIdentity &&
@@ -841,6 +950,9 @@ export function classifyCandidate(
      * Polygon + explicit political identity.
      *
      * This is the cleanest discovery case.
+     *
+     * A clear political identity takes precedence over incidental
+     * census/parcel/thematic terms.
      */
     const explicitIdentityPath =
         isPolygon &&
@@ -853,14 +965,6 @@ export function classifyCandidate(
      * Polygon + WARD field.
      *
      * This is extremely important for real-world municipal GIS.
-     *
-     * Example:
-     *
-     *     WARD_COT
-     *     WARD
-     *     Ward
-     *
-     * The layer title does not always contain "city council".
      */
     const wardFieldPath =
         isPolygon &&
@@ -905,12 +1009,28 @@ export function classifyCandidate(
         genericDistrictField &&
         !explicitNonPoliticalIdentity;
 
+    /*
+     * Rule 6:
+     *
+     * Polygon + explicit political identity should still be accepted
+     * when census/parcel/thematic evidence exists, provided that the
+     * candidate does not have an explicit non-political district identity.
+     *
+     * This makes political identity dominant instead of allowing
+     * incidental metadata to defeat a legitimate municipal boundary.
+     */
+    const strongPoliticalIdentityPath =
+        isPolygon &&
+        explicitPoliticalIdentity &&
+        !explicitNonPoliticalIdentity;
+
     const isPoliticalBoundary =
         explicitIdentityPath ||
         wardFieldPath ||
         politicalFieldPath ||
         officialDistrictPath ||
-        politicalIdentityWithGenericField;
+        politicalIdentityWithGenericField ||
+        strongPoliticalIdentityPath;
 
     const isBoundaryLayer =
         isPoliticalBoundary;
@@ -956,7 +1076,7 @@ export function classifyCandidate(
         !isPoliticalBoundary
     ) {
         rejectionReasons.push(
-            `non-political district identity: ${nonPoliticalIdentity.join(", ")}`
+            `non-political district identity: ${nonPoliticalMatches.join(", ")}`
         );
     }
 

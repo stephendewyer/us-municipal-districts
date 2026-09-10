@@ -54,13 +54,39 @@ function hasValidatedPoliticalBoundary(
 function hasStrongNegativeEvidence(
     candidate: InspectedCandidate
 ): boolean {
+
     const classification =
         candidate.classification;
 
+    const political =
+        classification.matches.political ?? [];
+
+    /*
+     * Once a candidate has been positively identified as a
+     * political boundary, census/parcel/housing evidence should
+     * not automatically reject it.
+     *
+     * Those terms may describe:
+     *
+     * - attributes contained in the dataset
+     * - related demographic information
+     * - source documentation
+     * - metadata inherited from another layer
+     *
+     * They are only strong negative evidence when the candidate
+     * lacks convincing political identity.
+     */
+    const hasPoliticalIdentity =
+        classification.isPoliticalBoundary ||
+        political.length > 0;
+
     if (
-        classification.isCensusDataset ||
-        classification.isParcelDataset ||
-        classification.isHousingDataset
+        !hasPoliticalIdentity &&
+        (
+            classification.isCensusDataset ||
+            classification.isParcelDataset ||
+            classification.isHousingDataset
+        )
     ) {
         return true;
     }
@@ -68,12 +94,13 @@ function hasStrongNegativeEvidence(
     const thematic =
         classification.matches.thematic ?? [];
 
-    const political =
-        classification.matches.political ?? [];
-
+    /*
+     * A thematic dataset is strong negative evidence only when
+     * there is no political identity to counter it.
+     */
     if (
-        thematic.length > 0 &&
-        political.length === 0
+        !hasPoliticalIdentity &&
+        thematic.length > 0
     ) {
         return true;
     }
