@@ -36,7 +36,22 @@ export interface GeometryOptimizationReport {
     /**
      * Percentage reduction in coordinate positions.
      */
-    reductionPercent: number;
+    vertexReductionPercent: number;
+
+    /**
+     * Serialized GeoJSON size before optimization.
+     */
+    originalByteSize: number;
+
+    /**
+     * Serialized GeoJSON size after optimization.
+     */
+    optimizedByteSize: number;
+
+    /**
+     * Percentage reduction in serialized GeoJSON size.
+     */
+    byteReductionPercent: number;
 }
 
 
@@ -131,12 +146,48 @@ function countVerticesInCollection(
 
 
 /**
+ * Returns the UTF-8 byte size of serialized GeoJSON.
+ */
+function getByteSize(
+    geometry: GeoJSONFeatureCollection
+): number {
+
+    return Buffer.byteLength(
+        JSON.stringify(geometry),
+        "utf8"
+    );
+}
+
+
+/**
+ * Calculates percentage reduction between two values.
+ */
+function calculateReductionPercent(
+    original: number,
+    optimized: number
+): number {
+
+    if (original === 0) {
+        return 0;
+    }
+
+    return (
+        (
+            original -
+            optimized
+        ) /
+        original
+    ) * 100;
+}
+
+
+/**
  * Optimizes normalized municipal boundary geometry.
  *
  * The initial implementation intentionally performs no
- * simplification. Its purpose is to establish a baseline
- * measurement before topology-preserving simplification
- * is introduced.
+ * simplification. Its purpose is to establish a reliable
+ * baseline measurement before topology-preserving
+ * simplification is introduced.
  */
 export function optimizeGeometry(
     geometry: GeoJSONFeatureCollection,
@@ -147,6 +198,11 @@ export function optimizeGeometry(
 
     const originalVertexCount =
         countVerticesInCollection(
+            geometry
+        );
+
+    const originalByteSize =
+        getByteSize(
             geometry
         );
 
@@ -164,16 +220,10 @@ export function optimizeGeometry(
             optimizedGeometry
         );
 
-    const reductionPercent =
-        originalVertexCount === 0
-            ? 0
-            : (
-                (
-                    originalVertexCount -
-                    optimizedVertexCount
-                ) /
-                originalVertexCount
-            ) * 100;
+    const optimizedByteSize =
+        getByteSize(
+            optimizedGeometry
+        );
 
     return {
         geometry: optimizedGeometry,
@@ -186,7 +236,21 @@ export function optimizeGeometry(
 
             optimizedVertexCount,
 
-            reductionPercent
+            vertexReductionPercent:
+                calculateReductionPercent(
+                    originalVertexCount,
+                    optimizedVertexCount
+                ),
+
+            originalByteSize,
+
+            optimizedByteSize,
+
+            byteReductionPercent:
+                calculateReductionPercent(
+                    originalByteSize,
+                    optimizedByteSize
+                )
         }
     };
 }

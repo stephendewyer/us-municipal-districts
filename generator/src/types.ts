@@ -509,6 +509,12 @@ export interface ArcGISCandidateValidation {
     municipalityOverlap?: number;
 
     evidence: string[];
+
+    expectedDistrictCount?: number;
+
+    completeDistrictCoverage?: boolean;
+
+    missingDistrictValues?: string[];
 }
 
 
@@ -1006,6 +1012,12 @@ export interface ArcGISQueryOptions {
     resultOffset?: number;
     maxUniqueValues?: number;
     outSR?: number;
+    /**
+     * Retrieve all available records through ArcGIS pagination.
+     *
+     * Defaults to false so ordinary queries remain bounded.
+     */
+    fetchAll?: boolean;
 }
 
 export type SourceRole =

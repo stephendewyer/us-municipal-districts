@@ -92,6 +92,14 @@ export async function generateGeometry(
             }
         );
 
+    console.log(
+        [
+            `Geometry baseline: ${entry.city}, ${entry.state}`,
+            `  Features: ${optimized.report.featureCount}`,
+            `  Vertices: ${optimized.report.originalVertexCount.toLocaleString()}`,
+            `  GeoJSON size: ${(optimized.report.originalByteSize / 1024).toFixed(1)} KB`
+        ].join("\n")
+    );
 
     const outputPath =
         path.join(

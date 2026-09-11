@@ -9,6 +9,10 @@ import {
     queryArcGISLayer
 } from "./queryArcGISLayer.js";
 
+import {
+    getMunicipalDivisionExpectation
+} from "./municipalityExpectations.js";
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -109,7 +113,10 @@ export async function validateCandidate(
                         false,
 
                     outFields:
-                        candidateFields
+                        candidateFields,
+
+                    fetchAll:
+                        true
                 }
             );
     } catch (error) {
@@ -239,6 +246,82 @@ export async function validateCandidate(
             confidence
         );
 
+    /*
+     * Determine whether this municipality/district type has
+     * a known expected district structure.
+     *
+     * Completeness is deliberately separate from political-boundary
+     * acceptance. An incomplete layer may still be a genuine political
+     * boundary layer; it simply should not be preferred as the
+     * canonical source.
+     */
+    const expectation =
+        classification.districtType
+            ? getMunicipalDivisionExpectation(
+                candidate.placeFips,
+                classification.districtType
+            )
+            : undefined;
+
+    const expectedDistrictCount =
+        expectation?.expectedDistrictCount;
+
+    const actualDistrictValues =
+        best.distinctValues;
+
+    const normalizedActualValues =
+        new Set(
+            actualDistrictValues.map(
+                value =>
+                    value
+                        .trim()
+                        .replace(
+                            /^ward\s+/i,
+                            ""
+                        )
+                        .replace(
+                            /^district\s+/i,
+                            ""
+                        )
+                        .replace(
+                            /^0+(?=\d)/,
+                            ""
+                        )
+            )
+        );
+
+    let completeDistrictCoverage:
+        boolean | undefined;
+
+    let missingDistrictValues:
+        string[] | undefined;
+
+    if (
+        expectation?.expectedDistrictValues
+    ) {
+        const missing =
+            expectation.expectedDistrictValues.filter(
+                expectedValue =>
+                    !normalizedActualValues.has(
+                        expectedValue
+                    )
+            );
+
+        missingDistrictValues =
+            missing;
+
+        completeDistrictCoverage =
+            missing.length === 0 &&
+            actualDistrictValues.length ===
+                expectation.expectedDistrictValues.length;
+    } else if (
+        expectedDistrictCount !== undefined
+    ) {
+        completeDistrictCoverage =
+            actualDistrictValues.length ===
+            expectedDistrictCount;
+    }
+
     const evidence: string[] = [];
 
     evidence.push(
@@ -268,6 +351,33 @@ export async function validateCandidate(
     evidence.push(
         `Field coverage: ${formatPercent(best.coverage)}.`
     );
+
+    if (
+        expectedDistrictCount !== undefined
+    ) {
+        evidence.push(
+            `Expected district count: ${expectedDistrictCount}.`
+        );
+
+        evidence.push(
+            `District coverage: ${
+                completeDistrictCoverage
+                    ? "complete"
+                    : "incomplete"
+            }.`
+        );
+    }
+
+    if (
+        missingDistrictValues &&
+        missingDistrictValues.length > 0
+    ) {
+        evidence.push(
+            `Missing expected district values: ${
+                missingDistrictValues.join(", ")
+            }.`
+        );
+    }
 
     evidence.push(
         `Validation confidence: ${confidence}.`
@@ -320,6 +430,12 @@ export async function validateCandidate(
 
         geometryType:
             inspection.geometryType,
+
+        expectedDistrictCount,
+
+        completeDistrictCoverage,
+
+        missingDistrictValues,
 
         evidence
     };

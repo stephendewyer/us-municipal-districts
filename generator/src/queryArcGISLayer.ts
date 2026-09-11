@@ -76,6 +76,20 @@ type FetchLike = (
 
 
 // =============================================================================
+// Constants
+// =============================================================================
+
+/**
+ * Maximum number of pages that a fetchAll query may retrieve.
+ *
+ * This is a safety guard for ArcGIS services that incorrectly report
+ * exceededTransferLimit or ignore resultOffset.
+ */
+const MAX_PAGES =
+    1000;
+
+
+// =============================================================================
 // Public API
 // =============================================================================
 
@@ -94,7 +108,7 @@ export async function queryArcGISLayer(
         options.resultRecordCount ??
         100;
 
-    const resultOffset =
+    const initialResultOffset =
         options.resultOffset ??
         0;
 
@@ -105,6 +119,10 @@ export async function queryArcGISLayer(
     const maxUniqueValues =
         options.maxUniqueValues ??
         100;
+
+    const fetchAll =
+        options.fetchAll ??
+        false;
 
     const outFields =
         options.outFields &&
@@ -129,114 +147,58 @@ export async function queryArcGISLayer(
             ? options.outSR ?? 4326
             : undefined;
 
-    const queryUrl =
-        buildQueryUrl(
+    /*
+     * Ordinary queries retain the original single-page behavior.
+     *
+     * This is important because geometry generation and other
+     * bounded queries should not unexpectedly retrieve an entire
+     * ArcGIS layer.
+     */
+    if (!fetchAll) {
+
+        return queryPage(
             normalizedUrl,
             {
                 where,
                 outFields,
                 resultRecordCount,
-                resultOffset,
+                resultOffset:
+                    initialResultOffset,
                 returnGeometry,
-                outSR
-            }
-        );
-
-    try {
-
-        const response =
-            await fetchImpl(
-                queryUrl,
-                {
-                    headers: {
-                        Accept:
-                            "application/json"
-                    }
-                }
-            );
-
-        if (!response.ok) {
-
-            return createFailedResult(
-                normalizedUrl,
-                [
-                    "ArcGIS query failed.",
-                    `Status: ${response.status}`,
-                    `Status text: ${response.statusText}`
-                ].join(" ")
-            );
-        }
-
-        const json =
-            await response.json() as ArcGISQueryResponse;
-
-        if (json.error) {
-
-            return createFailedResult(
-                normalizedUrl,
-                [
-                    `ArcGIS error ${json.error.code ?? ""}`.trim(),
-                    json.error.message ?? "",
-                    ...(json.error.details ?? [])
-                ]
-                    .filter(Boolean)
-                    .join(" ")
-            );
-        }
-
-        const features =
-            normalizeFeatures(
-                json.features
-            );
-
-        const fields =
-            normalizeFields(
-                json.fields
-            );
-
-        const uniqueValues =
-            collectUniqueValues(
-                features,
+                outSR,
                 maxUniqueValues
-            );
-
-        return {
-
-            url:
-                normalizedUrl,
-
-            success:
-                true,
-
-            features,
-
-            featureCount:
-                features.length,
-
-            exceededTransferLimit:
-                Boolean(
-                    json.exceededTransferLimit
-                ),
-
-            fields,
-
-            uniqueValues
-        };
-
-    } catch (error) {
-
-        return createFailedResult(
-            normalizedUrl,
-            error instanceof Error
-                ? error.message
-                : String(error)
+            },
+            fetchImpl
         );
     }
+
+    /*
+     * fetchAll is intentionally implemented separately from the
+     * normal single-page path.
+     *
+     * This allows callers such as municipality completeness
+     * validation to explicitly request the entire layer without
+     * changing the behavior of ordinary ArcGIS queries.
+     */
+    return queryAllPages(
+        normalizedUrl,
+        {
+            where,
+            outFields,
+            resultRecordCount,
+            resultOffset:
+                initialResultOffset,
+            returnGeometry,
+            outSR,
+            maxUniqueValues
+        },
+        fetchImpl
+    );
 }
 
 
 // =============================================================================
-// Query URL
+// Query parameters
 // =============================================================================
 
 interface QueryParameters {
@@ -260,6 +222,305 @@ interface QueryParameters {
         number;
 }
 
+
+interface PageQueryParameters
+    extends QueryParameters {
+
+    maxUniqueValues:
+        number;
+}
+
+
+// =============================================================================
+// Single-page query
+// =============================================================================
+
+async function queryPage(
+    url:
+        string,
+
+    parameters:
+        PageQueryParameters,
+
+    fetchImpl:
+        FetchLike
+): Promise<ArcGISQueryResult> {
+
+    const queryUrl =
+        buildQueryUrl(
+            url,
+            parameters
+        );
+
+    try {
+
+        const response =
+            await fetchImpl(
+                queryUrl,
+                {
+                    headers: {
+                        Accept:
+                            "application/json"
+                    }
+                }
+            );
+
+        if (!response.ok) {
+
+            return createFailedResult(
+                url,
+                [
+                    "ArcGIS query failed.",
+                    `Status: ${response.status}`,
+                    `Status text: ${response.statusText}`
+                ].join(" ")
+            );
+        }
+
+        const json =
+            await response.json() as ArcGISQueryResponse;
+
+        if (json.error) {
+
+            return createFailedResult(
+                url,
+                [
+                    `ArcGIS error ${json.error.code ?? ""}`.trim(),
+                    json.error.message ?? "",
+                    ...(json.error.details ?? [])
+                ]
+                    .filter(Boolean)
+                    .join(" ")
+            );
+        }
+
+        const features =
+            normalizeFeatures(
+                json.features
+            );
+
+        const fields =
+            normalizeFields(
+                json.fields
+            );
+
+        const uniqueValues =
+            collectUniqueValues(
+                features,
+                parameters.maxUniqueValues
+            );
+
+        return {
+
+            url,
+
+            success:
+                true,
+
+            features,
+
+            featureCount:
+                features.length,
+
+            exceededTransferLimit:
+                Boolean(
+                    json.exceededTransferLimit
+                ),
+
+            fields,
+
+            uniqueValues
+        };
+
+    } catch (error) {
+
+        return createFailedResult(
+            url,
+            error instanceof Error
+                ? error.message
+                : String(error)
+        );
+    }
+}
+
+
+// =============================================================================
+// Paginated query
+// =============================================================================
+
+async function queryAllPages(
+    url:
+        string,
+
+    parameters:
+        PageQueryParameters,
+
+    fetchImpl:
+        FetchLike
+): Promise<ArcGISQueryResult> {
+
+    const allFeatures:
+        ArcGISQueryFeature[] = [];
+
+    const allUniqueValues:
+        Record<string, unknown[]> = {};
+
+    let fields:
+        ArcGISField[] = [];
+
+    let resultOffset =
+        parameters.resultOffset;
+
+    let exceededTransferLimit =
+        true;
+
+    let pageCount =
+        0;
+
+    let previousPageSignature:
+        string | undefined;
+
+    while (exceededTransferLimit) {
+
+        pageCount += 1;
+
+        if (pageCount > MAX_PAGES) {
+
+            return createFailedResult(
+                url,
+                [
+                    "ArcGIS pagination exceeded the maximum",
+                    `page limit of ${MAX_PAGES}.`
+                ].join(" ")
+            );
+        }
+
+        const page =
+            await queryPage(
+                url,
+                {
+                    ...parameters,
+                    resultOffset
+                },
+                fetchImpl
+            );
+
+        if (!page.success) {
+
+            /*
+             * Do not return partial data.
+             *
+             * A completeness check must never conclude that a
+             * layer is incomplete merely because a later page
+             * failed to load.
+             */
+            return page;
+        }
+
+        if (pageCount === 1) {
+
+            fields =
+                page.fields;
+        }
+
+        /*
+         * Protect against services that report
+         * exceededTransferLimit but ignore resultOffset.
+         *
+         * Such a service could otherwise return the same page
+         * forever.
+         */
+        const pageSignature =
+            createPageSignature(
+                page.features
+            );
+
+        if (
+            previousPageSignature !== undefined &&
+            pageSignature === previousPageSignature
+        ) {
+
+            return createFailedResult(
+                url,
+                [
+                    "ArcGIS pagination did not advance.",
+                    "The service may not support result offsets."
+                ].join(" ")
+            );
+        }
+
+        previousPageSignature =
+            pageSignature;
+
+        allFeatures.push(
+            ...page.features
+        );
+
+        mergeUniqueValues(
+            allUniqueValues,
+            page.uniqueValues,
+            parameters.maxUniqueValues
+        );
+
+        exceededTransferLimit =
+            page.exceededTransferLimit;
+
+        /*
+         * Advance by the number of features actually returned,
+         * rather than blindly adding resultRecordCount.
+         *
+         * This handles a final partial page correctly.
+         */
+        if (
+            exceededTransferLimit
+        ) {
+
+            if (
+                page.features.length === 0
+            ) {
+
+                return createFailedResult(
+                    url,
+                    [
+                        "ArcGIS pagination reported",
+                        "exceededTransferLimit but returned",
+                        "no features."
+                    ].join(" ")
+                );
+            }
+
+            resultOffset +=
+                page.features.length;
+        }
+    }
+
+    return {
+
+        url,
+
+        success:
+            true,
+
+        features:
+            allFeatures,
+
+        featureCount:
+            allFeatures.length,
+
+        exceededTransferLimit:
+            false,
+
+        fields,
+
+        uniqueValues:
+            allUniqueValues
+    };
+}
+
+
+// =============================================================================
+// Query URL
+// =============================================================================
 
 function buildQueryUrl(
     url: string,
@@ -346,6 +607,7 @@ function normalizeFeatures(
         )
         .map(
             feature => ({
+
                 attributes:
                     feature.attributes ?? {},
 
@@ -504,6 +766,100 @@ function collectUniqueValues(
     }
 
     return result;
+}
+
+
+// =============================================================================
+// Merge unique values
+// =============================================================================
+
+function mergeUniqueValues(
+    target:
+        Record<string, unknown[]>,
+
+    source:
+        Record<string, unknown[]>,
+
+    maxUniqueValues:
+        number
+): void {
+
+    for (
+        const [
+            field,
+            values
+        ]
+            of Object.entries(source)
+    ) {
+
+        if (
+            !target[field]
+        ) {
+
+            target[field] =
+                [];
+        }
+
+        const existing =
+            new Set(
+                target[field].map(
+                    value =>
+                        String(value)
+                )
+            );
+
+        for (
+            const value
+                of values
+        ) {
+
+            if (
+                existing.size >=
+                maxUniqueValues
+            ) {
+                break;
+            }
+
+            const normalized =
+                String(value);
+
+            if (
+                !existing.has(
+                    normalized
+                )
+            ) {
+
+                existing.add(
+                    normalized
+                );
+
+                target[field].push(
+                    value
+                );
+            }
+        }
+    }
+}
+
+
+// =============================================================================
+// Page signature
+// =============================================================================
+
+function createPageSignature(
+    features:
+        ArcGISQueryFeature[]
+): string {
+
+    /*
+     * This is deliberately based on the returned feature content
+     * rather than requiring OBJECTID to be present in outFields.
+     *
+     * That keeps queryArcGISLayer() generic across ArcGIS layers.
+     */
+    return JSON.stringify(
+        features
+    );
 }
 
 

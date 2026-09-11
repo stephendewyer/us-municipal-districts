@@ -766,6 +766,23 @@ function isCanonicalCandidate(
         return false;
     }
 
+    // -------------------------------------------------------------------------
+    // A source with known incomplete district coverage cannot be canonical.
+    //
+    // It may still remain a valid candidate/alternative in the discovery
+    // pipeline. Completeness only determines canonical eligibility here.
+    //
+    // Unknown completeness is allowed because many municipalities will not yet
+    // have an expectation registered.
+    // -------------------------------------------------------------------------
+
+    if (
+        candidate
+            .validation
+            ?.completeDistrictCoverage === false
+    ) {
+        return false;
+    }
 
     // -------------------------------------------------------------------------
     // Canonical lookup requires polygon geometry.
@@ -1147,31 +1164,20 @@ export function selectCanonicalSource(
                 best.temporalPriority
             }`,
 
+            candidate.validation?.completeDistrictCoverage === true
+                ? "district coverage: complete"
+                : candidate.validation?.completeDistrictCoverage === false
+                    ? "district coverage: incomplete"
+                    : "district coverage: unknown",
+
             `canonical source bonus: ${
                 best.canonicalBonus >= 0
                     ? "+"
                     : ""
             }${best.canonicalBonus}`,
 
-            `canonical candidate score: ${
-                bestScore.score
-            }`,
-
-            `district type: ${
-                classification.districtType
-            }`,
-
-            `district field: ${
-                districtField
-            }`,
-
-            candidate.validation
-                ? `validation confidence: ${
-                    candidate.validation.confidence
-                }`
-                : "attribute validation unavailable"
+            // ...rest unchanged
         ];
-
 
     // -------------------------------------------------------------------------
     // Construct canonical source.

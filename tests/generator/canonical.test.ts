@@ -126,7 +126,7 @@ function createClassification(): CandidateClassification {
             "ward",
 
         temporalStatus: "undated",
-        
+
         sourceRole: "unknown",
 
         rejected:
@@ -656,7 +656,7 @@ test(
             result.selectionReasons.some(
                 reason =>
                     reason ===
-                    "district type: ward"
+                    "+15 district type: ward"
             )
         );
 
@@ -665,7 +665,7 @@ test(
             result.selectionReasons.some(
                 reason =>
                     reason ===
-                    "district field: WARD"
+                    "+15 district field: WARD"
             )
         );
 
@@ -674,7 +674,7 @@ test(
             result.selectionReasons.some(
                 reason =>
                     reason ===
-                    "validation confidence: 90"
+                    "+20 validation confidence >= 0.90"
             )
         );
     }
