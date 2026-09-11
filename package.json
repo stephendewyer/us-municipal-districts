@@ -29,7 +29,8 @@
     "validate": "tsx generator/src/cli.ts validate",
     "inspect": "tsx generator/src/cli.ts inspect",
     "check": "npm run build && npm run typecheck && npm test",
-    "geometry": "tsx generator/src/cli.ts geometry"
+    "geometry": "tsx generator/src/cli.ts geometry",
+    "coverage": "tsx evaluation/runCoverage.ts"
   },
   "dependencies": {
     "@turf/boolean-point-in-polygon": "^7.4.0",
