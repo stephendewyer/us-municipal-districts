@@ -49,20 +49,14 @@ const IGNORED_TITLE_TOKENS =
 // Normalization
 // =============================================================================
 
-function normalize(
-    value?: string
-): string | undefined {
-
-    if (!value) {
-        return undefined;
-    }
-
-    return value
-        .toLowerCase()
+function normalize(value: string | undefined): string {
+    return (value ?? "")
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .replace(/([a-zA-Z])(\d+)/g, "$1 $2")
         .replace(/[_-]+/g, " ")
-        .replace(/[^\p{L}\p{N}\s]/gu, " ")
         .replace(/\s+/g, " ")
-        .trim() || undefined;
+        .toLowerCase()
+        .trim();
 }
 
 function normalizeTemporalName(
@@ -77,14 +71,14 @@ function normalizeTemporalName(
     }
 
     return normalized
-        .split(/\s+/)
-        .filter(
-            token =>
-                !TEMPORAL_TITLE_TOKEN_PATTERN.test(
-                    token
-                )
+        .replace(
+            /[\(\[\{]?\b(?:19|20)\d{2}\b[\)\]\}]?/g,
+            ""
         )
-        .join(" ")
+        .replace(
+            /\s+/g,
+            " "
+        )
         .trim() || undefined;
 }
 
@@ -190,7 +184,6 @@ function createGroupId(
         )}`
     );
 }
-
 
 // =============================================================================
 // Geometry
@@ -430,7 +423,12 @@ function titleTokens(
             .split(/\s+/)
             .map(
                 token =>
-                    token.trim()
+                    token
+                        .replace(
+                            /^[()[\]{}]+|[()[\]{}]+$/g,
+                            ""
+                        )
+                        .trim()
             )
             .filter(
                 token =>
@@ -782,25 +780,45 @@ export function compareCandidates(
     }
 
 
-    // -------------------------------------------------------------------------
+        // -------------------------------------------------------------------------
     // Title similarity
     // -------------------------------------------------------------------------
 
+    const titleA =
+        normalize(
+            a.inspection.title ??
+            a.candidate.title
+        );
+
+    const titleB =
+        normalize(
+            b.inspection.title ??
+            b.candidate.title
+        );
+
     const titles =
         titleSimilarity(
+            titleA,
+            titleB
+        );
 
-            normalize(
-                a.inspection.title ??
-                a.candidate.title
-            ),
-
-            normalize(
-                b.inspection.title ??
-                b.candidate.title
-            )
+    const temporalTitles =
+        titleSimilarity(
+            normalizeTemporalName(titleA),
+            normalizeTemporalName(titleB)
         );
 
     if (
+        temporalTitles >= 0.75
+    ) {
+
+        score += 0.20;
+
+        reasons.push(
+            `highly similar dataset titles after temporal normalization (${temporalTitles.toFixed(2)})`
+        );
+
+    } else if (
         titles >= 0.75
     ) {
 
@@ -988,147 +1006,257 @@ export function detectEquivalentLayers(
             isEligibleForEquivalence
         );
 
+
+    // -------------------------------------------------------------------------
+    // Build an equivalence graph.
+    //
+    // Each candidate is a node.
+    //
+    // An edge between two candidates means that compareCandidates()
+    // considers them equivalent.
+    //
+    // This makes grouping independent of discovery order.
+    // -------------------------------------------------------------------------
+
+    const adjacency =
+        eligibleCandidates.map(
+            () => new Set<number>()
+        );
+
+    const comparisons:
+        {
+            left: number;
+            right: number;
+            confidence: number;
+            reasons: string[];
+        }[] = [];
+
+
+    for (
+        let left = 0;
+        left < eligibleCandidates.length;
+        left++
+    ) {
+
+        for (
+            let right = left + 1;
+            right < eligibleCandidates.length;
+            right++
+        ) {
+
+            const comparison =
+                compareCandidates(
+                    eligibleCandidates[left],
+                    eligibleCandidates[right],
+                    threshold
+                );
+
+
+            if (
+                !comparison.equivalent
+            ) {
+                continue;
+            }
+
+
+            adjacency[left].add(
+                right
+            );
+
+            adjacency[right].add(
+                left
+            );
+
+
+            comparisons.push({
+
+                left,
+
+                right,
+
+                confidence:
+                    comparison.confidence,
+
+                reasons:
+                    comparison.reasons
+            });
+        }
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Find connected components in the equivalence graph.
+    // -------------------------------------------------------------------------
+
+    const visited =
+        new Set<number>();
+
     const groups:
         EquivalentLayerGroup[] = [];
 
 
     for (
-        const candidate of
-        eligibleCandidates
+        let start = 0;
+        start < eligibleCandidates.length;
+        start++
     ) {
 
-        let matchedGroup:
-            EquivalentLayerGroup |
-            undefined;
-
-        let bestConfidence =
-            0;
-
-        let bestReasons:
-            string[] = [];
+        if (
+            visited.has(start)
+        ) {
+            continue;
+        }
 
 
-        // ---------------------------------------------------------------------
-        // Find strongest matching group
-        // ---------------------------------------------------------------------
+        const component:
+            number[] = [];
 
-        for (
-            const group of groups
+        const queue:
+            number[] = [
+                start
+            ];
+
+        visited.add(
+            start
+        );
+
+
+        while (
+            queue.length > 0
         ) {
 
+            const current =
+                queue.shift()!;
+
+            component.push(
+                current
+            );
+
+
             for (
-                const existing of
-                group.candidates
+                const neighbor of
+                adjacency[current]
             ) {
 
-                const comparison =
-                    compareCandidates(
-
-                        candidate,
-
-                        existing,
-
-                        threshold
-                    );
-
                 if (
-
-                    comparison.equivalent &&
-
-                    comparison.confidence >
-                    bestConfidence
+                    visited.has(neighbor)
                 ) {
-
-                    matchedGroup =
-                        group;
-
-                    bestConfidence =
-                        comparison.confidence;
-
-                    bestReasons =
-                        comparison.reasons;
+                    continue;
                 }
+
+
+                visited.add(
+                    neighbor
+                );
+
+                queue.push(
+                    neighbor
+                );
             }
         }
 
 
         // ---------------------------------------------------------------------
-        // Add to existing group
+        // Sort candidates within the component so the resulting group is
+        // deterministic regardless of discovery order.
         // ---------------------------------------------------------------------
 
-        if (
-            matchedGroup
-        ) {
+        component.sort(
+            (left, right) =>
+                eligibleCandidates[left].candidate.url.localeCompare(
+                    eligibleCandidates[right].candidate.url
+                )
+        );
 
-            matchedGroup.candidates.push(
-                candidate
+
+        const groupCandidates =
+            component.map(
+                index =>
+                    eligibleCandidates[index]
             );
 
-            matchedGroup.confidence =
+
+        // ---------------------------------------------------------------------
+        // Collect confidence and reasons from equivalence edges belonging
+        // to this component.
+        // ---------------------------------------------------------------------
+
+        const componentIndexes =
+            new Set(component);
+
+        let confidence =
+            1;
+
+        const reasons =
+            new Set<string>([
+                "equivalent candidate group"
+            ]);
+
+
+        for (
+            const comparison of
+            comparisons
+        ) {
+
+            if (
+                !componentIndexes.has(
+                    comparison.left
+                ) ||
+                !componentIndexes.has(
+                    comparison.right
+                )
+            ) {
+                continue;
+            }
+
+
+            confidence =
                 Math.max(
-
-                    matchedGroup.confidence,
-
-                    bestConfidence
+                    confidence,
+                    comparison.confidence
                 );
 
-            matchedGroup.reasons = [
 
-                ...new Set([
+            for (
+                const reason of
+                comparison.reasons
+            ) {
 
-                    ...matchedGroup.reasons,
-
-                    ...bestReasons
-                ])
-            ];
-
-            continue;
+                reasons.add(
+                    reason
+                );
+            }
         }
 
 
-        // ---------------------------------------------------------------------
-        // Create new group
-        // ---------------------------------------------------------------------
-
-        const newGroup:
-            EquivalentLayerGroup = {
+        groups.push({
 
             id:
-                createGroupId([
-                    candidate
-                ]),
+                createGroupId(
+                    groupCandidates
+                ),
 
-            candidates: [
-                candidate
-            ],
+            candidates:
+                groupCandidates,
 
-            confidence:
-                1,
+            confidence,
 
-            reasons: [
-                "initial candidate group"
-            ]
-        };
-
-        groups.push(
-            newGroup
-        );
+            reasons:
+                [...reasons]
+        });
     }
 
 
     // -------------------------------------------------------------------------
-    // Rebuild deterministic group IDs after membership is finalized
+    // Sort groups deterministically.
     // -------------------------------------------------------------------------
 
-    for (
-        const group of groups
-    ) {
-
-        group.id =
-            createGroupId(
-                group.candidates
-            );
-    }
+    groups.sort(
+        (left, right) =>
+            left.id.localeCompare(
+                right.id
+            )
+    );
 
 
     return groups;

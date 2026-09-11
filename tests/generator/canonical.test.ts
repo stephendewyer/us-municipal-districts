@@ -97,7 +97,13 @@ function createArcGISInspection(
 }
 
 
-function createClassification(): CandidateClassification {
+function createClassification(
+    options: {
+        officialMunicipalSource?: boolean;
+        requiresReview?: boolean;
+        temporalStatus?: CandidateClassification["temporalStatus"];
+    } = {}
+): CandidateClassification {
 
     return {
 
@@ -120,46 +126,53 @@ function createClassification(): CandidateClassification {
             false,
 
         officialMunicipalSource:
+            options.officialMunicipalSource ??
             false,
 
         districtType:
             "ward",
 
-        temporalStatus: "undated",
+        temporalStatus:
+            options.temporalStatus ??
+            "undated",
 
-        sourceRole: "unknown",
+        sourceRole:
+            "unknown",
 
         rejected:
             false,
 
-        rejectionReasons:
-            [],
+        rejectionReasons: [],
 
         requiresReview:
+            options.requiresReview ??
             false,
 
         matches: {
 
-            thematic:
-                [],
+            thematic: [],
 
-            census:
-                [],
+            census: [],
 
-            parcel:
-                [],
+            parcel: [],
 
-            housing:
-                [],
+            housing: [],
 
-            political:
-                ["ward"],
+            political: [
+                "ward",
+                "city council"
+            ],
 
-            boundary:
-                ["boundary"],
+            boundary: [
+                "boundary"
+            ],
 
             official:
-                []
+                options.officialMunicipalSource
+                    ? [
+                        "municipal government"
+                    ]
+                    : []
         }
     };
 }
@@ -219,7 +232,10 @@ function createCandidate(
         "https://example.com/FeatureServer/0",
 
     title =
-        "Tucson Ward Boundaries"
+        "Tucson Ward Boundaries",
+
+    temporalStatus?:
+        CandidateClassification["temporalStatus"]
 ): InspectedCandidate {
 
     const candidate:
@@ -237,7 +253,9 @@ function createCandidate(
             ),
 
         classification:
-            createClassification(),
+            createClassification({
+                temporalStatus
+            }),
 
         validation:
             createValidation()
@@ -351,6 +369,7 @@ function createGroup(
             ]
     };
 }
+
 
 function createPhoenixCandidate(
     url: string,
@@ -693,14 +712,16 @@ test(
             createCandidate(
                 undefined,
                 "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries (2015)"
+                "Tucson Ward Boundaries (2015)",
+                "historical"
             );
 
         const current =
             createCandidate(
                 undefined,
                 "https://example.com/current/FeatureServer/0",
-                "Current Tucson Ward Boundaries"
+                "Current Tucson Ward Boundaries",
+                "current"
             );
 
 
@@ -751,7 +772,8 @@ test(
             createCandidate(
                 undefined,
                 "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries (2015)"
+                "Tucson Ward Boundaries (2015)",
+                "historical"
             );
 
 
@@ -791,14 +813,16 @@ test(
             createCandidate(
                 undefined,
                 "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries (2015)"
+                "Tucson Ward Boundaries (2015)",
+                "historical"
             );
 
         const undated =
             createCandidate(
                 undefined,
                 "https://example.com/undated/FeatureServer/0",
-                "Tucson Ward Boundaries"
+                "Tucson Ward Boundaries",
+                "undated"
             );
 
 
@@ -841,14 +865,16 @@ test(
             createCandidate(
                 undefined,
                 "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries (2015)"
+                "Tucson Ward Boundaries (2015)",
+                "historical"
             );
 
         const current =
             createCandidate(
                 undefined,
                 "https://example.com/current/FeatureServer/0",
-                "Current Tucson Ward Boundaries"
+                "Current Tucson Ward Boundaries",
+                "current"
             );
 
 
@@ -886,6 +912,7 @@ test(
         );
     }
 );
+
 
 // =============================================================================
 // Phoenix municipality-wide canonical selection regression

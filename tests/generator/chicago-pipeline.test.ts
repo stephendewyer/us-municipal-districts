@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import {
+    compareCandidates
+} from "../../generator/src/equivalence.js";
+
 import type {
     ArcGISInspection,
     ArcGISCandidateValidation,
@@ -100,6 +104,7 @@ function createClassification(
     options: {
         officialMunicipalSource?: boolean;
         requiresReview?: boolean;
+        temporalStatus?: CandidateClassification["temporalStatus"];
     } = {}
 ): CandidateClassification {
 
@@ -129,10 +134,13 @@ function createClassification(
 
         districtType:
             "ward",
-            
-        temporalStatus: "undated",
-        
-        sourceRole: "unknown",
+
+        temporalStatus:
+            options.temporalStatus ??
+            "undated",
+
+        sourceRole:
+            "unknown",
 
         rejected:
             false,
@@ -410,6 +418,7 @@ function createInspectedCandidate(
     };
 }
 
+
 // =============================================================================
 // Candidate fixtures
 // =============================================================================
@@ -447,7 +456,10 @@ function createHistoricalChicagoCandidate():
         classification:
             createClassification({
                 officialMunicipalSource:
-                    true
+                    true,
+
+                temporalStatus:
+                    "historical"
             }),
 
         validation:
@@ -508,7 +520,10 @@ function createCurrentChicagoCandidate():
                     false,
 
                 requiresReview:
-                    true
+                    true,
+
+                temporalStatus:
+                    "current"
             }),
 
         validation:
@@ -558,6 +573,21 @@ test(
                     current
                 ]
             );
+
+        const comparison =
+            compareCandidates(
+                historical,
+                current
+            );
+
+        assert.equal(
+            comparison.equivalent,
+            true
+        );
+
+        assert.ok(
+            comparison.confidence >= 0.60
+        );
 
         assert.equal(
             result.validCandidates.length,

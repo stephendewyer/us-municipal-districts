@@ -68,7 +68,7 @@ function createClassification(
             "ward",
 
         temporalStatus: "undated",
-        
+
         sourceRole: "unknown",
 
         rejected:
@@ -431,6 +431,59 @@ test(
             compareCandidates(
                 first,
                 second
+            );
+
+        assert.equal(
+            result.equivalent,
+            true
+        );
+
+        assert.ok(
+            result.confidence >= 0.60
+        );
+    }
+);
+
+test(
+    "equivalent: camelCase and separated title forms normalize to the same dataset family",
+    () => {
+
+        const camelCase =
+            createCandidate({
+
+                url:
+                    "https://server-a.example.gov/rest/services/ChicagoWards/FeatureServer/0",
+
+                title:
+                    "ChicagoWards",
+
+                serviceName:
+                    "ChicagoWards",
+
+                layerName:
+                    "ChicagoWards"
+            });
+
+        const separated =
+            createCandidate({
+
+                url:
+                    "https://server-b.example.gov/rest/services/Chicago_Wards/FeatureServer/0",
+
+                title:
+                    "Chicago_Wards",
+
+                serviceName:
+                    "Chicago_Wards",
+
+                layerName:
+                    "Chicago_Wards"
+            });
+
+        const result =
+            compareCandidates(
+                camelCase,
+                separated
             );
 
         assert.equal(
