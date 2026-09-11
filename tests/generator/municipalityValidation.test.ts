@@ -76,6 +76,8 @@ function createCandidate(
             isHousingDataset: false,
             officialMunicipalSource: true,
             districtType: "ward",
+            temporalStatus: "undated",
+            sourceRole: "unknown",
             rejected: false,
             rejectionReasons: [],
             requiresReview: false,

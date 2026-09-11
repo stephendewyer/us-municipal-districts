@@ -67,6 +67,10 @@ function createClassification(
             options.districtType ??
             "ward",
 
+        temporalStatus: "undated",
+        
+        sourceRole: "unknown",
+
         rejected:
             options.rejected ??
             false,

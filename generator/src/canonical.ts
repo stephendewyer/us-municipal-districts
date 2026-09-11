@@ -4,7 +4,8 @@ import type {
     CanonicalSource,
     CandidateScore,
     DistrictType,
-    EquivalentLayerGroup
+    EquivalentLayerGroup,
+    SourceRole
 } from "./types.js";
 
 import {
@@ -46,6 +47,60 @@ function normalizeField(
         .trim();
 }
 
+
+// =============================================================================
+// Source-role priority
+// =============================================================================
+
+/**
+ * Primary provenance hierarchy used when selecting a canonical source.
+ *
+ * Authoritative sources represent the political boundary itself and are
+ * preferred over derived datasets, duplicate/alternate datasets, and
+ * sources whose provenance is unknown.
+ *
+ * Historical/current status is intentionally NOT represented here.
+ * Historical is a temporal property and is handled separately below.
+ */
+const SOURCE_ROLE_PRIORITY: Record<SourceRole, number> = {
+    authoritative: 4,
+    derived: 3,
+    duplicate: 2,
+    unknown: 1
+};
+
+
+function sourceRolePriority(
+    candidate: EquivalentLayerGroup["candidates"][number]
+): number {
+
+    return SOURCE_ROLE_PRIORITY[
+        candidate.classification.sourceRole
+    ];
+}
+
+
+// =============================================================================
+// Temporal priority
+// =============================================================================
+
+/**
+ * Secondary temporal hierarchy.
+ *
+ * Current > undated > historical.
+ *
+ * Temporal status is deliberately secondary to source role.
+ *
+ * Therefore:
+ *
+ *   authoritative historical
+ *
+ * still beats:
+ *
+ *   derived current
+ *
+ * when selecting the canonical source.
+ */
 function temporalPriority(
     candidate: EquivalentLayerGroup["candidates"][number]
 ): number {
@@ -394,23 +449,18 @@ function districtFieldScore(
 // =============================================================================
 
 /**
- * Return a moderate adjustment used ONLY when selecting the canonical
- * source.
+ * Return a secondary adjustment used when selecting the canonical source.
  *
- * This does not determine whether a candidate is valid.
+ * Source role is the primary provenance signal:
  *
- * Positive values favor datasets whose primary identity is the political
- * boundary itself.
+ *   authoritative > derived > duplicate > unknown
  *
- * Negative values demote datasets whose political geometry is embedded
- * in a derived analytical or thematic dataset.
+ * This bonus is deliberately smaller than source-role and temporal
+ * priorities. It is used only to break ties between otherwise similar
+ * candidates.
  *
- * IMPORTANT:
- *
- * This adjustment is intentionally much smaller than the major ranking
- * signals in rank.ts, especially temporal evidence. Therefore a current
- * versus historical distinction remains more important than whether the
- * dataset title sounds more boundary-native.
+ * Importantly, this function does NOT try to determine whether a source
+ * is derived. That responsibility belongs to classification.sourceRole.
  */
 function canonicalSourceBonus(
     candidate: EquivalentLayerGroup["candidates"][number]
@@ -438,23 +488,11 @@ function canonicalSourceBonus(
     let bonus = 0;
 
 
-    /*
-     * Prefer datasets whose identity clearly indicates that they are
-     * the actual political boundary dataset rather than a thematic
-     * dataset that merely contains ward/district information.
-     *
-     * Because normalizeField() now splits camelCase, names such as:
-     *
-     *   TucsonWards2022
-     *   CityCouncilDistricts
-     *   WardBoundaries
-     *
-     * become:
-     *
-     *   tucson wards2022
-     *   city council districts
-     *   ward boundaries
-     */
+    // -------------------------------------------------------------------------
+    // Prefer datasets whose identity clearly represents the political
+    // boundary itself.
+    // -------------------------------------------------------------------------
+
     const boundaryNative =
         /\bcouncil\s+districts?\b/.test(
             identityText
@@ -462,7 +500,7 @@ function canonicalSourceBonus(
         /\bward\s+boundar(?:y|ies)\b/.test(
             identityText
         ) ||
-        /\bwards?(?:\d{2,4})?\b/.test(
+        /\bwards?(?:\s*\d{2,4})?\b/.test(
             identityText
         ) ||
         /\baldermanic\s+districts?\b/.test(
@@ -483,28 +521,10 @@ function canonicalSourceBonus(
     }
 
 
-    /*
-     * Penalize datasets that use political terminology as attributes
-     * of another thematic dataset rather than representing the boundary.
-     */
-    const derived =
-        /\b(eviction|filings?|crime|incidents?|complaints?|violations?|permits?|inspections?|parcels?|housing|population|demographics)\b/
-            .test(
-                identityText
-            );
+    // -------------------------------------------------------------------------
+    // Official municipal provenance is a secondary preference.
+    // -------------------------------------------------------------------------
 
-
-    if (
-        derived
-    ) {
-        bonus -= 20;
-    }
-
-
-    /*
-     * Official municipal provenance should be a meaningful canonical
-     * preference, but not so large that it overwhelms boundary quality.
-     */
     if (
         candidate
             .classification
@@ -827,9 +847,14 @@ export function selectCanonicalSource(
 
 
     // -------------------------------------------------------------------------
-    // Calculate the normal candidate scores first.
+    // Calculate the normal candidate scores and canonical-selection signals.
     //
-    // scoreCandidate() remains the underlying scoring system.
+    // Canonical selection hierarchy:
+    //
+    //   1. source role
+    //   2. temporal status
+    //   3. canonical-source bonus
+    //   4. normal candidate score
     // -------------------------------------------------------------------------
 
     const ranked =
@@ -863,9 +888,36 @@ export function selectCanonicalSource(
                 ) => {
 
                     // -------------------------------------------------------------
-                    // 1. Temporal status takes precedence.
+                    // 1. Source role.
+                    //
+                    // Authoritative > derived > duplicate > unknown.
+                    //
+                    // This is the primary provenance hierarchy.
+                    // -------------------------------------------------------------
+
+                    const sourceRoleDifference =
+                        sourceRolePriority(
+                            b.candidate
+                        ) -
+                        sourceRolePriority(
+                            a.candidate
+                        );
+
+
+                    if (
+                        sourceRoleDifference !== 0
+                    ) {
+
+                        return sourceRoleDifference;
+                    }
+
+
+                    // -------------------------------------------------------------
+                    // 2. Temporal status.
                     //
                     // Current > undated > historical.
+                    //
+                    // Temporal status is intentionally secondary to source role.
                     // -------------------------------------------------------------
 
                     if (
@@ -881,12 +933,7 @@ export function selectCanonicalSource(
 
 
                     // -------------------------------------------------------------
-                    // 2. Canonical-source preference.
-                    //
-                    // Among candidates with the same temporal status, prefer
-                    // sources that represent the political boundary itself,
-                    // with official municipal sources receiving additional
-                    // provenance weight.
+                    // 3. Canonical-source preference.
                     // -------------------------------------------------------------
 
                     if (
@@ -902,7 +949,7 @@ export function selectCanonicalSource(
 
 
                     // -------------------------------------------------------------
-                    // 3. Existing candidate ranking.
+                    // 4. Existing candidate ranking.
                     // -------------------------------------------------------------
 
                     return compareCandidateScores(
@@ -1083,6 +1130,23 @@ export function selectCanonicalSource(
         [
             ...bestScore.reasons,
 
+            `source role: ${
+                best
+                    .candidate
+                    .classification
+                    .sourceRole
+            }`,
+
+            `source role priority: ${
+                sourceRolePriority(
+                    best.candidate
+                )
+            }`,
+
+            `temporal priority: ${
+                best.temporalPriority
+            }`,
+
             `canonical source bonus: ${
                 best.canonicalBonus >= 0
                     ? "+"
@@ -1171,7 +1235,8 @@ export function selectCanonicalSource(
             "unknown",
 
         // Keep the original candidate score here.
-        // The canonical bonus is a selection mechanism only.
+        // The canonical bonus and source-role/temporal priorities are
+        // selection mechanisms only.
         score:
             bestScore.score,
 
@@ -1335,7 +1400,8 @@ export function selectMunicipalityCanonicalSource(
                     /*
                      * Recover the candidate that produced the canonical
                      * source so municipality-level selection can still use
-                     * temporal priority and canonical-source preference.
+                     * source-role, temporal priority, and canonical-source
+                     * preference.
                      */
                     const candidate =
                         group.candidates.find(
@@ -1382,32 +1448,35 @@ export function selectMunicipalityCanonicalSource(
         ) => {
 
             // ---------------------------------------------------------------------
-            // 1. Prefer a boundary-native source over a derived dataset.
+            // 1. Source role.
             //
-            // The canonical source should represent the political boundary
-            // itself, rather than a thematic/analytical dataset that happens
-            // to contain the same boundary geometry.
+            // Authoritative > derived > duplicate > unknown.
+            //
+            // This must remain the first criterion at the municipality level
+            // as well as within individual equivalence groups.
             // ---------------------------------------------------------------------
 
-            const canonicalBonusDifference =
-                canonicalSourceBonus(
+            const sourceRoleDifference =
+                sourceRolePriority(
                     b.candidate
                 ) -
-                canonicalSourceBonus(
+                sourceRolePriority(
                     a.candidate
                 );
 
 
             if (
-                canonicalBonusDifference !== 0
+                sourceRoleDifference !== 0
             ) {
-                return canonicalBonusDifference;
+
+                return sourceRoleDifference;
             }
 
 
             // ---------------------------------------------------------------------
-            // 2. Among sources with the same canonical-source quality,
-            // prefer current over undated over historical.
+            // 2. Temporal status.
+            //
+            // Current > undated > historical.
             // ---------------------------------------------------------------------
 
             const temporalDifference =
@@ -1422,12 +1491,34 @@ export function selectMunicipalityCanonicalSource(
             if (
                 temporalDifference !== 0
             ) {
+
                 return temporalDifference;
             }
 
 
             // ---------------------------------------------------------------------
-            // 3. Fall back to the existing canonical-source comparison.
+            // 3. Canonical-source preference.
+            // ---------------------------------------------------------------------
+
+            const canonicalBonusDifference =
+                canonicalSourceBonus(
+                    b.candidate
+                ) -
+                canonicalSourceBonus(
+                    a.candidate
+                );
+
+
+            if (
+                canonicalBonusDifference !== 0
+            ) {
+
+                return canonicalBonusDifference;
+            }
+
+
+            // ---------------------------------------------------------------------
+            // 4. Fall back to the existing canonical-source comparison.
             // ---------------------------------------------------------------------
 
             return compareCanonicalSources(

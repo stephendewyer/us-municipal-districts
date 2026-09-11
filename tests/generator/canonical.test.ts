@@ -125,6 +125,10 @@ function createClassification(): CandidateClassification {
         districtType:
             "ward",
 
+        temporalStatus: "undated",
+        
+        sourceRole: "unknown",
+
         rejected:
             false,
 

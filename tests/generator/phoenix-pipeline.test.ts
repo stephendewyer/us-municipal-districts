@@ -142,6 +142,10 @@ function createClassification(
         districtType:
             "council-district",
 
+        temporalStatus: "undated",
+        
+        sourceRole: "unknown",
+
         rejected:
             false,
 

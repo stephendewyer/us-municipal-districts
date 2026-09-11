@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import {
+    optimizeGeometry
+} from "./geometry-optimize.js";
+
 import type {
     MunicipalDistrictRegistryEntry,
     MunicipalDistrictSource
@@ -11,7 +15,7 @@ import type {
 // Types
 // =============================================================================
 
-interface GeoJSONGeometry {
+export interface GeoJSONGeometry {
     type:
         | "Polygon"
         | "MultiPolygon";
@@ -19,7 +23,7 @@ interface GeoJSONGeometry {
     coordinates: unknown;
 }
 
-interface GeoJSONFeature {
+export interface GeoJSONFeature {
     type: "Feature";
 
     properties:
@@ -30,7 +34,7 @@ interface GeoJSONFeature {
         | null;
 }
 
-interface GeoJSONFeatureCollection {
+export interface GeoJSONFeatureCollection {
     type: "FeatureCollection";
 
     features:
@@ -72,6 +76,23 @@ export async function generateGeometry(
         );
 
 
+    /*
+     * Pass normalized geometry through the production optimization
+     * layer.
+     *
+     * The first optimization implementation performs no simplification.
+     * This establishes the optimization stage without changing the
+     * geometry.
+     */
+    const optimized =
+        optimizeGeometry(
+            normalized,
+            {
+                simplify: false
+            }
+        );
+
+
     const outputPath =
         path.join(
             outputRoot,
@@ -90,7 +111,7 @@ export async function generateGeometry(
     fs.writeFileSync(
         outputPath,
         JSON.stringify(
-            normalized,
+            optimized.geometry,
             null,
             2
         ) + "\n",

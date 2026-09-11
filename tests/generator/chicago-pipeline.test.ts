@@ -129,6 +129,10 @@ function createClassification(
 
         districtType:
             "ward",
+            
+        temporalStatus: "undated",
+        
+        sourceRole: "unknown",
 
         rejected:
             false,

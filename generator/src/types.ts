@@ -644,6 +644,10 @@ export interface CandidateClassification {
      */
     districtType?: DistrictType;
 
+    temporalStatus: TemporalStatus;
+
+    sourceRole: SourceRole;
+
     /**
      * Whether the candidate should be rejected.
      */
@@ -1004,6 +1008,16 @@ export interface ArcGISQueryOptions {
     outSR?: number;
 }
 
+export type SourceRole =
+    | "authoritative"
+    | "derived"
+    | "duplicate"
+    | "unknown";
+
+export type TemporalStatus =
+    | "current"
+    | "historical"
+    | "undated";
 
 // =============================================================================
 // Generator options
