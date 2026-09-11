@@ -1,15 +1,23 @@
 import {
+    performance
+} from "node:perf_hooks";
+
+
+import {
     COVERAGE_FIXTURES
 } from "./fixtures.js";
+
 
 import type {
     CoverageFixture,
     CoverageResult
 } from "./types.js";
 
+
 import {
     discoverArcGIS
 } from "../generator/src/discover.js";
+
 
 import type {
     DiscoveryResult,
@@ -52,12 +60,21 @@ async function main(): Promise<void> {
         );
 
 
+        const startTime =
+            performance.now();
+
+
         try {
 
             const result =
                 await evaluateFixture(
                     fixture
                 );
+
+
+            result.runtimeMs =
+                performance.now() -
+                startTime;
 
 
             results.push(
@@ -70,6 +87,11 @@ async function main(): Promise<void> {
             );
 
         } catch (error) {
+
+            const runtimeMs =
+                performance.now() -
+                startTime;
+
 
             const result: CoverageResult = {
 
@@ -88,6 +110,7 @@ async function main(): Promise<void> {
                 expectedDistrictCount:
                     fixture.expectedDistrictCount,
 
+
                 discoveredCandidateCount:
                     0,
 
@@ -100,11 +123,16 @@ async function main(): Promise<void> {
                 completeCandidateCount:
                     0,
 
+
                 canonicalSourceFound:
                     false,
 
                 geometryGenerated:
                     false,
+
+
+                runtimeMs,
+
 
                 failureStage:
                     "discovery",
@@ -125,6 +153,10 @@ async function main(): Promise<void> {
                         ? error.message
                         : String(error)
                 }`
+            );
+
+            console.log(
+                `  Runtime: ${formatRuntime(runtimeMs)}`
             );
         }
 
@@ -167,39 +199,9 @@ async function evaluateFixture(
     if (!discovery) {
 
         return {
-
-            placeFips:
-                fixture.placeFips,
-
-            city:
-                fixture.city,
-
-            state:
-                fixture.state,
-
-            districtType:
-                fixture.districtType,
-
-            expectedDistrictCount:
-                fixture.expectedDistrictCount,
-
-            discoveredCandidateCount:
-                0,
-
-            inspectedCandidateCount:
-                0,
-
-            validCandidateCount:
-                0,
-
-            completeCandidateCount:
-                0,
-
-            canonicalSourceFound:
-                false,
-
-            geometryGenerated:
-                false,
+            ...createEmptyResult(
+                fixture
+            ),
 
             failureStage:
                 "discovery",
@@ -347,6 +349,7 @@ function isCompleteCandidate(
     if (
         validation?.completeDistrictCoverage === true
     ) {
+
         return true;
     }
 
@@ -361,6 +364,7 @@ function isCompleteCandidate(
     if (
         fixture.expectedDistrictValues === undefined
     ) {
+
         return (
             validation?.distinctDistrictValues.length ===
             fixture.expectedDistrictCount
@@ -378,6 +382,7 @@ function isCompleteCandidate(
         actualValues.size !==
         fixture.expectedDistrictValues.length
     ) {
+
         return false;
     }
 
@@ -388,6 +393,58 @@ function isCompleteCandidate(
                 expectedValue
             )
     );
+}
+
+
+// =============================================================================
+// Create empty result
+// =============================================================================
+
+function createEmptyResult(
+    fixture: CoverageFixture
+): CoverageResult {
+
+    return {
+
+        placeFips:
+            fixture.placeFips,
+
+        city:
+            fixture.city,
+
+        state:
+            fixture.state,
+
+        districtType:
+            fixture.districtType,
+
+        expectedDistrictCount:
+            fixture.expectedDistrictCount,
+
+
+        discoveredCandidateCount:
+            0,
+
+        inspectedCandidateCount:
+            0,
+
+        validCandidateCount:
+            0,
+
+        completeCandidateCount:
+            0,
+
+
+        canonicalSourceFound:
+            false,
+
+        geometryGenerated:
+            false,
+
+
+        runtimeMs:
+            0
+    };
 }
 
 
@@ -439,6 +496,7 @@ function createResult(
         expectedDistrictCount:
             fixture.expectedDistrictCount,
 
+
         discoveredCandidateCount:
             discovery.candidates.length,
 
@@ -451,10 +509,11 @@ function createResult(
         completeCandidateCount:
             completeCandidates.length,
 
+
         /*
          * Canonical and geometry evaluation are intentionally not wired
-         * into the first version. Those will be evaluated separately once
-         * discovery/validation coverage is established.
+         * into this first instrumentation version. Those will be evaluated
+         * separately once discovery/validation coverage is established.
          */
         canonicalSourceFound:
             false,
@@ -462,10 +521,32 @@ function createResult(
         geometryGenerated:
             false,
 
+
+        /*
+         * Runtime is assigned by main() after evaluateFixture() completes.
+         */
+        runtimeMs:
+            0,
+
+
         failureStage,
 
         failureCode
     };
+}
+
+
+// =============================================================================
+// Format runtime
+// =============================================================================
+
+function formatRuntime(
+    runtimeMs: number
+): string {
+
+    return (
+        `${(runtimeMs / 1000).toFixed(2)}s`
+    );
 }
 
 
@@ -478,19 +559,23 @@ function printResult(
 ): void {
 
     console.log(
-        `  Candidates: ${result.discoveredCandidateCount}`
+        `  Discovered candidates: ${result.discoveredCandidateCount}`
     );
 
     console.log(
-        `  Inspected: ${result.inspectedCandidateCount}`
+        `  Matching district type: ${result.inspectedCandidateCount}`
     );
 
     console.log(
-        `  Valid: ${result.validCandidateCount}`
+        `  Valid boundaries: ${result.validCandidateCount}`
     );
 
     console.log(
-        `  Complete: ${result.completeCandidateCount}`
+        `  Complete boundaries: ${result.completeCandidateCount}`
+    );
+
+    console.log(
+        `  Runtime: ${formatRuntime(result.runtimeMs)}`
     );
 
 
@@ -507,7 +592,7 @@ function printResult(
 
 
     console.log(
-        `  Status: FAIL`
+        "  Status: FAIL"
     );
 
     console.log(
@@ -556,6 +641,46 @@ function printSummary(
         ).length;
 
 
+    const totalRuntimeMs =
+        results.reduce(
+            (sum, result) =>
+                sum + result.runtimeMs,
+            0
+        );
+
+
+    const averageRuntimeMs =
+        total > 0
+            ? totalRuntimeMs / total
+            : 0;
+
+
+    const slowestResult =
+        results.length > 0
+            ? results.reduce(
+                (slowest, result) =>
+                    result.runtimeMs >
+                    slowest.runtimeMs
+                        ? result
+                        : slowest,
+                results[0]
+            )
+            : undefined;
+
+
+    const fastestResult =
+        results.length > 0
+            ? results.reduce(
+                (fastest, result) =>
+                    result.runtimeMs <
+                    fastest.runtimeMs
+                        ? result
+                        : fastest,
+                results[0]
+            )
+            : undefined;
+
+
     console.log(
         "\nSUMMARY"
     );
@@ -563,6 +688,7 @@ function printSummary(
     console.log(
         "======="
     );
+
 
     console.log(
         `\nEvaluation cases:       ${total}`
@@ -586,6 +712,43 @@ function printSummary(
 
 
     // -------------------------------------------------------------------------
+    // Runtime
+    // -------------------------------------------------------------------------
+
+    console.log(
+        "\nRuntime:"
+    );
+
+    console.log(
+        `  Total:                ${formatRuntime(totalRuntimeMs)}`
+    );
+
+    console.log(
+        `  Average:              ${formatRuntime(averageRuntimeMs)}`
+    );
+
+
+    if (
+        slowestResult
+    ) {
+
+        console.log(
+            `  Slowest:              ${slowestResult.city}, ${slowestResult.state} (${formatRuntime(slowestResult.runtimeMs)})`
+        );
+    }
+
+
+    if (
+        fastestResult
+    ) {
+
+        console.log(
+            `  Fastest:              ${fastestResult.city}, ${fastestResult.state} (${formatRuntime(fastestResult.runtimeMs)})`
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
     // Failure breakdown
     // -------------------------------------------------------------------------
 
@@ -603,6 +766,7 @@ function printSummary(
         if (
             result.failureCode === undefined
         ) {
+
             continue;
         }
 

@@ -1,5 +1,6 @@
 import type { DistrictType } from "../generator/src/types.js";
 
+
 export type CoverageFailureStage =
     | "discovery"
     | "inspection"
@@ -7,6 +8,7 @@ export type CoverageFailureStage =
     | "validation"
     | "canonical"
     | "geometry";
+
 
 export type CoverageFailureCode =
     | "NO_DISCOVERY_CANDIDATES"
@@ -16,32 +18,60 @@ export type CoverageFailureCode =
     | "GEOMETRY_FETCH_FAILED"
     | "GEOMETRY_VALIDATION_FAILED";
 
+
 export interface CoverageFixture {
+
     placeFips: string;
+
     city: string;
+
     state: string;
+
     districtType: DistrictType;
 
+
     expectedDistrictCount: number;
+
     expectedDistrictValues?: string[];
 }
 
+
 export interface CoverageResult {
+
     placeFips: string;
+
     city: string;
+
     state: string;
+
     districtType: DistrictType;
+
 
     expectedDistrictCount: number;
 
+
     discoveredCandidateCount: number;
+
     inspectedCandidateCount: number;
+
     validCandidateCount: number;
+
     completeCandidateCount: number;
 
+
     canonicalSourceFound?: boolean;
+
     geometryGenerated?: boolean;
 
+
+    /**
+     * Total time required to evaluate this municipality,
+     * measured in milliseconds.
+     */
+    runtimeMs: number;
+
+
     failureStage?: CoverageFailureStage;
+
     failureCode?: CoverageFailureCode;
 }
