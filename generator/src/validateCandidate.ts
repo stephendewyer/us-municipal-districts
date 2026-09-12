@@ -24,6 +24,216 @@ const MIN_DISTINCT_VALUES = 2;
 const MAX_DISTINCT_VALUES = 100;
 
 // =============================================================================
+// Layer semantic evidence
+// =============================================================================
+
+/*
+ * Terms that strongly suggest that the layer itself represents
+ * political boundaries.
+ *
+ * These are intentionally semantic signals rather than hard-coded
+ * exclusions. Different municipalities use different naming conventions.
+ */
+const BOUNDARY_TERMS = [
+    "boundary",
+    "ward",
+    "council district",
+    "aldermanic",
+    "municipal district",
+    "political district"
+];
+
+/*
+ * Terms that suggest the layer is a thematic dataset which may
+ * happen to contain a political district attribute.
+ *
+ * These are NOT automatic rejection terms.
+ */
+const THEMATIC_TERMS = [
+    "eviction",
+    "crime",
+    "incident",
+    "complaint",
+    "inspection",
+    "permit",
+    "filing",
+    "property",
+    "housing",
+    "business",
+    "license",
+    "assessment",
+    "tax",
+    "sales",
+    "employment",
+    "population",
+    "demographic",
+    "facility",
+    "service",
+    "application",
+    "site"
+];
+
+
+interface LayerSemanticEvidence {
+    boundaryScore: number;
+    thematicScore: number;
+    evidence: string[];
+}
+
+function scoreLayerSemantics(
+    candidate: DiscoveryCandidate,
+    inspection: ArcGISInspection
+): LayerSemanticEvidence {
+
+    /*
+     * Identity text describes what the layer actually is.
+     *
+     * These fields should carry the strongest semantic weight.
+     */
+    const identityText = [
+        candidate.title,
+        inspection.title,
+        inspection.serviceName,
+        inspection.layerName
+    ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+    /*
+     * Metadata provides supporting evidence, but should not be allowed
+     * to dominate the identity of the dataset.
+     */
+    const metadataText = [
+        inspection.description,
+        inspection.serviceDescription
+    ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+    let boundaryScore = 0;
+    let thematicScore = 0;
+
+    const evidence: string[] = [];
+
+    /*
+     * =========================================================================
+     * Identity evidence
+     * =========================================================================
+     *
+     * A term in the actual layer/service title is strong evidence about
+     * what the geometry represents.
+     */
+    for (const term of BOUNDARY_TERMS) {
+        if (identityText.includes(term)) {
+            boundaryScore += 20;
+
+            evidence.push(
+                `Boundary identity term: "${term}".`
+            );
+        }
+    }
+
+    for (const term of THEMATIC_TERMS) {
+        if (identityText.includes(term)) {
+            thematicScore += 20;
+
+            evidence.push(
+                `Thematic identity term: "${term}".`
+            );
+        }
+    }
+
+    /*
+     * =========================================================================
+     * Metadata evidence
+     * =========================================================================
+     *
+     * Descriptions are intentionally weaker.
+     *
+     * A description may say:
+     *
+     *     "This layer contains information summarized by council district."
+     *
+     * That does NOT mean the geometry represents council districts.
+     */
+    for (const term of BOUNDARY_TERMS) {
+        if (metadataText.includes(term)) {
+            boundaryScore += 5;
+
+            evidence.push(
+                `Boundary metadata term: "${term}".`
+            );
+        }
+    }
+
+    for (const term of THEMATIC_TERMS) {
+        if (metadataText.includes(term)) {
+            thematicScore += 5;
+
+            evidence.push(
+                `Thematic metadata term: "${term}".`
+            );
+        }
+    }
+
+    /*
+     * =========================================================================
+     * Grouping / overlay language
+     * =========================================================================
+     *
+     * Phrases such as:
+     *
+     *     "by ward"
+     *     "by council district"
+     *     "within ward boundaries"
+     *     "per ward"
+     *
+     * commonly indicate that political divisions are an attribute or
+     * aggregation dimension rather than the geometry's actual identity.
+     *
+     * These are deliberately treated as thematic evidence only when
+     * the layer also has an obvious thematic identity.
+     */
+    const thematicGroupingPatterns = [
+        /\bby\s+(?:ward|wards)\b/i,
+        /\bby\s+(?:council\s+)?districts?\b/i,
+        /\bwithin\s+(?:ward|wards)\b/i,
+        /\bwithin\s+(?:council\s+)?districts?\b/i,
+        /\bper\s+(?:ward|wards)\b/i,
+        /\bper\s+(?:council\s+)?districts?\b/i,
+        /\b(?:ward|wards)\s+aggregation\b/i,
+        /\b(?:district|districts)\s+aggregation\b/i,
+        /\bsummar(?:y|ize|ized|ization).*?\b(?:ward|wards|district|districts)\b/i
+    ];
+
+    const hasThematicGrouping =
+        thematicGroupingPatterns.some(
+            pattern =>
+                pattern.test(identityText)
+        );
+
+    if (
+        hasThematicGrouping &&
+        thematicScore > 0
+    ) {
+        thematicScore += 15;
+
+        evidence.push(
+            "Political district appears to be a grouping/aggregation dimension on a thematic layer."
+        );
+    }
+
+    return {
+        boundaryScore,
+        thematicScore,
+        evidence
+    };
+}
+
+
+// =============================================================================
 // Public API
 // =============================================================================
 
@@ -55,6 +265,23 @@ export async function validateCandidate(
             ]
         };
     }
+
+    const semanticEvidence =
+        scoreLayerSemantics(
+            candidate,
+            inspection
+        );
+    console.log(
+    "SEMANTIC DEBUG:",
+        {
+            title: inspection.title,
+            serviceName: inspection.serviceName,
+            layerName: inspection.layerName,
+            boundaryScore: semanticEvidence.boundaryScore,
+            thematicScore: semanticEvidence.thematicScore,
+            evidence: semanticEvidence.evidence
+        }
+    );
 
     const candidateFields =
         getCandidateFields(
@@ -89,9 +316,16 @@ export async function validateCandidate(
 
             evidence: [
                 "No candidate district field could be identified.",
+
                 classification.isPoliticalBoundary
                     ? "Classification identified political-boundary evidence; validation could not inspect attributes."
-                    : "No political-boundary evidence was available."
+                    : "No political-boundary evidence was available.",
+
+                `Boundary semantic score: ${semanticEvidence.boundaryScore}.`,
+
+                `Thematic semantic score: ${semanticEvidence.thematicScore}.`,
+
+                ...semanticEvidence.evidence
             ]
         };
     }
@@ -161,9 +395,16 @@ export async function validateCandidate(
 
             evidence: [
                 "ArcGIS attribute validation failed.",
+
                 error instanceof Error
                     ? error.message
-                    : String(error)
+                    : String(error),
+
+                `Boundary semantic score: ${semanticEvidence.boundaryScore}.`,
+
+                `Thematic semantic score: ${semanticEvidence.thematicScore}.`,
+
+                ...semanticEvidence.evidence
             ]
         };
     }
@@ -197,8 +438,15 @@ export async function validateCandidate(
 
             evidence: [
                 "Unable to query ArcGIS layer.",
+
                 query.error ??
-                    "Unknown ArcGIS query error."
+                    "Unknown ArcGIS query error.",
+
+                `Boundary semantic score: ${semanticEvidence.boundaryScore}.`,
+
+                `Thematic semantic score: ${semanticEvidence.thematicScore}.`,
+
+                ...semanticEvidence.evidence
             ]
         };
     }
@@ -242,7 +490,13 @@ export async function validateCandidate(
                 inspection.geometryType,
 
             evidence: [
-                "No candidate field contained usable values."
+                "No candidate field contained usable values.",
+
+                `Boundary semantic score: ${semanticEvidence.boundaryScore}.`,
+
+                `Thematic semantic score: ${semanticEvidence.thematicScore}.`,
+
+                ...semanticEvidence.evidence
             ]
         };
     }
@@ -251,15 +505,22 @@ export async function validateCandidate(
         calculateConfidence(
             inspection,
             classification,
-            best
+            best,
+            semanticEvidence
         );
 
+    /*
+    * Semantic evidence is now provided to the acceptance decision so that
+    * strongly thematic layers with political-looking attributes can be
+    * distinguished from genuine political-boundary layers.
+    */
     const accepted =
         determineAcceptance(
             inspection,
             classification,
             best,
-            confidence
+            confidence,
+            semanticEvidence
         );
 
     /*
@@ -366,6 +627,21 @@ export async function validateCandidate(
 
     evidence.push(
         `Field coverage: ${formatPercent(best.coverage)}.`
+    );
+
+    /*
+     * Semantic evidence is diagnostic in this first iteration.
+     */
+    evidence.push(
+        `Boundary semantic score: ${semanticEvidence.boundaryScore}.`
+    );
+
+    evidence.push(
+        `Thematic semantic score: ${semanticEvidence.thematicScore}.`
+    );
+
+    evidence.push(
+        ...semanticEvidence.evidence
     );
 
     if (
@@ -884,7 +1160,8 @@ function determineAcceptance(
     inspection: ArcGISInspection,
     classification: CandidateClassification,
     best: FieldAnalysis,
-    confidence: number
+    confidence: number,
+    semanticEvidence: LayerSemanticEvidence
 ): boolean {
 
     const isPolygon =
@@ -895,6 +1172,22 @@ function determineAcceptance(
 
     if (
         !isPolygon
+    ) {
+        return false;
+    }
+
+    /*
+    * A strongly thematic layer should not pass merely because it contains
+    * a political-looking field such as COUNCIL_DISTRICT or WARD.
+    *
+    * Semantic evidence is allowed to reject a candidate when thematic
+    * evidence is stronger than boundary evidence, even if the ordinary
+    * classifier independently identified political-looking terminology.
+    */
+
+    if (
+        semanticEvidence.thematicScore >
+            semanticEvidence.boundaryScore
     ) {
         return false;
     }
@@ -1032,75 +1325,56 @@ function determineAcceptance(
 function calculateConfidence(
     inspection: ArcGISInspection,
     classification: CandidateClassification,
-    best: FieldAnalysis
+    best: FieldAnalysis,
+    semanticEvidence: LayerSemanticEvidence
 ): number {
-
     let confidence = 0;
 
     const isPolygon =
-        inspection.geometryType ===
-            "esriGeometryPolygon" ||
-        inspection.geometryType ===
-            "polygon";
+        inspection.geometryType === "esriGeometryPolygon" ||
+        inspection.geometryType === "polygon";
 
-    if (
-        isPolygon
-    ) {
+    // =========================================================================
+    // Structural evidence
+    // =========================================================================
+
+    if (isPolygon) {
         confidence += 25;
     }
 
-    if (
-        classification.isPoliticalBoundary
-    ) {
+    if (classification.isPoliticalBoundary) {
         confidence += 25;
     }
 
-    if (
-        classification.officialMunicipalSource
-    ) {
+    if (classification.officialMunicipalSource) {
         confidence += 20;
     }
 
-    if (
-        isPoliticalFieldName(
-            best.field
-        )
-    ) {
+    if (isPoliticalFieldName(best.field)) {
         confidence += 20;
     }
 
-    if (
-        /\bward\b/i.test(
-            normalizeField(
-                best.field
-            )
-        )
-    ) {
+    if (/\bward\b/i.test(normalizeField(best.field))) {
         confidence += 10;
     }
 
-    if (
-        best.distinctValues.length >= 2
-    ) {
+    // =========================================================================
+    // District values
+    // =========================================================================
+
+    if (best.distinctValues.length >= 2) {
         confidence += 10;
     }
 
-    if (
-        best.distinctValues.length >= 3
-    ) {
+    if (best.distinctValues.length >= 3) {
         confidence += 5;
     }
 
-    if (
-        best.distinctValues.length >= 5
-    ) {
+    if (best.distinctValues.length >= 5) {
         confidence += 5;
     }
 
-    switch (
-        best.pattern
-    ) {
-
+    switch (best.pattern) {
         case "ward-number":
             confidence += 15;
             break;
@@ -1118,28 +1392,48 @@ function calculateConfidence(
             break;
     }
 
-    if (
-        best.coverage >= 0.95
-    ) {
+    // =========================================================================
+    // Field coverage
+    // =========================================================================
+
+    if (best.coverage >= 0.95) {
         confidence += 5;
-    }
-    else if (
-        best.coverage >= 0.75
-    ) {
+    } else if (best.coverage >= 0.75) {
         confidence += 3;
-    }
-    else if (
-        best.coverage < 0.50
-    ) {
+    } else if (best.coverage < 0.50) {
         confidence -= 10;
     }
 
+    // =========================================================================
+    // Layer semantic evidence
+    // =========================================================================
+    //
+    // Semantic evidence is supporting evidence only.
+    //
+    // A strong boundary identity should outweigh a few thematic words.
+    // Conversely, a strongly thematic layer should lose confidence unless
+    // the classifier independently identified it as a political boundary.
+    //
+
+    if (
+        semanticEvidence.boundaryScore >
+        semanticEvidence.thematicScore
+    ) {
+        confidence += 10;
+    } else if (
+        semanticEvidence.thematicScore >
+        semanticEvidence.boundaryScore
+    ) {
+        confidence -= 15;
+    }
+
+    // =========================================================================
+    // Clamp
+    // =========================================================================
+
     return Math.max(
         0,
-        Math.min(
-            100,
-            confidence
-        )
+        Math.min(100, confidence)
     );
 }
 
@@ -1285,7 +1579,8 @@ function uniqueStrings(
         new Set<string>();
 
     for (
-        const value of values
+        const value of
+        values
     ) {
 
         const normalized =

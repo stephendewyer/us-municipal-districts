@@ -862,14 +862,11 @@ async function discoverMunicipality(
             // -----------------------------------------------------------------
             // Validate political boundary
             // -----------------------------------------------------------------
-
             let validation:
                 ArcGISCandidateValidation |
                 undefined;
 
-
             try {
-
                 validation =
                     await validateCandidate(
                         candidate,
@@ -880,7 +877,6 @@ async function discoverMunicipality(
                 // -----------------------------------------------------------------
                 // Candidate validation gate
                 // -----------------------------------------------------------------
-
                 if (!validation.isLikelyPoliticalBoundary) {
                     if (options.verbose) {
                         console.log(
@@ -892,9 +888,7 @@ async function discoverMunicipality(
                 }
 
             } catch (error) {
-
                 if (options.verbose) {
-
                     console.warn(
                         `\n    Validation failed:`
                     );
@@ -903,12 +897,12 @@ async function discoverMunicipality(
                         `      ${candidate.url}`
                     );
 
-                    console.warn(
-                        error
-                    );
+                    console.warn(error);
                 }
+
+                continue;
             }
-            
+                        
             // -----------------------------------------------------------------
             // Municipality geographic validation
             // -----------------------------------------------------------------
