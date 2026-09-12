@@ -483,6 +483,12 @@ export interface ArcGISInspection {
 // ArcGIS validation
 // =============================================================================
 
+export interface LayerSemanticEvidence {
+    boundaryScore: number;
+    thematicScore: number;
+    evidence: string[];
+}
+
 export interface ArcGISCandidateValidation {
 
     isLikelyPoliticalBoundary: boolean;
@@ -509,6 +515,8 @@ export interface ArcGISCandidateValidation {
     municipalityOverlap?: number;
 
     evidence: string[];
+
+    rejectionReasons?: string[];
 
     expectedDistrictCount?: number;
 

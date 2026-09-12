@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-11T21:44:00.047Z",
+  "generatedAt": "2026-09-12T21:45:58.023Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-10T23:40:58.193Z",
+        "generatedAt": "2026-09-12T21:45:58.023Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -55,7 +55,7 @@
       },
       "generatedFile": "geometry/0477000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-11T20:49:07.334Z",
+        "generatedAt": "2026-09-12T21:34:16.165Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -65,6 +65,22 @@
             "serviceType": "FeatureServer",
             "official": false,
             "score": 168
+          },
+          {
+            "url": "https://utility.arcgis.com/usrsvcs/servers/0657741d9e4a4289912330077707ad39/rest/services/PublicMaps/Boundaries/MapServer/15",
+            "itemId": "0657741d9e4a4289912330077707ad39",
+            "title": "WARD_COT",
+            "serviceType": "MapServer",
+            "official": false,
+            "score": 168
+          },
+          {
+            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/COTWards_HFL/FeatureServer/6",
+            "itemId": "1abe5b7d93f749a1a3481b8899090082",
+            "title": "WARD_COT",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 108
           },
           {
             "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Boundaries_2000/FeatureServer/9",

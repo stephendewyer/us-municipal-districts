@@ -2,51 +2,101 @@ import type {
     ArcGISInspection,
     ArcGISCandidateValidation,
     CandidateClassification,
-    DiscoveryCandidate
+    DiscoveryCandidate,
+    LayerSemanticEvidence
 } from "./types.js";
-
-import {
-    queryArcGISLayer
-} from "./queryArcGISLayer.js";
-
-import {
-    getMunicipalDivisionExpectation
-} from "./municipalityExpectations.js";
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const SAMPLE_SIZE = 250;
-
 const MIN_DISTINCT_VALUES = 2;
-
 const MAX_DISTINCT_VALUES = 100;
+const MIN_COVERAGE = 0.50;
 
 // =============================================================================
-// Layer semantic evidence
+// Helpers
 // =============================================================================
 
-/*
- * Terms that strongly suggest that the layer itself represents
- * political boundaries.
- *
- * These are intentionally semantic signals rather than hard-coded
- * exclusions. Different municipalities use different naming conventions.
- */
+function normalizeField(
+    value: string | undefined
+): string {
+    return (value ?? "")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/([a-zA-Z])(\d+)/g, "$1 $2")
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .toLowerCase()
+        .trim();
+}
+
+function unique(
+    values: string[]
+): string[] {
+    return [
+        ...new Set(
+            values.filter(Boolean)
+        )
+    ];
+}
+
+function isPoliticalFieldName(
+    value?: string
+): boolean {
+    const normalized =
+        normalizeField(value);
+
+    if (!normalized) {
+        return false;
+    }
+
+    return (
+        /\bwards?\b/i.test(normalized) ||
+        /\bcouncil\b/i.test(normalized) ||
+        /\balderman/i.test(normalized) ||
+        /\bmunicipal\s+district\b/i.test(normalized) ||
+        /\bpolitical\s+district\b/i.test(normalized) ||
+        /\belection\s+district\b/i.test(normalized) ||
+        /\belectoral\s+district\b/i.test(normalized) ||
+        /\bvoting\s+district\b/i.test(normalized) ||
+        /\bvoting\s+precinct\b/i.test(normalized)
+    );
+}
+
+function isGenericDistrictField(
+    value?: string
+): boolean {
+    const normalized =
+        normalizeField(value);
+
+    return (
+        /\bdistrict\b/i.test(normalized) &&
+        !isPoliticalFieldName(normalized)
+    );
+}
+
+function isWardField(
+    value?: string
+): boolean {
+    return /\bward\b/i.test(
+        normalizeField(value)
+    );
+}
+
+// =============================================================================
+// Semantic identity
+// =============================================================================
 
 const BOUNDARY_IDENTITY_PATTERNS = [
     /\bward\s+boundar(?:y|ies)\b/i,
     /\bward\s+maps?\b/i,
     /\bwards?\b/i,
-
     /\bcouncil\s+districts?\b/i,
     /\bcouncil\s+boundar(?:y|ies)\b/i,
     /\bcouncil\s+maps?\b/i,
-
     /\baldermanic\s+districts?\b/i,
     /\bmunicipal\s+districts?\b/i,
-    /\bpolitical\s+districts?\b/i,
+    /\bpolitical\s+districts?\b/i
 ];
 
 const THEMATIC_IDENTITY_PATTERNS = [
@@ -62,20 +112,21 @@ const THEMATIC_IDENTITY_PATTERNS = [
     /\bbusiness(?:es)?\b/i,
     /\blicenses?\b/i,
     /\bassessments?\b/i,
-    /\btaxes?\b/i,
+    /\btaxes\b/i,
     /\bsales\b/i,
     /\bemployment\b/i,
     /\bpopulation\b/i,
-    /\bdemographics?\b/i,
+    /\bdemographics?\b/i
 ];
 
 const BOUNDARY_METADATA_PATTERNS = [
-    /\bboundar(?:y|ies)\b/i,
-    /\bwards?\b/i,
-    /\bcouncil\s+districts?\b/i,
-    /\baldermanic\b/i,
-    /\bmunicipal\s+districts?\b/i,
-    /\bpolitical\s+districts?\b/i
+    /\bward\s+boundar(?:y|ies)\b/i,
+    /\bward\s+maps?\b/i,
+    /\bcouncil\s+district\s+boundar(?:y|ies)\b/i,
+    /\bcouncil\s+district\s+maps?\b/i,
+    /\baldermanic\s+district\s+boundar(?:y|ies)\b/i,
+    /\bmunicipal\s+district\s+boundar(?:y|ies)\b/i,
+    /\bpolitical\s+district\s+boundar(?:y|ies)\b/i
 ];
 
 const THEMATIC_METADATA_PATTERNS = [
@@ -91,30 +142,28 @@ const THEMATIC_METADATA_PATTERNS = [
     /\bbusiness(?:es)?\b/i,
     /\blicenses?\b/i,
     /\bassessments?\b/i,
-    /\btaxes?\b/i,
+    /\btaxes\b/i,
     /\bsales\b/i,
     /\bemployment\b/i,
     /\bpopulation\b/i,
     /\bdemographics?\b/i
 ];
 
+const THEMATIC_GROUPING_PATTERNS = [
+    /\bby\s+(?:ward|wards)\b/i,
+    /\bby\s+(?:council\s+)?districts?\b/i,
+    /\bby\s+(?:council\s+)?district\b/i,
+    /\bby\s+(?:political\s+)?districts?\b/i,
+    /\bgrouped\s+by\b/i,
+    /\baggregated\s+by\b/i,
+    /\bsummarized\s+by\b/i,
+    /\bsummarised\s+by\b/i
+];
 
-interface LayerSemanticEvidence {
-    boundaryScore: number;
-    thematicScore: number;
-    evidence: string[];
-}
-
-function scoreLayerSemantics(
+export function scoreLayerSemantics(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection
 ): LayerSemanticEvidence {
-
-    /*
-     * Identity text describes what the layer actually is.
-     *
-     * These fields should carry the strongest semantic weight.
-     */
     const identityText = [
         candidate.title,
         inspection.title,
@@ -122,36 +171,29 @@ function scoreLayerSemantics(
         inspection.layerName
     ]
         .filter(Boolean)
+        .map(normalizeField)
         .join(" ");
 
-    /*
-     * Metadata provides supporting evidence, but should not be allowed
-     * to dominate the identity of the dataset.
-     */
     const metadataText = [
         inspection.description,
         inspection.serviceDescription
     ]
         .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+        .map(normalizeField)
+        .join(" ");
 
     let boundaryScore = 0;
     let thematicScore = 0;
 
     const evidence: string[] = [];
 
-    /*
-     * =========================================================================
-     * Identity evidence
-     * =========================================================================
-     *
-     * A term in the actual layer/service title is strong evidence about
-     * what the geometry represents.
-     */
+    // -------------------------------------------------------------------------
+    // Boundary identity
+    // -------------------------------------------------------------------------
 
-    // Strong identity evidence
-    for (const pattern of BOUNDARY_IDENTITY_PATTERNS) {
+    for (
+        const pattern of BOUNDARY_IDENTITY_PATTERNS
+    ) {
         if (pattern.test(identityText)) {
             boundaryScore += 20;
 
@@ -161,7 +203,13 @@ function scoreLayerSemantics(
         }
     }
 
-    for (const pattern of THEMATIC_IDENTITY_PATTERNS) {
+    // -------------------------------------------------------------------------
+    // Thematic identity
+    // -------------------------------------------------------------------------
+
+    for (
+        const pattern of THEMATIC_IDENTITY_PATTERNS
+    ) {
         if (pattern.test(identityText)) {
             thematicScore += 20;
 
@@ -171,21 +219,13 @@ function scoreLayerSemantics(
         }
     }
 
-    /*
-     * =========================================================================
-     * Metadata evidence
-     * =========================================================================
-     *
-     * Descriptions are intentionally weaker.
-     *
-     * A description may say:
-     *
-     *     "This layer contains information summarized by council district."
-     *
-     * That does NOT mean the geometry represents council districts.
-     */
-    // Weak metadata evidence
-    for (const pattern of BOUNDARY_METADATA_PATTERNS) {
+    // -------------------------------------------------------------------------
+    // Boundary metadata
+    // -------------------------------------------------------------------------
+
+    for (
+        const pattern of BOUNDARY_METADATA_PATTERNS
+    ) {
         if (pattern.test(metadataText)) {
             boundaryScore += 2;
 
@@ -195,7 +235,13 @@ function scoreLayerSemantics(
         }
     }
 
-    for (const pattern of THEMATIC_METADATA_PATTERNS) {
+    // -------------------------------------------------------------------------
+    // Thematic metadata
+    // -------------------------------------------------------------------------
+
+    for (
+        const pattern of THEMATIC_METADATA_PATTERNS
+    ) {
         if (pattern.test(metadataText)) {
             thematicScore += 2;
 
@@ -205,51 +251,33 @@ function scoreLayerSemantics(
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Thematic grouping
+    // -------------------------------------------------------------------------
+
     /*
-     * =========================================================================
-     * Grouping / overlay language
-     * =========================================================================
+     * A phrase such as:
      *
-     * Phrases such as:
+     *     "Eviction Filings by Council Districts"
      *
-     *     "by ward"
-     *     "by council district"
-     *     "within ward boundaries"
-     *     "per ward"
+     * should be treated as a thematic dataset organized by political
+     * district rather than as a political boundary dataset.
      *
-     * commonly indicate that political divisions are an attribute or
-     * aggregation dimension rather than the geometry's actual identity.
-     *
-     * These are deliberately treated as thematic evidence only when
-     * the layer also has an obvious thematic identity.
+     * Grouping evidence is only meaningful when thematic identity
+     * evidence already exists.
      */
-    const THEMATIC_GROUPING_PATTERNS = [
-        /\bby\s+(?:ward|wards)\b/i,
-        /\bby\s+(?:council\s+)?districts?\b/i,
-        /\bwithin\s+(?:ward|wards)\b/i,
-        /\bwithin\s+(?:council\s+)?districts?\b/i,
-        /\bper\s+(?:ward|wards)\b/i,
-        /\bper\s+(?:council\s+)?districts?\b/i,
-        /\b(?:ward|wards)\s+aggregation\b/i,
-        /\b(?:district|districts)\s+aggregation\b/i,
-        /\bsummar(?:y|ize|ized|ization).*?\b(?:ward|wards|district|districts)\b/i
-    ];
+    if (thematicScore > 0) {
+        for (
+            const pattern of THEMATIC_GROUPING_PATTERNS
+        ) {
+            if (pattern.test(identityText)) {
+                thematicScore += 15;
 
-    const hasThematicGrouping =
-        THEMATIC_GROUPING_PATTERNS.some(
-            pattern =>
-                pattern.test(identityText)
-        );
-
-    if (
-        hasThematicGrouping &&
-        thematicScore > 0
-    ) {
-        thematicScore += 15;
-
-        evidence.push(
-            "Political district appears to be a grouping/aggregation dimension on a thematic layer."
-        );
+                evidence.push(
+                    `Thematic grouping pattern matched: "${pattern.source}".`
+                );
+            }
+        }
     }
 
     return {
@@ -259,925 +287,343 @@ function scoreLayerSemantics(
     };
 }
 
-
-// =============================================================================
-// Public API
-// =============================================================================
-
-export async function validateCandidate(
-    candidate: DiscoveryCandidate,
-    inspection: ArcGISInspection,
-    classification: CandidateClassification
-): Promise<ArcGISCandidateValidation> {
-
-    const isPolygon =
-        inspection.geometryType ===
-            "esriGeometryPolygon" ||
-        inspection.geometryType ===
-            "polygon";
-
-    if (!isPolygon) {
-        return {
-            isLikelyPoliticalBoundary: false,
-            confidence: 0,
-            districtField:
-                inspection.districtField,
-            sampleCount: 0,
-            distinctDistrictValues: [],
-            districtValuePattern: "unknown",
-            geometryType:
-                inspection.geometryType,
-            evidence: [
-                "Layer is not polygon geometry."
-            ]
-        };
-    }
-
-    const semanticEvidence =
-        scoreLayerSemantics(
-            candidate,
-            inspection
-        );
-
-    console.log(
-    "SEMANTIC DEBUG:",
-        {
-            title: inspection.title,
-            serviceName: inspection.serviceName,
-            layerName: inspection.layerName,
-            boundaryScore: semanticEvidence.boundaryScore,
-            thematicScore: semanticEvidence.thematicScore,
-            evidence: semanticEvidence.evidence
-        }
-    );
-
-    const candidateFields =
-        getCandidateFields(
-            inspection,
-            classification
-        );
-
-    if (
-        candidateFields.length === 0
-    ) {
-        return {
-            isLikelyPoliticalBoundary:
-                classification.isPoliticalBoundary,
-
-            confidence:
-                classification.isPoliticalBoundary
-                    ? 55
-                    : 0,
-
-            districtField:
-                inspection.districtField,
-
-            sampleCount: 0,
-
-            distinctDistrictValues: [],
-
-            districtValuePattern:
-                "unknown",
-
-            geometryType:
-                inspection.geometryType,
-
-            evidence: [
-                "No candidate district field could be identified.",
-
-                classification.isPoliticalBoundary
-                    ? "Classification identified political-boundary evidence; validation could not inspect attributes."
-                    : "No political-boundary evidence was available.",
-
-                `Boundary semantic score: ${semanticEvidence.boundaryScore}.`,
-
-                `Thematic semantic score: ${semanticEvidence.thematicScore}.`,
-
-                ...semanticEvidence.evidence
-            ]
-        };
-    }
-
-    let query;
-
-    try {
-        query =
-            await queryArcGISLayer(
-                inspection.url,
-                {
-                    /*
-                     * Only inspect a small sample of features.
-                     *
-                     * This validation is intended to determine whether
-                     * the layer looks like a political-boundary layer.
-                     * Full geometry retrieval happens later, only after
-                     * the candidate passes this stage.
-                     */
-                    resultRecordCount:
-                        SAMPLE_SIZE,
-
-                    resultOffset:
-                        0,
-
-                    returnGeometry:
-                        false,
-
-                    outFields:
-                        candidateFields,
-
-                    /*
-                     * Do not paginate through the entire layer.
-                     *
-                     * validateCandidate() only needs a representative
-                     * attribute sample. Fetching every feature here would
-                     * defeat the purpose of using this as a cheap
-                     * pre-geometry validation stage.
-                     */
-                    fetchAll:
-                        false
-                }
-            );
-    } catch (error) {
-        return {
-            isLikelyPoliticalBoundary:
-                classification.isPoliticalBoundary,
-
-            confidence:
-                classification.isPoliticalBoundary
-                    ? 60
-                    : 0,
-
-            districtField:
-                inspection.districtField ??
-                candidateFields[0],
-
-            sampleCount: 0,
-
-            distinctDistrictValues: [],
-
-            districtValuePattern:
-                "unknown",
-
-            geometryType:
-                inspection.geometryType,
-
-            evidence: [
-                "ArcGIS attribute validation failed.",
-
-                error instanceof Error
-                    ? error.message
-                    : String(error),
-
-                `Boundary semantic score: ${semanticEvidence.boundaryScore}.`,
-
-                `Thematic semantic score: ${semanticEvidence.thematicScore}.`,
-
-                ...semanticEvidence.evidence
-            ]
-        };
-    }
-
-    if (
-        !query.success
-    ) {
-        return {
-            isLikelyPoliticalBoundary:
-                classification.isPoliticalBoundary,
-
-            confidence:
-                classification.isPoliticalBoundary
-                    ? 60
-                    : 0,
-
-            districtField:
-                inspection.districtField ??
-                candidateFields[0],
-
-            sampleCount:
-                query.featureCount,
-
-            distinctDistrictValues: [],
-
-            districtValuePattern:
-                "unknown",
-
-            geometryType:
-                inspection.geometryType,
-
-            evidence: [
-                "Unable to query ArcGIS layer.",
-
-                query.error ??
-                    "Unknown ArcGIS query error.",
-
-                `Boundary semantic score: ${semanticEvidence.boundaryScore}.`,
-
-                `Thematic semantic score: ${semanticEvidence.thematicScore}.`,
-
-                ...semanticEvidence.evidence
-            ]
-        };
-    }
-
-    const analyses =
-        candidateFields.map(
-            field =>
-                analyzeField(
-                    query.features,
-                    field
-                )
-        );
-
-    const best =
-        selectBestField(
-            analyses
-        );
-
-    if (!best) {
-        return {
-            isLikelyPoliticalBoundary:
-                classification.isPoliticalBoundary,
-
-            confidence:
-                classification.isPoliticalBoundary
-                    ? 55
-                    : 0,
-
-            districtField:
-                inspection.districtField,
-
-            sampleCount:
-                query.featureCount,
-
-            distinctDistrictValues: [],
-
-            districtValuePattern:
-                "unknown",
-
-            geometryType:
-                inspection.geometryType,
-
-            evidence: [
-                "No candidate field contained usable values.",
-
-                `Boundary semantic score: ${semanticEvidence.boundaryScore}.`,
-
-                `Thematic semantic score: ${semanticEvidence.thematicScore}.`,
-
-                ...semanticEvidence.evidence
-            ]
-        };
-    }
-
-    const confidence =
-        calculateConfidence(
-            inspection,
-            classification,
-            best,
-            semanticEvidence
-        );
-
-    /*
-    * Semantic evidence is now provided to the acceptance decision so that
-    * strongly thematic layers with political-looking attributes can be
-    * distinguished from genuine political-boundary layers.
-    */
-    const accepted =
-        determineAcceptance(
-            inspection,
-            classification,
-            best,
-            confidence,
-            semanticEvidence
-        );
-
-    /*
-     * Determine whether this municipality/district type has
-     * a known expected district structure.
-     *
-     * Completeness is deliberately separate from political-boundary
-     * acceptance. An incomplete layer may still be a genuine political
-     * boundary layer; it simply should not be preferred as the
-     * canonical source.
-     */
-    const expectation =
-        classification.districtType
-            ? getMunicipalDivisionExpectation(
-                candidate.placeFips,
-                classification.districtType
-            )
-            : undefined;
-
-    const expectedDistrictCount =
-        expectation?.expectedDistrictCount;
-
-    const actualDistrictValues =
-        best.distinctValues;
-
-    const normalizedActualValues =
-        new Set(
-            actualDistrictValues.map(
-                value =>
-                    value
-                        .trim()
-                        .replace(
-                            /^ward\s+/i,
-                            ""
-                        )
-                        .replace(
-                            /^district\s+/i,
-                            ""
-                        )
-                        .replace(
-                            /^0+(?=\d)/,
-                            ""
-                        )
-            )
-        );
-
-    let completeDistrictCoverage:
-        boolean | undefined;
-
-    let missingDistrictValues:
-        string[] | undefined;
-
-    if (
-        expectation?.expectedDistrictValues
-    ) {
-        const missing =
-            expectation.expectedDistrictValues.filter(
-                expectedValue =>
-                    !normalizedActualValues.has(
-                        expectedValue
-                    )
-            );
-
-        missingDistrictValues =
-            missing;
-
-        completeDistrictCoverage =
-            missing.length === 0 &&
-            actualDistrictValues.length ===
-                expectation.expectedDistrictValues.length;
-    } else if (
-        expectedDistrictCount !== undefined
-    ) {
-        completeDistrictCoverage =
-            actualDistrictValues.length ===
-            expectedDistrictCount;
-    }
-
-    const evidence: string[] = [];
-
-    evidence.push(
-        `Queried ${query.featureCount} feature${
-            query.featureCount === 1
-                ? ""
-                : "s"
-        }.`
-    );
-
-    evidence.push(
-        `Best candidate field: "${best.field}".`
-    );
-
-    evidence.push(
-        `Found ${best.distinctValues.length} distinct value${
-            best.distinctValues.length === 1
-                ? ""
-                : "s"
-        }.`
-    );
-
-    evidence.push(
-        `Value pattern: ${best.pattern}.`
-    );
-
-    evidence.push(
-        `Field coverage: ${formatPercent(best.coverage)}.`
-    );
-
-    /*
-     * Semantic evidence is diagnostic in this first iteration.
-     */
-    evidence.push(
-        `Boundary semantic score: ${semanticEvidence.boundaryScore}.`
-    );
-
-    evidence.push(
-        `Thematic semantic score: ${semanticEvidence.thematicScore}.`
-    );
-
-    evidence.push(
-        ...semanticEvidence.evidence
-    );
-
-    if (
-        expectedDistrictCount !== undefined
-    ) {
-        evidence.push(
-            `Expected district count: ${expectedDistrictCount}.`
-        );
-
-        evidence.push(
-            `District coverage: ${
-                completeDistrictCoverage
-                    ? "complete"
-                    : "incomplete"
-            }.`
-        );
-    }
-
-    if (
-        missingDistrictValues &&
-        missingDistrictValues.length > 0
-    ) {
-        evidence.push(
-            `Missing expected district values: ${
-                missingDistrictValues.join(", ")
-            }.`
-        );
-    }
-
-    evidence.push(
-        `Validation confidence: ${confidence}.`
-    );
-
-    if (
-        classification.officialMunicipalSource
-    ) {
-        evidence.push(
-            "Source appears to be municipal or government GIS."
-        );
-    }
-
-    if (
-        classification.isPoliticalBoundary
-    ) {
-        evidence.push(
-            "Classifier identified political-boundary evidence."
-        );
-    }
-
-    if (
-        accepted
-    ) {
-        evidence.push(
-            "Candidate accepted by attribute validation."
-        );
-    }
-
-    return {
-        isLikelyPoliticalBoundary:
-            accepted,
-
-        confidence,
-
-        districtField:
-            best.field,
-
-        sampleCount:
-            query.featureCount,
-
-        featureCount:
-            query.featureCount,
-
-        distinctDistrictValues:
-            best.distinctValues,
-
-        districtValuePattern:
-            best.pattern,
-
-        geometryType:
-            inspection.geometryType,
-
-        expectedDistrictCount,
-
-        completeDistrictCoverage,
-
-        missingDistrictValues,
-
-        evidence
-    };
-}
-
-
-// =============================================================================
-// Candidate fields
-// =============================================================================
-
-function getCandidateFields(
-    inspection: ArcGISInspection,
-    classification: CandidateClassification
-): string[] {
-
-    const fields =
-        inspection.fields ?? [];
-
-    const result: string[] = [];
-
-    function add(
-        value?: string
-    ): void {
-
-        if (
-            !value ||
-            !value.trim()
-        ) {
-            return;
-        }
-
-        if (
-            !result.some(
-                existing =>
-                    existing.toLowerCase() ===
-                    value.toLowerCase()
-            )
-        ) {
-            result.push(
-                value
-            );
-        }
-    }
-
-    /*
-     * Existing inspector-selected fields first.
-     */
-    add(
-        inspection.districtField
-    );
-
-    for (
-        const field of
-        inspection.districtFields ?? []
-    ) {
-        add(field);
-    }
-
-    /*
-     * Political-looking fields.
-     */
-    for (
-        const field of fields
-    ) {
-
-        if (
-            isPoliticalFieldName(
-                field.name
-            )
-        ) {
-            add(field.name);
-        }
-
-        if (
-            isPoliticalFieldName(
-                field.alias
-            )
-        ) {
-            add(field.name);
-        }
-    }
-
-    /*
-     * Name fields can contain:
-     *
-     * Ward 1
-     * Ward 2
-     *
-     * Council District 1
-     *
-     * etc.
-     */
-    for (
-        const field of
-        inspection.nameFields ?? []
-    ) {
-        add(field);
-    }
-
-    if (
-        inspection.nameField
-    ) {
-        add(
-            inspection.nameField
-        );
-    }
-
-    /*
-     * If classification strongly identifies a political layer,
-     * also inspect string/integer fields that could contain district
-     * identifiers.
-     */
-    if (
-        classification.isPoliticalBoundary
-    ) {
-
-        for (
-            const field of
-            fields
-        ) {
-
-            const type =
-                (
-                    field.type ??
-                    ""
-                ).toLowerCase();
-
-            const name =
-                (
-                    field.name ??
-                    ""
-                ).toLowerCase();
-
-            if (
-                type.includes("string") ||
-                type.includes("integer") ||
-                type.includes("smallinteger") ||
-                type.includes("double")
-            ) {
-
-                if (
-                    !isObjectIdField(
-                        name
-                    )
-                ) {
-                    add(
-                        field.name
-                    );
-                }
-            }
-        }
-    }
-
-    return result;
-}
-
 // =============================================================================
 // Field analysis
 // =============================================================================
 
 interface FieldAnalysis {
-
     field: string;
-
-    values: string[];
-
     distinctValues: string[];
-
+    coverage: number;
     pattern:
         | "numeric"
         | "ward-number"
         | "district-number"
         | "named"
         | "unknown";
-
-    coverage: number;
-
-    score: number;
 }
 
-function analyzeField(
-    features: Array<{
-        attributes: Record<string, unknown>;
-        geometry?: unknown;
-    }>,
-    field: string
-): FieldAnalysis {
-
-    const values: string[] = [];
-
-    for (
-        const feature of features
-    ) {
-
-        const actualField =
-            findActualField(
-                feature.attributes,
-                field
-            );
-
-        if (
-            !actualField
-        ) {
-            continue;
-        }
-
-        const value =
-            normalizeValue(
-                feature.attributes[
-                    actualField
-                ]
-            );
-
-        if (
-            value
-        ) {
-            values.push(
-                value
-            );
-        }
+function classifyValuePattern(
+    values: string[]
+): FieldAnalysis["pattern"] {
+    if (values.length === 0) {
+        return "unknown";
     }
 
-    const distinctValues =
-        uniqueStrings(
-            values
+    const normalized =
+        values.map(
+            value =>
+                normalizeField(value)
         );
 
-    const pattern =
-        detectDistrictValuePattern(
-            distinctValues
+    const wardNumberPattern =
+        normalized.every(
+            value =>
+                /^ward\s+\d+[a-z]?$/i.test(
+                    value
+                )
         );
+
+    if (wardNumberPattern) {
+        return "ward-number";
+    }
+
+    const districtNumberPattern =
+        normalized.every(
+            value =>
+                /^(?:district|council\s+district)\s+\d+[a-z]?$/i.test(
+                    value
+                )
+        );
+
+    if (districtNumberPattern) {
+        return "district-number";
+    }
+
+    const numericPattern =
+        normalized.every(
+            value =>
+                /^\d+[a-z]?$/i.test(
+                    value
+                )
+        );
+
+    if (numericPattern) {
+        return "numeric";
+    }
+
+    /*
+     * A named political district is still legitimate.
+     *
+     * Examples:
+     *
+     *     Central
+     *     North
+     *     Downtown
+     *     Ward A
+     */
+    const namedPattern =
+        normalized.every(
+            value =>
+                value.length > 0 &&
+                !/^\d+$/.test(value)
+        );
+
+    if (namedPattern) {
+        return "named";
+    }
+
+    return "unknown";
+}
+
+function analyzeDistrictField(
+    inspection: ArcGISInspection
+): FieldAnalysis {
+    const fields =
+        inspection.fields ?? [];
+
+    const candidateFields =
+        unique([
+            ...(inspection.districtFields ?? []),
+            ...fields
+                .filter(
+                    field =>
+                        isPoliticalFieldName(
+                            field.name
+                        ) ||
+                        isPoliticalFieldName(
+                            field.alias
+                        ) ||
+                        isGenericDistrictField(
+                            field.name
+                        ) ||
+                        isGenericDistrictField(
+                            field.alias
+                        )
+                )
+                .map(
+                    field =>
+                        field.name
+                )
+        ]);
+
+    if (
+        candidateFields.length === 0
+    ) {
+        return {
+            field: "",
+            distinctValues: [],
+            coverage: 0,
+            pattern: "unknown"
+        };
+    }
+
+    /*
+     * The inspection interface normally provides district field
+     * information. This function uses the first strongest candidate
+     * field supplied by inspection.
+     */
+    const field =
+        candidateFields[0];
+
+    const inspectionDistrictFields =
+        inspection.districtFields ?? [];
+
+    /*
+     * ArcGISInspection does not necessarily contain sampled field
+     * values directly. The caller may provide them through the
+     * district field metadata.
+     *
+     * For the current architecture, use the known district values
+     * supplied by inspection when available.
+     */
+    const fieldMetadata =
+        fields.find(
+            candidate =>
+                normalizeField(
+                    candidate.name
+                ) ===
+                normalizeField(field)
+        );
+
+    const values =
+        (
+            fieldMetadata as
+            {
+                values?: string[];
+                sampleValues?: string[];
+            } | undefined
+        )?.values ??
+        (
+            fieldMetadata as
+            {
+                values?: string[];
+                sampleValues?: string[];
+            } | undefined
+        )?.sampleValues ??
+        [];
+
+    const distinctValues =
+        unique(
+            values.map(
+                value =>
+                    String(value).trim()
+            )
+        );
+
+    /*
+     * If the inspection layer already exposes distinct district values,
+     * prefer those.
+     */
+    const inspectionValues =
+        (
+            inspection as
+            ArcGISInspection & {
+                distinctDistrictValues?: string[];
+            }
+        ).distinctDistrictValues;
+
+    const finalValues =
+        inspectionValues &&
+        inspectionValues.length > 0
+            ? unique(
+                inspectionValues.map(
+                    value =>
+                        String(value).trim()
+                )
+            )
+            : distinctValues;
+
+    const featureCount =
+        (
+            inspection as
+            ArcGISInspection & {
+                featureCount?: number;
+            }
+        ).featureCount;
+
+    const sampledCount =
+        finalValues.length;
 
     const coverage =
-        features.length === 0
-            ? 0
-            : values.length /
-                features.length;
-
-    const score =
-        scoreField(
-            field,
-            distinctValues,
-            pattern,
-            coverage
-        );
+        featureCount &&
+        featureCount > 0
+            ? Math.min(
+                1,
+                sampledCount /
+                featureCount
+            )
+            : sampledCount > 0
+                ? 1
+                : 0;
 
     return {
         field,
-        values,
-        distinctValues,
-        pattern,
+        distinctValues:
+            finalValues,
         coverage,
-        score
+        pattern:
+            classifyValuePattern(
+                finalValues
+            )
     };
 }
 
 // =============================================================================
-// Field scoring
+// Confidence
 // =============================================================================
 
-function scoreField(
-    field: string,
-    distinctValues: string[],
-    pattern:
-        | "numeric"
-        | "ward-number"
-        | "district-number"
-        | "named"
-        | "unknown",
-    coverage: number
+function calculateConfidence(
+    inspection: ArcGISInspection,
+    classification: CandidateClassification,
+    best: FieldAnalysis,
+    semanticEvidence: LayerSemanticEvidence
 ): number {
+    let confidence = 0;
 
-    let score = 0;
+    const geometryType =
+        normalizeField(
+            inspection.geometryType
+        );
 
-    const normalized =
-        field
-            .toLowerCase()
-            .replace(/[_-]+/g, " ")
-            .trim();
+    const isPolygon =
+        geometryType === "esri geometry polygon" ||
+        geometryType === "polygon";
+
+    if (isPolygon) {
+        confidence += 25;
+    }
 
     if (
-        /\bward\b/.test(
-            normalized
+        classification.isPoliticalBoundary
+    ) {
+        confidence += 25;
+    }
+
+    if (
+        classification.officialMunicipalSource
+    ) {
+        confidence += 15;
+    }
+
+    if (
+        isPoliticalFieldName(
+            best.field
         )
     ) {
-        score += 100;
+        confidence += 15;
     }
 
     if (
-        /\bcouncil\b/.test(
-            normalized
+        best.pattern ===
+            "ward-number" ||
+        best.pattern ===
+            "district-number"
+    ) {
+        confidence += 15;
+    } else if (
+        best.pattern ===
+            "numeric" ||
+        best.pattern ===
+            "named"
+    ) {
+        confidence += 10;
+    }
+
+    if (
+        best.coverage >=
+        MIN_COVERAGE
+    ) {
+        confidence += 5;
+    }
+
+    /*
+     * Semantic evidence is an important supporting signal.
+     *
+     * Boundary-native identity receives a modest boost.
+     * Thematic identity receives a stronger penalty because a dataset
+     * such as "Eviction Filings by Council Districts" can otherwise
+     * look structurally similar to a true district boundary layer.
+     */
+    if (
+        semanticEvidence.boundaryScore >
+        semanticEvidence.thematicScore
+    ) {
+        confidence += 10;
+    } else if (
+        semanticEvidence.thematicScore >
+        semanticEvidence.boundaryScore
+    ) {
+        confidence -= 15;
+    }
+
+    return Math.max(
+        0,
+        Math.min(
+            100,
+            confidence
         )
-    ) {
-        score += 100;
-    }
-
-    if (
-        /\balderman/.test(
-            normalized
-        )
-    ) {
-        score += 100;
-    }
-
-    if (
-        /\bmunicipal\s+district\b/.test(
-            normalized
-        )
-    ) {
-        score += 90;
-    }
-
-    if (
-        /\bpolitical\s+district\b/.test(
-            normalized
-        )
-    ) {
-        score += 90;
-    }
-
-    if (
-        /\belection\s+district\b/.test(
-            normalized
-        )
-    ) {
-        score += 80;
-    }
-
-    if (
-        /\bvoting\s+district\b/.test(
-            normalized
-        )
-    ) {
-        score += 80;
-    }
-
-    if (
-        /\bdistrict\b/.test(
-            normalized
-        )
-    ) {
-        score += 30;
-    }
-
-    switch (
-        pattern
-    ) {
-
-        case "ward-number":
-            score += 50;
-            break;
-
-        case "district-number":
-            score += 50;
-            break;
-
-        case "numeric":
-            score += 20;
-            break;
-
-        case "named":
-            score += 10;
-            break;
-    }
-
-    if (
-        distinctValues.length >= 2
-    ) {
-        score += 10;
-    }
-
-    if (
-        distinctValues.length >= 3
-    ) {
-        score += 10;
-    }
-
-    if (
-        distinctValues.length >= 5
-    ) {
-        score += 10;
-    }
-
-    if (
-        coverage >= 0.95
-    ) {
-        score += 15;
-    }
-    else if (
-        coverage >= 0.75
-    ) {
-        score += 10;
-    }
-    else if (
-        coverage < 0.25
-    ) {
-        score -= 20;
-    }
-
-    return score;
-}
-
-// =============================================================================
-// Select best field
-// =============================================================================
-
-function selectBestField(
-    analyses: FieldAnalysis[]
-): FieldAnalysis | undefined {
-
-    return [
-        ...analyses
-    ]
-        .filter(
-            analysis =>
-                analysis.distinctValues.length > 0
-        )
-        .sort(
-            (a, b) =>
-                b.score -
-                a.score
-        )[0];
+    );
 }
 
 // =============================================================================
@@ -1191,49 +637,58 @@ function determineAcceptance(
     confidence: number,
     semanticEvidence: LayerSemanticEvidence
 ): boolean {
+    const geometryType =
+        normalizeField(
+            inspection.geometryType
+        );
 
     const isPolygon =
-        inspection.geometryType ===
-            "esriGeometryPolygon" ||
-        inspection.geometryType ===
+        geometryType ===
+            "esri geometry polygon" ||
+        geometryType ===
             "polygon";
 
-    if (
-        !isPolygon
-    ) {
-        return false;
-    }
-
     /*
-    * A strongly thematic layer should not pass merely because it contains
-    * a political-looking field such as COUNCIL_DISTRICT or WARD.
-    *
-    * Semantic evidence is allowed to reject a candidate when thematic
-    * evidence is stronger than boundary evidence, even if the ordinary
-    * classifier independently identified political-looking terminology.
-    */
-
+     * =========================================================================
+     * Semantic rejection
+     * =========================================================================
+     *
+     * This must happen before the structural field checks.
+     *
+     * A thematic dataset can contain:
+     *
+     *     DISTRICT
+     *     WARD
+     *     COUNCIL_DISTRICT
+     *
+     * and even contain polygon geometry.
+     *
+     * Therefore field evidence alone must not allow something like:
+     *
+     *     "Eviction Filings by Council Districts"
+     *
+     * through validation.
+     */
     if (
         semanticEvidence.thematicScore >
-            semanticEvidence.boundaryScore
+        semanticEvidence.boundaryScore
     ) {
         return false;
     }
+
+    // -------------------------------------------------------------------------
+    // Basic distinct-value guard
+    // -------------------------------------------------------------------------
 
     if (
         best.distinctValues.length <
         MIN_DISTINCT_VALUES
     ) {
-        /*
-         * A strongly identified municipal layer may still be useful
-         * even when the sample contains only one value.
-         *
-         * However, it should remain lower confidence.
-         */
         return (
             classification.isPoliticalBoundary &&
             classification.officialMunicipalSource &&
-            best.coverage >= 0.50
+            best.coverage >=
+                MIN_COVERAGE
         );
     }
 
@@ -1241,11 +696,10 @@ function determineAcceptance(
         best.distinctValues.length >
         MAX_DISTINCT_VALUES
     ) {
-        /*
-         * A district layer normally has a small number of values.
-         * More than 100 is overwhelmingly likely to be another
-         * categorical field.
-         */
+        return false;
+    }
+
+    if (!isPolygon) {
         return false;
     }
 
@@ -1255,10 +709,8 @@ function determineAcceptance(
         );
 
     const wardField =
-        /\bward\b/i.test(
-            normalizeField(
-                best.field
-            )
+        isWardField(
+            best.field
         );
 
     const genericDistrictField =
@@ -1277,13 +729,13 @@ function determineAcceptance(
             "named";
 
     const populated =
-        best.coverage >= 0.50;
+        best.coverage >=
+        MIN_COVERAGE;
 
-    /*
-     * Strongest case:
-     *
-     * WARD / COUNCIL field + multiple values.
-     */
+    // -------------------------------------------------------------------------
+    // Strong political field
+    // -------------------------------------------------------------------------
+
     if (
         explicitPoliticalField &&
         recognizablePattern &&
@@ -1293,21 +745,24 @@ function determineAcceptance(
         return true;
     }
 
-    /*
-     * Tucson-style WARD field.
-     */
+    // -------------------------------------------------------------------------
+    // Ward field
+    // -------------------------------------------------------------------------
+
     if (
         wardField &&
-        best.distinctValues.length >= 2 &&
+        best.distinctValues.length >=
+            MIN_DISTINCT_VALUES &&
         populated &&
         confidence >= 50
     ) {
         return true;
     }
 
-    /*
-     * Explicit political classification plus a numeric/name field.
-     */
+    // -------------------------------------------------------------------------
+    // Explicit political identity
+    // -------------------------------------------------------------------------
+
     if (
         classification.isPoliticalBoundary &&
         recognizablePattern &&
@@ -1317,22 +772,25 @@ function determineAcceptance(
         return true;
     }
 
-    /*
-     * Generic DISTRICT field requires stronger classification.
-     */
+    // -------------------------------------------------------------------------
+    // Generic district field
+    // -------------------------------------------------------------------------
+
     if (
         genericDistrictField &&
         classification.isPoliticalBoundary &&
-        best.distinctValues.length >= 2 &&
+        best.distinctValues.length >=
+            MIN_DISTINCT_VALUES &&
         populated &&
         confidence >= 65
     ) {
         return true;
     }
 
-    /*
-     * Official municipal source is valuable supporting evidence.
-     */
+    // -------------------------------------------------------------------------
+    // Official municipal source
+    // -------------------------------------------------------------------------
+
     if (
         classification.officialMunicipalSource &&
         classification.isPoliticalBoundary &&
@@ -1347,393 +805,274 @@ function determineAcceptance(
 }
 
 // =============================================================================
-// Confidence
+// Main validation function
 // =============================================================================
 
-function calculateConfidence(
+export function validateCandidate(
+    candidate: DiscoveryCandidate,
     inspection: ArcGISInspection,
-    classification: CandidateClassification,
-    best: FieldAnalysis,
-    semanticEvidence: LayerSemanticEvidence
-): number {
-    let confidence = 0;
-
-    const isPolygon =
-        inspection.geometryType === "esriGeometryPolygon" ||
-        inspection.geometryType === "polygon";
-
+    classification: CandidateClassification
+): ArcGISCandidateValidation {
     // =========================================================================
-    // Structural evidence
+    // Semantic analysis
     // =========================================================================
 
-    if (isPolygon) {
-        confidence += 25;
-    }
-
-    if (classification.isPoliticalBoundary) {
-        confidence += 25;
-    }
-
-    if (classification.officialMunicipalSource) {
-        confidence += 20;
-    }
-
-    if (isPoliticalFieldName(best.field)) {
-        confidence += 20;
-    }
-
-    if (/\bward\b/i.test(normalizeField(best.field))) {
-        confidence += 10;
-    }
-
-    // =========================================================================
-    // District values
-    // =========================================================================
-
-    if (best.distinctValues.length >= 2) {
-        confidence += 10;
-    }
-
-    if (best.distinctValues.length >= 3) {
-        confidence += 5;
-    }
-
-    if (best.distinctValues.length >= 5) {
-        confidence += 5;
-    }
-
-    switch (best.pattern) {
-        case "ward-number":
-            confidence += 15;
-            break;
-
-        case "district-number":
-            confidence += 15;
-            break;
-
-        case "numeric":
-            confidence += 8;
-            break;
-
-        case "named":
-            confidence += 5;
-            break;
-    }
-
-    // =========================================================================
-    // Field coverage
-    // =========================================================================
-
-    if (best.coverage >= 0.95) {
-        confidence += 5;
-    } else if (best.coverage >= 0.75) {
-        confidence += 3;
-    } else if (best.coverage < 0.50) {
-        confidence -= 10;
-    }
-
-    // =========================================================================
-    // Layer semantic evidence
-    // =========================================================================
-    //
-    // Semantic evidence is supporting evidence only.
-    //
-    // A strong boundary identity should outweigh a few thematic words.
-    // Conversely, a strongly thematic layer should lose confidence unless
-    // the classifier independently identified it as a political boundary.
-    //
-
-    if (
-        semanticEvidence.boundaryScore >
-        semanticEvidence.thematicScore
-    ) {
-        confidence += 10;
-    } else if (
-        semanticEvidence.thematicScore >
-        semanticEvidence.boundaryScore
-    ) {
-        confidence -= 15;
-    }
-
-    // =========================================================================
-    // Clamp
-    // =========================================================================
-
-    return Math.max(
-        0,
-        Math.min(100, confidence)
-    );
-}
-
-// =============================================================================
-// Field helpers
-// =============================================================================
-
-function isPoliticalFieldName(
-    value?: string
-): boolean {
-
-    const normalized =
-        normalizeField(
-            value
+    const semanticEvidence =
+        scoreLayerSemantics(
+            candidate,
+            inspection
         );
 
-    return (
-        /\bward\b/.test(
-            normalized
-        ) ||
-        /\bcouncil\b/.test(
-            normalized
-        ) ||
-        /\balderman/.test(
-            normalized
-        ) ||
-        /\bmunicipal\s+district\b/.test(
-            normalized
-        ) ||
-        /\bpolitical\s+district\b/.test(
-            normalized
-        ) ||
-        /\belection\s+district\b/.test(
-            normalized
-        ) ||
-        /\belectoral\s+district\b/.test(
-            normalized
-        ) ||
-        /\bvoting\s+district\b/.test(
-            normalized
-        ) ||
-        /\bvoting\s+precinct\b/.test(
-            normalized
-        )
+    console.log(
+        "SEMANTIC DEBUG:",
+        {
+            title:
+                inspection.title,
+            serviceName:
+                inspection.serviceName,
+            layerName:
+                inspection.layerName,
+            boundaryScore:
+                semanticEvidence.boundaryScore,
+            thematicScore:
+                semanticEvidence.thematicScore,
+            evidence:
+                semanticEvidence.evidence
+        }
     );
-}
 
-function isGenericDistrictField(
-    value?: string
-): boolean {
+    // =========================================================================
+    // District field analysis
+    // =========================================================================
 
-    const normalized =
-        normalizeField(
-            value
+    const best =
+        analyzeDistrictField(
+            inspection
         );
 
-    return (
-        /\bdistrict\b/.test(
-            normalized
-        ) &&
-        !isPoliticalFieldName(
-            normalized
-        )
+    // =========================================================================
+    // Confidence
+    // =========================================================================
+
+    const confidence =
+        calculateConfidence(
+            inspection,
+            classification,
+            best,
+            semanticEvidence
+        );
+
+    // =========================================================================
+    // Acceptance
+    // =========================================================================
+
+    const accepted =
+        determineAcceptance(
+            inspection,
+            classification,
+            best,
+            confidence,
+            semanticEvidence
+        );
+
+    console.log(
+        "ACCEPTANCE DEBUG:",
+        {
+            title:
+                inspection.title,
+            boundaryScore:
+                semanticEvidence.boundaryScore,
+            thematicScore:
+                semanticEvidence.thematicScore,
+            confidence,
+            classificationPolitical:
+                classification.isPoliticalBoundary,
+            accepted
+        }
     );
-}
 
-function normalizeField(
-    value?: string
-): string {
+    // =========================================================================
+    // Rejection reasons
+    // =========================================================================
 
-    return (
-        value ?? ""
-    )
-        .toLowerCase()
-        .replace(/[_-]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-}
+    const rejectionReasons:
+        string[] = [];
 
-function isObjectIdField(
-    value: string
-): boolean {
+    if (!accepted) {
+        if (
+            semanticEvidence.thematicScore >
+            semanticEvidence.boundaryScore
+        ) {
+            rejectionReasons.push(
+                "thematic dataset grouped by political district"
+            );
+        }
 
-    const normalized =
-        value
-            .toLowerCase()
-            .replace(/[_-]+/g, "");
+        if (
+            best.distinctValues.length >
+            MAX_DISTINCT_VALUES
+        ) {
+            rejectionReasons.push(
+                "too many distinct district values"
+            );
+        }
 
-    return (
-        normalized === "objectid" ||
-        normalized === "fid" ||
-        normalized === "shape" ||
-        normalized === "shapearea" ||
-        normalized === "shapelength" ||
-        normalized === "globalid"
-    );
-}
+        if (
+            best.distinctValues.length <
+            MIN_DISTINCT_VALUES
+        ) {
+            rejectionReasons.push(
+                "insufficient distinct district values"
+            );
+        }
 
-function findActualField(
-    attributes: Record<string, unknown>,
-    requestedField: string
-): string | undefined {
+        if (
+            best.coverage <
+            MIN_COVERAGE
+        ) {
+            rejectionReasons.push(
+                "insufficient district-field coverage"
+            );
+        }
 
-    return Object.keys(
-        attributes
-    ).find(
-        field =>
-            field.toLowerCase() ===
-            requestedField.toLowerCase()
-    );
-}
+        if (!classification.isPoliticalBoundary) {
+            rejectionReasons.push(
+                "classifier did not identify a political boundary"
+            );
+        }
 
-function normalizeValue(
-    value: unknown
-): string | undefined {
-
-    if (
-        value === null ||
-        value === undefined
-    ) {
-        return undefined;
-    }
-
-    const normalized =
-        String(value)
-            .trim()
-            .replace(
-                /\s+/g,
-                " "
+        const geometryType =
+            normalizeField(
+                inspection.geometryType
             );
 
-    return normalized ||
-        undefined;
-}
+        const isPolygon =
+            geometryType ===
+                "esri geometry polygon" ||
+            geometryType ===
+                "polygon";
 
-function uniqueStrings(
-    values: string[]
-): string[] {
-
-    const result: string[] = [];
-
-    const seen =
-        new Set<string>();
-
-    for (
-        const value of
-        values
-    ) {
-
-        const normalized =
-            value.trim();
-
-        if (
-            !normalized
-        ) {
-            continue;
+        if (!isPolygon) {
+            rejectionReasons.push(
+                "not polygon geometry"
+            );
         }
 
-        const key =
-            normalized.toLowerCase();
-
         if (
-            seen.has(key)
+            rejectionReasons.length ===
+            0
         ) {
-            continue;
+            rejectionReasons.push(
+                "failed political-boundary validation"
+            );
         }
+    }
 
-        seen.add(key);
+    // =========================================================================
+    // Evidence
+    // =========================================================================
 
-        result.push(
-            normalized
+    const evidence =
+        [
+            ...semanticEvidence.evidence
+        ];
+
+    if (best.field) {
+        evidence.push(
+            `District field: ${best.field}.`
         );
     }
 
-    return result;
-}
-
-// =============================================================================
-// District value pattern
-// =============================================================================
-
-function detectDistrictValuePattern(
-    values: string[]
-):
-    | "numeric"
-    | "ward-number"
-    | "district-number"
-    | "named"
-    | "unknown"
-{
-
     if (
-        values.length === 0
+        best.distinctValues.length > 0
     ) {
-        return "unknown";
-    }
-
-    const normalized =
-        values.map(
-            value =>
-                value
-                    .trim()
-                    .toLowerCase()
+        evidence.push(
+            `Distinct district values: ${best.distinctValues.length}.`
         );
-
-    if (
-        normalized.every(
-            value =>
-                /^ward\s*[a-z0-9]+$/i.test(
-                    value
-                )
-        )
-    ) {
-        return "ward-number";
     }
 
-    if (
-        normalized.every(
-            value =>
-                /^(?:(?:city|council)\s+)?district\s*[a-z0-9]+$/i.test(
-                    value
-                )
-        )
-    ) {
-        return "district-number";
+    if (best.coverage > 0) {
+        evidence.push(
+            `District-field coverage: ${(best.coverage * 100).toFixed(1)}%.`
+        );
     }
 
-    if (
-        normalized.every(
-            value =>
-                /^\d+$/.test(
-                    value
-                )
-        )
-    ) {
-        return "numeric";
-    }
+    evidence.push(
+        `District value pattern: ${best.pattern}.`
+    );
 
-    /*
-     * Named district values.
-     *
-     * Examples:
-     *
-     * North
-     * South
-     * Central
-     * Downtown
-     * Ward A
-     */
-    if (
-        normalized.every(
-            value =>
-                /[a-z]/i.test(
-                    value
-                )
-        )
-    ) {
-        return "named";
-    }
+    evidence.push(
+        `Validation confidence: ${confidence}.`
+    );
 
-    return "unknown";
-}
+    // =========================================================================
+    // Expected district count
+    // =========================================================================
 
-// =============================================================================
-// Formatting
-// =============================================================================
+    const expectedDistrictCount =
+        (
+            inspection as
+            ArcGISInspection & {
+                expectedDistrictCount?: number;
+            }
+        ).expectedDistrictCount;
 
-function formatPercent(
-    value: number
-): string {
+    const distinctDistrictValues =
+        best.distinctValues;
 
-    return `${Math.round(
-        value * 100
-    )}%`;
+    const completeDistrictCoverage =
+        expectedDistrictCount !== undefined
+            ? distinctDistrictValues.length >=
+                expectedDistrictCount
+            : undefined;
+
+    const missingDistrictValues:
+        string[] = [];
+
+    // =========================================================================
+    // Return
+    // =========================================================================
+
+    return {
+        isLikelyPoliticalBoundary:
+            accepted,
+
+        confidence,
+
+        districtField:
+            best.field ||
+            undefined,
+
+        sampleCount:
+            best.distinctValues.length,
+
+        featureCount:
+            (
+                inspection as
+                ArcGISInspection & {
+                    featureCount?: number;
+                }
+            ).featureCount,
+
+        distinctDistrictValues,
+
+        districtValuePattern:
+            best.pattern,
+
+        geometryType:
+            inspection.geometryType,
+
+        municipalityOverlap:
+            undefined,
+
+        evidence,
+
+        expectedDistrictCount,
+
+        completeDistrictCoverage,
+
+        missingDistrictValues,
+
+        rejectionReasons
+    };
 }

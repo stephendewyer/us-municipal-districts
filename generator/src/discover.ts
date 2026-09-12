@@ -174,6 +174,18 @@ export interface DiscoveryTiming {
 }
 
 // =============================================================================
+// Candidate rejection reasons
+// =============================================================================
+
+interface RejectedCandidate {
+    candidate: DiscoveryCandidate;
+    inspection: ArcGISInspection;
+    classification: ReturnType<typeof classifyCandidate>;
+    validation: ArcGISCandidateValidation;
+    reason: string;
+}
+
+// =============================================================================
 // Search configuration
 // =============================================================================
 
@@ -757,6 +769,8 @@ async function discoverMunicipality(
     const inspectedCandidates:
         InspectedCandidate[] = [];
 
+    const rejectedCandidates:
+        RejectedCandidate[] = [];
 
     for (
         const candidate of layerCandidates
@@ -878,11 +892,16 @@ async function discoverMunicipality(
                 // Candidate validation gate
                 // -----------------------------------------------------------------
                 if (!validation.isLikelyPoliticalBoundary) {
-                    if (options.verbose) {
-                        console.log(
-                            `      REJECTED: candidate validation`
-                        );
-                    }
+                    rejectedCandidates.push({
+                        candidate,
+                        inspection,
+                        classification,
+                        validation,
+                        reason:
+                            validation.evidence.length > 0
+                                ? validation.evidence.join("; ")
+                                : "failed political-boundary validation"
+                    });
 
                     continue;
                 }
