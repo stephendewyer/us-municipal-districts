@@ -4,7 +4,9 @@ import {
     stat,
     writeFile
 } from "node:fs/promises";
+
 import { createHash } from "node:crypto";
+
 import path from "node:path";
 
 import type {
@@ -68,6 +70,66 @@ import {
     queryArcGISLayerGeometry
 } from "./queryArcGISLayerGeometry.js";
 
+import {
+    performance
+} from "node:perf_hooks";
+
+// =============================================================================
+// Timing helpers
+// =============================================================================
+
+function recordStageTiming(
+    timing: DiscoveryTiming,
+    name: string,
+    runtimeMs: number
+): void {
+
+    const existing =
+        timing.stages.find(
+            stage =>
+                stage.name === name
+        );
+
+    if (existing) {
+
+        existing.runtimeMs +=
+            runtimeMs;
+
+        existing.count += 1;
+
+        return;
+    }
+
+    timing.stages.push({
+        name,
+        runtimeMs,
+        count: 1
+    });
+}
+
+async function measureStage<T>(
+    timing: DiscoveryTiming,
+    name: string,
+    operation: () => Promise<T>
+): Promise<T> {
+
+    const start =
+        performance.now();
+
+    try {
+
+        return await operation();
+
+    } finally {
+
+        recordStageTiming(
+            timing,
+            name,
+            performance.now() -
+                start
+        );
+    }
+}
 
 // =============================================================================
 // Options
@@ -101,6 +163,15 @@ export interface DiscoverOptions {
     verbose?: boolean;
 }
 
+export interface DiscoveryStageTiming {
+    name: string;
+    runtimeMs: number;
+    count: number;
+}
+
+export interface DiscoveryTiming {
+    stages: DiscoveryStageTiming[];
+}
 
 // =============================================================================
 // Search configuration
@@ -306,20 +377,28 @@ function isExternalArcGISServerRoot(
     }
 }
 
+
 async function discoverMunicipality(
     place: CensusPlace,
     options: DiscoverOptions
 ): Promise<DiscoveryResult> {
 
-
+    const timing: DiscoveryTiming = {
+        stages: []
+    };
     // =========================================================================
     // 1. Search ArcGIS Online
     // =========================================================================
 
     const searchCandidates =
-        await searchMunicipalArcGIS(
-            place,
-            options
+        await measureStage(
+            timing,
+            "Search ArcGIS Online",
+            () =>
+                searchMunicipalArcGIS(
+                    place,
+                    options
+                )
         );
 
 
@@ -363,11 +442,15 @@ async function discoverMunicipality(
 
             const services:
                 ArcGISServerServiceResult[] =
-                await discoverArcGISServer(
-                    serverRoot,
-                    place
+                await measureStage(
+                    timing,
+                    `ArcGIS Server discovery: ${serverRoot}`,
+                    () =>
+                        discoverArcGISServer(
+                            serverRoot,
+                            place
+                        )
                 );
-
 
             for (
                 const service of services
@@ -535,8 +618,13 @@ async function discoverMunicipality(
         try {
 
             const item =
-                await resolveArcGISItem(
-                    candidate.itemId
+                await measureStage(
+                    timing,
+                    "Resolve ArcGIS items",
+                    () =>
+                        resolveArcGISItem(
+                            candidate.itemId!
+                        )
                 );
 
 
@@ -595,8 +683,13 @@ async function discoverMunicipality(
     ) {
 
         const expanded =
-            await expandArcGISLayers(
-                candidate
+            await measureStage(
+                timing,
+                "Expand ArcGIS layers",
+                () =>
+                    expandArcGISLayers(
+                        candidate
+                    )
             );
 
 
@@ -645,8 +738,13 @@ async function discoverMunicipality(
 
             const inspection:
                 ArcGISInspection =
-                await inspectArcGIS(
-                    candidate.url
+                await measureStage(
+                    timing,
+                    "Inspect ArcGIS candidate",
+                    () =>
+                        inspectArcGIS(
+                            candidate.url
+                        )
                 );
 
 
@@ -761,8 +859,13 @@ async function discoverMunicipality(
             try {
 
                 const geometryResult =
-                    await queryArcGISLayerGeometry(
-                        candidate.url
+                    await measureStage(
+                        timing,
+                        "Query candidate geometry",
+                        () =>
+                            queryArcGISLayerGeometry(
+                                candidate.url
+                            )
                     );
 
 
