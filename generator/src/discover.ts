@@ -859,7 +859,56 @@ async function discoverMunicipality(
                 continue;
             }
 
+            // -----------------------------------------------------------------
+            // Validate political boundary
+            // -----------------------------------------------------------------
 
+            let validation:
+                ArcGISCandidateValidation |
+                undefined;
+
+
+            try {
+
+                validation =
+                    await validateCandidate(
+                        candidate,
+                        inspection,
+                        classification
+                    );
+
+                // -----------------------------------------------------------------
+                // Candidate validation gate
+                // -----------------------------------------------------------------
+
+                if (!validation.isLikelyPoliticalBoundary) {
+                    if (options.verbose) {
+                        console.log(
+                            `      REJECTED: candidate validation`
+                        );
+                    }
+
+                    continue;
+                }
+
+            } catch (error) {
+
+                if (options.verbose) {
+
+                    console.warn(
+                        `\n    Validation failed:`
+                    );
+
+                    console.warn(
+                        `      ${candidate.url}`
+                    );
+
+                    console.warn(
+                        error
+                    );
+                }
+            }
+            
             // -----------------------------------------------------------------
             // Municipality geographic validation
             // -----------------------------------------------------------------
@@ -969,44 +1018,6 @@ async function discoverMunicipality(
                     );
                 }
             }
-
-
-            // -----------------------------------------------------------------
-            // Validate political boundary
-            // -----------------------------------------------------------------
-
-            let validation:
-                ArcGISCandidateValidation |
-                undefined;
-
-
-            try {
-
-                validation =
-                    await validateCandidate(
-                        candidate,
-                        inspection,
-                        classification
-                    );
-
-            } catch (error) {
-
-                if (options.verbose) {
-
-                    console.warn(
-                        `\n    Validation failed:`
-                    );
-
-                    console.warn(
-                        `      ${candidate.url}`
-                    );
-
-                    console.warn(
-                        error
-                    );
-                }
-            }
-
 
             // -----------------------------------------------------------------
             // Store inspected candidate

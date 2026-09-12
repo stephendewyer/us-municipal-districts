@@ -103,6 +103,14 @@ export async function validateCandidate(
             await queryArcGISLayer(
                 inspection.url,
                 {
+                    /*
+                     * Only inspect a small sample of features.
+                     *
+                     * This validation is intended to determine whether
+                     * the layer looks like a political-boundary layer.
+                     * Full geometry retrieval happens later, only after
+                     * the candidate passes this stage.
+                     */
                     resultRecordCount:
                         SAMPLE_SIZE,
 
@@ -115,8 +123,16 @@ export async function validateCandidate(
                     outFields:
                         candidateFields,
 
+                    /*
+                     * Do not paginate through the entire layer.
+                     *
+                     * validateCandidate() only needs a representative
+                     * attribute sample. Fetching every feature here would
+                     * defeat the purpose of using this as a cheap
+                     * pre-geometry validation stage.
+                     */
                     fetchAll:
-                        true
+                        false
                 }
             );
     } catch (error) {
@@ -440,6 +456,7 @@ export async function validateCandidate(
         evidence
     };
 }
+
 
 // =============================================================================
 // Candidate fields

@@ -24,9 +24,7 @@ import type {
 export type ArcGISGeoJSONGeometry =
     Polygon | MultiPolygon;
 
-
 export interface ArcGISGeometryQueryResult {
-
     success:
         boolean;
 
@@ -103,6 +101,13 @@ export async function queryArcGISLayerGeometry(
 
     while (true) {
 
+        // ---------------------------------------------------------------------
+        // Time the individual ArcGIS geometry request.
+        // ---------------------------------------------------------------------
+
+        const requestStart =
+            performance.now();
+
         const result =
             await queryArcGISLayer(
                 normalizedUrl,
@@ -123,7 +128,7 @@ export async function queryArcGISLayerGeometry(
                     outFields:
                         [],
 
-                    /*
+                    /**
                      * Request all geometries in WGS 84.
                      *
                      * This is critical because the rest of
@@ -135,6 +140,36 @@ export async function queryArcGISLayerGeometry(
                         4326
                 }
             );
+
+        const requestRuntimeMs =
+            performance.now() -
+            requestStart;
+
+
+        // ---------------------------------------------------------------------
+        // Diagnostic timing output.
+        //
+        // This is intentionally at the individual-request level so that
+        // slow ArcGIS layers can be identified without changing discovery
+        // behavior.
+        // ---------------------------------------------------------------------
+
+        console.log(
+            "DEBUG geometry query:",
+            `${requestRuntimeMs.toFixed(0)}ms`,
+            `offset=${offset}`,
+            `count=${
+                result.success
+                    ? result.featureCount
+                    : "ERROR"
+            }`,
+            normalizedUrl
+        );
+
+
+        // ---------------------------------------------------------------------
+        // Handle query failure.
+        // ---------------------------------------------------------------------
 
         if (!result.success) {
 
@@ -162,6 +197,11 @@ export async function queryArcGISLayerGeometry(
             };
         }
 
+
+        // ---------------------------------------------------------------------
+        // Process returned features.
+        // ---------------------------------------------------------------------
+
         totalFeatureCount +=
             result.featureCount;
 
@@ -183,20 +223,24 @@ export async function queryArcGISLayerGeometry(
             }
         }
 
+
         exceededTransferLimit =
             result.exceededTransferLimit;
 
-        /*
+
+        /**
          * ArcGIS has returned the final page.
          */
         if (
             !result.exceededTransferLimit ||
             result.featureCount === 0
         ) {
+
             break;
         }
 
-        /*
+
+        /**
          * Prevent an accidental infinite loop if an
          * ArcGIS service reports transfer-limit behavior
          * but does not return any new records.
@@ -204,12 +248,15 @@ export async function queryArcGISLayerGeometry(
         if (
             result.featureCount <= 0
         ) {
+
             break;
         }
+
 
         offset +=
             result.featureCount;
     }
+
 
     return {
         success:
@@ -243,8 +290,10 @@ function normalizeFeatureGeometry(
         !feature.geometry ||
         typeof feature.geometry !== "object"
     ) {
+
         return undefined;
     }
+
 
     const geometry =
         feature.geometry as Record<
@@ -252,7 +301,8 @@ function normalizeFeatureGeometry(
             unknown
         >;
 
-    /*
+
+    /**
      * This helper currently handles polygon geometries,
      * which ArcGIS represents using "rings".
      */
@@ -261,8 +311,10 @@ function normalizeFeatureGeometry(
             geometry.rings
         )
     ) {
+
         return undefined;
     }
+
 
     const arcGISGeometry:
         ArcGISPolygonGeometry = {
@@ -271,15 +323,18 @@ function normalizeFeatureGeometry(
             geometry.rings as number[][][],
 
         ...(geometry.spatialReference &&
-            typeof geometry.spatialReference === "object"
+        typeof geometry.spatialReference === "object"
             ? {
+
                 spatialReference:
                     normalizeSpatialReference(
                         geometry.spatialReference
                     )
+
             }
             : {})
     };
+
 
     try {
 
@@ -289,7 +344,7 @@ function normalizeFeatureGeometry(
 
     } catch {
 
-        /*
+        /**
          * A malformed individual feature should not make
          * an otherwise usable layer fail completely.
          */
@@ -315,18 +370,24 @@ function normalizeSpatialReference(
             unknown
         >;
 
+
     return {
+
         ...(typeof record.wkid === "number"
             ? {
+
                 wkid:
                     record.wkid
+
             }
             : {}),
 
         ...(typeof record.latestWkid === "number"
             ? {
+
                 latestWkid:
                     record.latestWkid
+
             }
             : {})
     };
