@@ -34,43 +34,68 @@ const MAX_DISTINCT_VALUES = 100;
  * These are intentionally semantic signals rather than hard-coded
  * exclusions. Different municipalities use different naming conventions.
  */
-const BOUNDARY_TERMS = [
-    "boundary",
-    "ward",
-    "council district",
-    "aldermanic",
-    "municipal district",
-    "political district"
+
+const BOUNDARY_IDENTITY_PATTERNS = [
+    /\bward\s+boundar(?:y|ies)\b/i,
+    /\bward\s+maps?\b/i,
+    /\bwards?\b/i,
+
+    /\bcouncil\s+districts?\b/i,
+    /\bcouncil\s+boundar(?:y|ies)\b/i,
+    /\bcouncil\s+maps?\b/i,
+
+    /\baldermanic\s+districts?\b/i,
+    /\bmunicipal\s+districts?\b/i,
+    /\bpolitical\s+districts?\b/i,
 ];
 
-/*
- * Terms that suggest the layer is a thematic dataset which may
- * happen to contain a political district attribute.
- *
- * These are NOT automatic rejection terms.
- */
-const THEMATIC_TERMS = [
-    "eviction",
-    "crime",
-    "incident",
-    "complaint",
-    "inspection",
-    "permit",
-    "filing",
-    "property",
-    "housing",
-    "business",
-    "license",
-    "assessment",
-    "tax",
-    "sales",
-    "employment",
-    "population",
-    "demographic",
-    "facility",
-    "service",
-    "application",
-    "site"
+const THEMATIC_IDENTITY_PATTERNS = [
+    /\bevictions?\b/i,
+    /\bcrimes?\b/i,
+    /\bincidents?\b/i,
+    /\bcomplaints?\b/i,
+    /\binspections?\b/i,
+    /\bpermits?\b/i,
+    /\bfilings?\b/i,
+    /\bproperties?\b/i,
+    /\bhousing\b/i,
+    /\bbusiness(?:es)?\b/i,
+    /\blicenses?\b/i,
+    /\bassessments?\b/i,
+    /\btaxes?\b/i,
+    /\bsales\b/i,
+    /\bemployment\b/i,
+    /\bpopulation\b/i,
+    /\bdemographics?\b/i,
+];
+
+const BOUNDARY_METADATA_PATTERNS = [
+    /\bboundar(?:y|ies)\b/i,
+    /\bwards?\b/i,
+    /\bcouncil\s+districts?\b/i,
+    /\baldermanic\b/i,
+    /\bmunicipal\s+districts?\b/i,
+    /\bpolitical\s+districts?\b/i
+];
+
+const THEMATIC_METADATA_PATTERNS = [
+    /\bevictions?\b/i,
+    /\bcrimes?\b/i,
+    /\bincidents?\b/i,
+    /\bcomplaints?\b/i,
+    /\binspections?\b/i,
+    /\bpermits?\b/i,
+    /\bfilings?\b/i,
+    /\bproperties?\b/i,
+    /\bhousing\b/i,
+    /\bbusiness(?:es)?\b/i,
+    /\blicenses?\b/i,
+    /\bassessments?\b/i,
+    /\btaxes?\b/i,
+    /\bsales\b/i,
+    /\bemployment\b/i,
+    /\bpopulation\b/i,
+    /\bdemographics?\b/i
 ];
 
 
@@ -97,8 +122,7 @@ function scoreLayerSemantics(
         inspection.layerName
     ]
         .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+        .join(" ");
 
     /*
      * Metadata provides supporting evidence, but should not be allowed
@@ -125,22 +149,24 @@ function scoreLayerSemantics(
      * A term in the actual layer/service title is strong evidence about
      * what the geometry represents.
      */
-    for (const term of BOUNDARY_TERMS) {
-        if (identityText.includes(term)) {
+
+    // Strong identity evidence
+    for (const pattern of BOUNDARY_IDENTITY_PATTERNS) {
+        if (pattern.test(identityText)) {
             boundaryScore += 20;
 
             evidence.push(
-                `Boundary identity term: "${term}".`
+                `Boundary identity pattern matched: "${pattern.source}".`
             );
         }
     }
 
-    for (const term of THEMATIC_TERMS) {
-        if (identityText.includes(term)) {
+    for (const pattern of THEMATIC_IDENTITY_PATTERNS) {
+        if (pattern.test(identityText)) {
             thematicScore += 20;
 
             evidence.push(
-                `Thematic identity term: "${term}".`
+                `Thematic identity pattern matched: "${pattern.source}".`
             );
         }
     }
@@ -158,22 +184,23 @@ function scoreLayerSemantics(
      *
      * That does NOT mean the geometry represents council districts.
      */
-    for (const term of BOUNDARY_TERMS) {
-        if (metadataText.includes(term)) {
-            boundaryScore += 5;
+    // Weak metadata evidence
+    for (const pattern of BOUNDARY_METADATA_PATTERNS) {
+        if (pattern.test(metadataText)) {
+            boundaryScore += 2;
 
             evidence.push(
-                `Boundary metadata term: "${term}".`
+                `Boundary metadata pattern matched: "${pattern.source}".`
             );
         }
     }
 
-    for (const term of THEMATIC_TERMS) {
-        if (metadataText.includes(term)) {
-            thematicScore += 5;
+    for (const pattern of THEMATIC_METADATA_PATTERNS) {
+        if (pattern.test(metadataText)) {
+            thematicScore += 2;
 
             evidence.push(
-                `Thematic metadata term: "${term}".`
+                `Thematic metadata pattern matched: "${pattern.source}".`
             );
         }
     }
@@ -196,7 +223,7 @@ function scoreLayerSemantics(
      * These are deliberately treated as thematic evidence only when
      * the layer also has an obvious thematic identity.
      */
-    const thematicGroupingPatterns = [
+    const THEMATIC_GROUPING_PATTERNS = [
         /\bby\s+(?:ward|wards)\b/i,
         /\bby\s+(?:council\s+)?districts?\b/i,
         /\bwithin\s+(?:ward|wards)\b/i,
@@ -209,7 +236,7 @@ function scoreLayerSemantics(
     ];
 
     const hasThematicGrouping =
-        thematicGroupingPatterns.some(
+        THEMATIC_GROUPING_PATTERNS.some(
             pattern =>
                 pattern.test(identityText)
         );
@@ -271,6 +298,7 @@ export async function validateCandidate(
             candidate,
             inspection
         );
+
     console.log(
     "SEMANTIC DEBUG:",
         {
