@@ -265,6 +265,27 @@ const SEARCH_CACHE_TTL_MS =
 export async function discoverArcGIS(
     options: DiscoverOptions = {}
 ): Promise<DiscoveryResult[]> {
+    const { results } =
+        await discoverArcGISWithTiming(options);
+
+    return results;
+}
+
+export interface DiscoveryRun {
+    results: DiscoveryResult[];
+    timings: DiscoveryTiming[];
+}
+
+/**
+ * Discover municipal political district sources and expose per-municipality
+ * stage timing for diagnostics and performance evaluation.
+ *
+ * This is intentionally separate from discoverArcGIS() so timing data does
+ * not become part of the public DiscoveryResult model.
+ */
+export async function discoverArcGISWithTiming(
+    options: DiscoverOptions = {}
+): Promise<DiscoveryRun> {
 
     const places =
         getCensusPlaces(
@@ -273,6 +294,8 @@ export async function discoverArcGIS(
 
     const results:
         DiscoveryResult[] = [];
+    const timings:
+        DiscoveryTiming[] = [];
 
 
     for (
@@ -298,7 +321,7 @@ export async function discoverArcGIS(
 
         try {
 
-            const result =
+            const { result, timing } =
                 await discoverMunicipality(
                     place,
                     options
@@ -306,6 +329,9 @@ export async function discoverArcGIS(
 
             results.push(
                 result
+            );
+            timings.push(
+                timing
             );
 
         } catch (error) {
@@ -326,11 +352,17 @@ export async function discoverArcGIS(
                     error
                 )
             );
+            timings.push({
+                stages: []
+            });
         }
     }
 
 
-    return results;
+    return {
+        results,
+        timings
+    };
 }
 
 
@@ -381,7 +413,7 @@ function isExternalArcGISServerRoot(
 async function discoverMunicipality(
     place: CensusPlace,
     options: DiscoverOptions
-): Promise<DiscoveryResult> {
+): Promise<{ result: DiscoveryResult; timing: DiscoveryTiming }> {
 
     const timing: DiscoveryTiming = {
         stages: []
@@ -444,7 +476,7 @@ async function discoverMunicipality(
                 ArcGISServerServiceResult[] =
                 await measureStage(
                     timing,
-                    `ArcGIS Server discovery: ${serverRoot}`,
+                    "ArcGIS Server discovery",
                     () =>
                         discoverArcGISServer(
                             serverRoot,
@@ -1042,7 +1074,10 @@ async function discoverMunicipality(
     }
 
 
-    return result;
+    return {
+        result,
+        timing
+    };
 }
 
 

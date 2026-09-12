@@ -15,7 +15,8 @@ import type {
 
 
 import {
-    discoverArcGIS
+    discoverArcGISWithTiming,
+    type DiscoveryTiming
 } from "../generator/src/discover.js";
 
 
@@ -23,6 +24,12 @@ import type {
     DiscoveryResult,
     InspectedCandidate
 } from "../generator/src/types.js";
+
+
+interface FixtureEvaluation {
+    result: CoverageResult;
+    timing: DiscoveryTiming;
+}
 
 
 // =============================================================================
@@ -66,12 +73,27 @@ async function main(): Promise<void> {
 
         try {
 
-            const result =
+            const evaluation =
                 await evaluateFixture(
                     fixture
                 );
 
 
+            const result =
+                evaluation.result;
+
+
+            const timing =
+                evaluation.timing;
+
+
+            /*
+             * Runtime here is the true end-to-end wall-clock runtime of
+             * evaluating this fixture.
+             *
+             * Stage timings are diagnostic and are intentionally kept
+             * separate from this value.
+             */
             result.runtimeMs =
                 performance.now() -
                 startTime;
@@ -84,6 +106,11 @@ async function main(): Promise<void> {
 
             printResult(
                 result
+            );
+
+
+            printStageTiming(
+                timing
             );
 
         } catch (error) {
@@ -177,10 +204,10 @@ async function main(): Promise<void> {
 
 async function evaluateFixture(
     fixture: CoverageFixture
-): Promise<CoverageResult> {
+): Promise<FixtureEvaluation> {
 
-    const discoveryResults =
-        await discoverArcGIS({
+    const discoveryRun =
+        await discoverArcGISWithTiming({
             city:
                 fixture.city,
 
@@ -193,21 +220,31 @@ async function evaluateFixture(
 
 
     const discovery =
-        discoveryResults[0];
+        discoveryRun.results[0];
+
+
+    const timing =
+        discoveryRun.timings[0] ?? {
+            stages: []
+        };
 
 
     if (!discovery) {
 
         return {
-            ...createEmptyResult(
-                fixture
-            ),
+            result: {
+                ...createEmptyResult(
+                    fixture
+                ),
 
-            failureStage:
-                "discovery",
+                failureStage:
+                    "discovery",
 
-            failureCode:
-                "NO_DISCOVERY_CANDIDATES"
+                failureCode:
+                    "NO_DISCOVERY_CANDIDATES"
+            },
+
+            timing
         };
     }
 
@@ -232,13 +269,18 @@ async function evaluateFixture(
         discovery.candidates.length === 0
     ) {
 
-        return createResult(
-            fixture,
-            discovery,
-            typeCandidates,
-            "discovery",
-            "NO_DISCOVERY_CANDIDATES"
-        );
+        return {
+            result:
+                createResult(
+                    fixture,
+                    discovery,
+                    typeCandidates,
+                    "discovery",
+                    "NO_DISCOVERY_CANDIDATES"
+                ),
+
+            timing
+        };
     }
 
 
@@ -250,13 +292,18 @@ async function evaluateFixture(
         typeCandidates.length === 0
     ) {
 
-        return createResult(
-            fixture,
-            discovery,
-            typeCandidates,
-            "classification",
-            "NO_VALID_BOUNDARY"
-        );
+        return {
+            result:
+                createResult(
+                    fixture,
+                    discovery,
+                    typeCandidates,
+                    "classification",
+                    "NO_VALID_BOUNDARY"
+                ),
+
+            timing
+        };
     }
 
 
@@ -277,13 +324,18 @@ async function evaluateFixture(
         validCandidates.length === 0
     ) {
 
-        return createResult(
-            fixture,
-            discovery,
-            typeCandidates,
-            "validation",
-            "NO_VALID_BOUNDARY"
-        );
+        return {
+            result:
+                createResult(
+                    fixture,
+                    discovery,
+                    typeCandidates,
+                    "validation",
+                    "NO_VALID_BOUNDARY"
+                ),
+
+            timing
+        };
     }
 
 
@@ -305,13 +357,18 @@ async function evaluateFixture(
         completeCandidates.length === 0
     ) {
 
-        return createResult(
-            fixture,
-            discovery,
-            typeCandidates,
-            "validation",
-            "INCOMPLETE_DISTRICT_COVERAGE"
-        );
+        return {
+            result:
+                createResult(
+                    fixture,
+                    discovery,
+                    typeCandidates,
+                    "validation",
+                    "INCOMPLETE_DISTRICT_COVERAGE"
+                ),
+
+            timing
+        };
     }
 
 
@@ -319,13 +376,18 @@ async function evaluateFixture(
     // Success
     // =========================================================================
 
-    return createResult(
-        fixture,
-        discovery,
-        typeCandidates,
-        undefined,
-        undefined
-    );
+    return {
+        result:
+            createResult(
+                fixture,
+                discovery,
+                typeCandidates,
+                undefined,
+                undefined
+            ),
+
+        timing
+    };
 }
 
 
@@ -598,6 +660,58 @@ function printResult(
     console.log(
         `  Failure: ${result.failureCode}`
     );
+}
+
+
+// =============================================================================
+// Print discovery stage timing
+// =============================================================================
+
+function printStageTiming(
+    timing: DiscoveryTiming
+): void {
+
+    if (
+        timing.stages.length === 0
+    ) {
+
+        return;
+    }
+
+
+    console.log(
+        "  Stage timing:"
+    );
+
+
+    for (
+        const stage of timing.stages
+    ) {
+
+        const seconds =
+            stage.runtimeMs /
+            1000;
+
+
+        const name =
+            stage.name.padEnd(
+                28,
+                " "
+            );
+
+
+        const countLabel =
+            stage.count === 1
+                ? "call"
+                : "calls";
+
+
+        console.log(
+            `    ${name} ` +
+            `${seconds.toFixed(2)}s ` +
+            `(${stage.count} ${countLabel})`
+        );
+    }
 }
 
 
