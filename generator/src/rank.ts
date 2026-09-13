@@ -39,9 +39,8 @@ function hasValidatedPoliticalBoundary(
     return Boolean(
         validation &&
         validation.isLikelyPoliticalBoundary &&
-        validation.confidence >= 0.60 &&
+        validation.confidence >= 60 &&
         validation.districtField &&
-        validation.distinctDistrictValues.length >= 2 &&
         (
             validation.geometryType ===
                 "esriGeometryPolygon" ||

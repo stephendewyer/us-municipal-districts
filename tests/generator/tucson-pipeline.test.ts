@@ -62,7 +62,7 @@ function makeClassification(
         isHousingDataset: false,
         officialMunicipalSource: true,
         districtType: "ward",
-        temporalStatus: "undated",  
+        temporalStatus: "undated",
         sourceRole: "unknown",
         rejected: false,
         rejectionReasons: [],
@@ -84,6 +84,7 @@ function makeInspection(
         title: "TucsonWards2022",
         geometryType: "esriGeometryPolygon",
         objectIdField: "OBJECTID",
+
         fields: [
             {
                 name: "OBJECTID",
@@ -98,10 +99,13 @@ function makeInspection(
                 type: "esriFieldTypeString"
             }
         ],
+
         districtFields: ["WARD"],
         districtField: "WARD",
+
         nameFields: ["NAME"],
         nameField: "NAME",
+
         fieldSamples: [
             {
                 field: "WARD",
@@ -126,10 +130,13 @@ function makeInspection(
                 ]
             }
         ],
+
         supportsQuery: true,
         supportsGeoJSON: true,
         supportsPagination: true,
+
         itemId: TUCSON_WARDS_ITEM_ID,
+
         ...overrides
     };
 }
@@ -139,10 +146,17 @@ function makeValidation(
 ): ArcGISCandidateValidation {
     return {
         isLikelyPoliticalBoundary: true,
-        confidence: 0.98,
+
+        /*
+         * Validation confidence uses the production 0–100 scale.
+         */
+        confidence: 98,
+
         districtField: "WARD",
+
         sampleCount: 6,
         featureCount: 6,
+
         distinctDistrictValues: [
             "1",
             "2",
@@ -151,15 +165,20 @@ function makeValidation(
             "5",
             "6"
         ],
+
         districtValuePattern: "ward-number",
+
         geometryType: "esriGeometryPolygon",
+
         municipalityOverlap: 1,
+
         evidence: [
             "Polygon geometry",
             "Ward district field",
             "Multiple district values",
             "Municipal boundary dataset"
         ],
+
         ...overrides
     };
 }
@@ -169,23 +188,47 @@ function makeCandidate(
 ): InspectedCandidate {
     const candidate: DiscoveryCandidate = {
         itemId: "test-item-id",
-        placeFips: TUCSON_PLACE.placeFips,
-        city: TUCSON_PLACE.city,
-        state: TUCSON_PLACE.state,
-        url: TUCSON_WARDS_URL,
-        title: "Tucson Ward Boundaries",
-        score: 90,
-        requiresReview: false,
+
+        placeFips:
+            TUCSON_PLACE.placeFips,
+
+        city:
+            TUCSON_PLACE.city,
+
+        state:
+            TUCSON_PLACE.state,
+
+        url:
+            TUCSON_WARDS_URL,
+
+        title:
+            "Tucson Ward Boundaries",
+
+        score:
+            90,
+
+        requiresReview:
+            false,
+
         reasons: [
             "Municipal ward boundary candidate"
         ],
-        source: "arcgis",
-        searchQuery: "Tucson AZ ward boundaries"
+
+        source:
+            "arcgis",
+
+        searchQuery:
+            "Tucson AZ ward boundaries"
     };
 
-    const inspection = makeInspection();
-    const classification = makeClassification();
-    const validation = makeValidation();
+    const inspection =
+        makeInspection();
+
+    const classification =
+        makeClassification();
+
+    const validation =
+        makeValidation();
 
     return {
         candidate,
@@ -200,39 +243,71 @@ function makeTucsonWardsCandidate(
     overrides: Partial<InspectedCandidate> = {},
     validationOverrides: Partial<ArcGISCandidateValidation> = {}
 ): InspectedCandidate {
-    const base = makeCandidate();
+    const base =
+        makeCandidate();
 
     return {
         ...base,
 
         candidate: {
             ...base.candidate,
-            itemId: TUCSON_WARDS_ITEM_ID,
-            placeFips: TUCSON_PLACE.placeFips,
-            city: TUCSON_PLACE.city,
-            state: TUCSON_PLACE.state,
-            url: TUCSON_WARDS_URL,
-            title: "TucsonWards2022",
-            score: 100,
-            requiresReview: false,
+
+            itemId:
+                TUCSON_WARDS_ITEM_ID,
+
+            placeFips:
+                TUCSON_PLACE.placeFips,
+
+            city:
+                TUCSON_PLACE.city,
+
+            state:
+                TUCSON_PLACE.state,
+
+            url:
+                TUCSON_WARDS_URL,
+
+            title:
+                "TucsonWards2022",
+
+            score:
+                100,
+
+            requiresReview:
+                false,
+
             reasons: [
                 "Official Tucson ward boundary dataset"
             ],
-            source: "arcgis",
-            searchQuery: "Tucson AZ ward boundaries"
+
+            source:
+                "arcgis",
+
+            searchQuery:
+                "Tucson AZ ward boundaries"
         },
 
         inspection: {
             ...base.inspection,
-            url: TUCSON_WARDS_URL,
-            title: "TucsonWards2022",
-            itemId: TUCSON_WARDS_ITEM_ID
+
+            url:
+                TUCSON_WARDS_URL,
+
+            title:
+                "TucsonWards2022",
+
+            itemId:
+                TUCSON_WARDS_ITEM_ID
         },
 
         classification: {
             ...base.classification,
-            officialMunicipalSource: true,
-            districtType: "ward"
+
+            officialMunicipalSource:
+                true,
+
+            districtType:
+                "ward"
         },
 
         validation: {
@@ -245,17 +320,27 @@ function makeTucsonWardsCandidate(
 }
 
 function makeGolfCandidate(): InspectedCandidate {
-    const base = makeCandidate();
+    const base =
+        makeCandidate();
 
     return {
         ...base,
 
         candidate: {
             ...base.candidate,
-            itemId: "golf-item-id",
-            url: TUCSON_GOLF_URL,
-            title: "Tucson City Golf Course HFL",
-            score: 90,
+
+            itemId:
+                "golf-item-id",
+
+            url:
+                TUCSON_GOLF_URL,
+
+            title:
+                "Tucson City Golf Course HFL",
+
+            score:
+                90,
+
             reasons: [
                 "Contains Tucson in title"
             ]
@@ -263,25 +348,47 @@ function makeGolfCandidate(): InspectedCandidate {
 
         inspection: {
             ...base.inspection,
-            url: TUCSON_GOLF_URL,
-            title: "Tucson City Golf Course HFL",
-            districtFields: [],
-            districtField: undefined,
-            nameFields: ["NAME"],
-            nameField: "NAME",
+
+            url:
+                TUCSON_GOLF_URL,
+
+            title:
+                "Tucson City Golf Course HFL",
+
+            districtFields:
+                [],
+
+            districtField:
+                undefined,
+
+            nameFields:
+                ["NAME"],
+
+            nameField:
+                "NAME",
+
             fields: [
                 {
-                    name: "OBJECTID",
-                    type: "esriFieldTypeOID"
+                    name:
+                        "OBJECTID",
+
+                    type:
+                        "esriFieldTypeOID"
                 },
                 {
-                    name: "NAME",
-                    type: "esriFieldTypeString"
+                    name:
+                        "NAME",
+
+                    type:
+                        "esriFieldTypeString"
                 }
             ],
+
             fieldSamples: [
                 {
-                    field: "NAME",
+                    field:
+                        "NAME",
+
                     values: [
                         "El Rio Golf Course",
                         "Silverbell Golf Course"
@@ -290,43 +397,85 @@ function makeGolfCandidate(): InspectedCandidate {
             ]
         },
 
-        classification: makeClassification({
-            isPoliticalBoundary: false,
-            isThematicDataset: true,
-            isCensusDataset: false,
-            isParcelDataset: false,
-            isHousingDataset: false,
-            officialMunicipalSource: false,
-            districtType: undefined,
-            rejected: true,
-            rejectionReasons: [
-                "Thematic dataset",
-                "Not a political district boundary"
-            ],
-            requiresReview: false,
-            matches: makeMatches({
-                thematic: [
-                    "golf",
-                    "course"
-                ],
-                political: [],
-                boundary: [],
-                official: []
-            })
-        }),
+        classification:
+            makeClassification({
+                isPoliticalBoundary:
+                    false,
 
-        validation: makeValidation({
-            isLikelyPoliticalBoundary: false,
-            confidence: 0.05,
-            districtField: undefined,
-            sampleCount: 0,
-            featureCount: 2,
-            distinctDistrictValues: [],
-            districtValuePattern: "unknown",
-            evidence: [
-                "Thematic golf-course dataset"
-            ]
-        })
+                isThematicDataset:
+                    true,
+
+                isCensusDataset:
+                    false,
+
+                isParcelDataset:
+                    false,
+
+                isHousingDataset:
+                    false,
+
+                officialMunicipalSource:
+                    false,
+
+                districtType:
+                    undefined,
+
+                rejected:
+                    true,
+
+                rejectionReasons: [
+                    "Thematic dataset",
+                    "Not a political district boundary"
+                ],
+
+                requiresReview:
+                    false,
+
+                matches:
+                    makeMatches({
+                        thematic: [
+                            "golf",
+                            "course"
+                        ],
+
+                        political:
+                            [],
+
+                        boundary:
+                            [],
+
+                        official:
+                            []
+                    })
+            }),
+
+        validation:
+            makeValidation({
+                isLikelyPoliticalBoundary:
+                    false,
+
+                confidence:
+                    5,
+
+                districtField:
+                    undefined,
+
+                sampleCount:
+                    0,
+
+                featureCount:
+                    2,
+
+                distinctDistrictValues:
+                    [],
+
+                districtValuePattern:
+                    "unknown",
+
+                evidence: [
+                    "Thematic golf-course dataset"
+                ]
+            })
     };
 }
 
@@ -334,454 +483,757 @@ function makeGolfCandidate(): InspectedCandidate {
 // Tests
 // =============================================================================
 
-describe("Tucson discovery pipeline", () => {
+describe(
+    "Tucson discovery pipeline",
+    () => {
 
-    it("accepts a valid Tucson ward boundary candidate", () => {
-        const candidate = makeTucsonWardsCandidate();
+        // ---------------------------------------------------------------------
+        // Basic acceptance
+        // ---------------------------------------------------------------------
 
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
+        it(
+            "accepts a valid Tucson ward boundary candidate",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate();
 
-        assert.strictEqual(
-            result.validCandidates.length,
-            1
-        );
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate]
+                    );
 
-        assert.strictEqual(
-            result.rejectedCandidates.length,
-            0
-        );
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    1
+                );
 
-        assert.strictEqual(
-            result.validCandidates[0].candidate.url,
-            TUCSON_WARDS_URL
-        );
-    });
+                assert.strictEqual(
+                    result.rejectedCandidates.length,
+                    0
+                );
 
-    it("rejects a thematic golf-course dataset", () => {
-        const candidate = makeGolfCandidate();
-
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
-
-        assert.strictEqual(
-            result.validCandidates.length,
-            0
-        );
-
-        assert.strictEqual(
-            result.rejectedCandidates.length,
-            1
-        );
-
-        assert.strictEqual(
-            result.rejectedCandidates[0].candidate.url,
-            TUCSON_GOLF_URL
-        );
-    });
-
-    it("rejects a candidate that is not classified as a political boundary", () => {
-        const candidate = makeTucsonWardsCandidate({
-            classification: makeClassification({
-                isPoliticalBoundary: false,
-                rejected: true,
-                rejectionReasons: [
-                    "Not classified as a political boundary"
-                ]
-            })
-        });
-
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
-
-        assert.strictEqual(
-            result.validCandidates.length,
-            0
-        );
-
-        assert.strictEqual(
-            result.rejectedCandidates.length,
-            1
-        );
-    });
-
-    it("rejects a candidate without validation", () => {
-        const candidate = makeTucsonWardsCandidate({
-            validation: undefined
-        });
-
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
-
-        assert.strictEqual(
-            result.validCandidates.length,
-            0
-        );
-
-        assert.strictEqual(
-            result.rejectedCandidates.length,
-            1
-        );
-    });
-
-    it("rejects validation that says the layer is not a political boundary", () => {
-        const candidate = makeTucsonWardsCandidate(
-            {},
-            {
-                isLikelyPoliticalBoundary: false,
-                confidence: 0.95,
-                evidence: [
-                    "Layer does not appear to represent political districts"
-                ]
+                assert.strictEqual(
+                    result.validCandidates[0]
+                        .candidate
+                        .url,
+                    TUCSON_WARDS_URL
+                );
             }
         );
 
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
+        // ---------------------------------------------------------------------
+        // False positives
+        // ---------------------------------------------------------------------
 
-        assert.strictEqual(
-            result.validCandidates.length,
-            0
-        );
+        it(
+            "rejects a thematic golf-course dataset",
+            () => {
+                const candidate =
+                    makeGolfCandidate();
 
-        assert.strictEqual(
-            result.rejectedCandidates.length,
-            1
-        );
-    });
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate],
+                        [candidate]
+                    );
 
-    it("rejects a candidate with low validation confidence", () => {
-        const candidate = makeTucsonWardsCandidate(
-            {},
-            {
-                confidence: 0.59
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    0
+                );
+
+                assert.strictEqual(
+                    result.rejectedCandidates.length,
+                    1
+                );
+
+                assert.strictEqual(
+                    result.inspectedCandidates.length,
+                    1
+                );
+
+                assert.strictEqual(
+                    result.rejectedCandidates[0]
+                        .candidate
+                        .url,
+                    TUCSON_GOLF_URL
+                );
             }
         );
 
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
+        it(
+            "rejects a candidate that is not classified as a political boundary",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate({
+                        classification:
+                            makeClassification({
+                                isPoliticalBoundary:
+                                    false,
 
-        assert.strictEqual(
-            result.validCandidates.length,
-            0
-        );
+                                rejected:
+                                    true,
 
-        assert.strictEqual(
-            result.rejectedCandidates.length,
-            1
-        );
-    });
+                                rejectionReasons: [
+                                    "Not classified as a political boundary"
+                                ]
+                            })
+                    });
 
-    it("accepts a candidate at the validation confidence threshold", () => {
-        const candidate = makeTucsonWardsCandidate(
-            {},
-            {
-                confidence: 0.60
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate],
+                        [candidate]
+                    );
+
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    0
+                );
+
+                assert.strictEqual(
+                    result.rejectedCandidates.length,
+                    1
+                );
             }
         );
 
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
+        it(
+            "rejects a candidate without validation",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate({
+                        validation:
+                            undefined
+                    });
 
-        assert.strictEqual(
-            result.validCandidates.length,
-            1
-        );
-    });
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate],
+                        [candidate]
+                    );
 
-    it("rejects a non-polygon candidate", () => {
-        const candidate = makeTucsonWardsCandidate(
-            {
-                inspection: makeInspection({
-                    geometryType: "esriGeometryPolyline"
-                })
-            },
-            {
-                geometryType: "esriGeometryPolyline"
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    0
+                );
+
+                assert.strictEqual(
+                    result.rejectedCandidates.length,
+                    1
+                );
             }
         );
 
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
+        it(
+            "rejects validation that says the layer is not a political boundary",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate(
+                        {},
+                        {
+                            isLikelyPoliticalBoundary:
+                                false,
 
-        assert.strictEqual(
-            result.validCandidates.length,
-            0
-        );
+                            confidence:
+                                95,
 
-        assert.strictEqual(
-            result.rejectedCandidates.length,
-            1
-        );
-    });
+                            evidence: [
+                                "Layer does not appear to represent political districts"
+                            ]
+                        }
+                    );
 
-    it("rejects a candidate with fewer than two district values", () => {
-        const candidate = makeTucsonWardsCandidate(
-            {},
-            {
-                distinctDistrictValues: ["1"]
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate],
+                        [candidate]
+                    );
+
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    0
+                );
+
+                assert.strictEqual(
+                    result.rejectedCandidates.length,
+                    1
+                );
             }
         );
 
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
+        // ---------------------------------------------------------------------
+        // Confidence threshold
+        // ---------------------------------------------------------------------
 
-        assert.strictEqual(
-            result.validCandidates.length,
-            0
-        );
+        it(
+            "rejects a candidate with low validation confidence",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate(
+                        {},
+                        {
+                            confidence:
+                                59
+                        }
+                    );
 
-        assert.strictEqual(
-            result.rejectedCandidates.length,
-            1
-        );
-    });
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate],
+                        [candidate]
+                    );
 
-    it("rejects a candidate without a district field", () => {
-        const candidate = makeTucsonWardsCandidate(
-            {
-                inspection: makeInspection({
-                    districtFields: [],
-                    districtField: undefined
-                })
-            },
-            {
-                districtField: undefined
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    0
+                );
+
+                assert.strictEqual(
+                    result.rejectedCandidates.length,
+                    1
+                );
             }
         );
 
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate]
-        );
+        it(
+            "accepts a candidate at the validation confidence threshold",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate(
+                        {},
+                        {
+                            confidence:
+                                60
+                        }
+                    );
 
-        assert.strictEqual(
-            result.validCandidates.length,
-            0
-        );
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate]
+                    );
 
-        assert.strictEqual(
-            result.rejectedCandidates.length,
-            1
-        );
-    });
-
-    it("ranks the stronger Tucson ward candidate above a weaker candidate", () => {
-        const strong = makeTucsonWardsCandidate();
-
-        const weak = makeTucsonWardsCandidate({
-            candidate: {
-                ...strong.candidate,
-                itemId: "weaker-item-id",
-                url: "https://example.com/weaker/FeatureServer/0",
-                title: "Tucson Ward Boundaries Alternative",
-                score: 70,
-                reasons: [
-                    "Possible Tucson ward boundary dataset"
-                ]
-            },
-
-            classification: {
-                ...strong.classification,
-                officialMunicipalSource: false
-            },
-
-            validation: {
-                ...strong.validation!,
-                confidence: 0.75
-            }
-        });
-
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [weak, strong]
-        );
-
-        assert.ok(
-            result.rankedCandidates.length >= 2
-        );
-
-        assert.strictEqual(
-            result.rankedCandidates[0].candidate.candidate.url,
-            TUCSON_WARDS_URL
-        );
-    });
-
-    it("groups equivalent Tucson ward candidates", () => {
-        const first = makeTucsonWardsCandidate();
-
-        const second = makeTucsonWardsCandidate({
-            candidate: {
-                ...first.candidate,
-                itemId: "equivalent-item-id",
-                url: "https://example.com/tucson/FeatureServer/0",
-                title: "Tucson Ward Boundaries Alternative"
-            },
-
-            inspection: {
-                ...first.inspection,
-                url: "https://example.com/tucson/FeatureServer/0",
-                title: "Tucson Ward Boundaries Alternative"
-            }
-        });
-
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [first, second]
-        );
-
-        assert.ok(
-            result.equivalentGroups.length > 0
-        );
-
-        const group = result.equivalentGroups.find(
-            group => group.candidates.length >= 2
-        );
-
-        assert.ok(group);
-    });
-
-    it("selects the TucsonWards2022 layer as the canonical source", () => {
-        const primary = makeTucsonWardsCandidate();
-
-        const alternative = makeTucsonWardsCandidate({
-            candidate: {
-                ...primary.candidate,
-                itemId: "alternative-item-id",
-                url: "https://example.com/alternative/FeatureServer/0",
-                title: "Tucson Ward Boundaries Alternative",
-                score: 70,
-                reasons: [
-                    "Alternative Tucson ward boundary dataset"
-                ]
-            },
-
-            inspection: {
-                ...primary.inspection,
-                url: "https://example.com/alternative/FeatureServer/0",
-                title: "Tucson Ward Boundaries Alternative"
-            },
-
-            classification: {
-                ...primary.classification,
-                officialMunicipalSource: false
-            },
-
-            validation: {
-                ...primary.validation!,
-                confidence: 0.75
-            }
-        });
-
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [alternative, primary]
-        );
-
-        assert.ok(result.canonical);
-
-        assert.strictEqual(
-            result.canonical?.url,
-            TUCSON_WARDS_URL
-        );
-
-        assert.strictEqual(
-            result.canonical?.title,
-            "TucsonWards2022"
-        );
-    });
-
-    it("selects the same canonical source regardless of discovery order", () => {
-        const primary = makeTucsonWardsCandidate();
-
-        const alternative = makeTucsonWardsCandidate({
-            candidate: {
-                ...primary.candidate,
-                itemId: "alternative-item-id",
-                url: "https://example.com/alternative/FeatureServer/0",
-                title: "Tucson Ward Boundaries Alternative",
-                score: 70
-            },
-
-            inspection: {
-                ...primary.inspection,
-                url: "https://example.com/alternative/FeatureServer/0",
-                title: "Tucson Ward Boundaries Alternative"
-            },
-
-            classification: {
-                ...primary.classification,
-                officialMunicipalSource: false
-            },
-
-            validation: {
-                ...primary.validation!,
-                confidence: 0.75
-            }
-        });
-
-        const resultA = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [primary, alternative]
-        );
-
-        const resultB = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [alternative, primary]
-        );
-
-        assert.strictEqual(
-            resultA.canonical?.url,
-            resultB.canonical?.url
-        );
-
-        assert.strictEqual(
-            resultA.canonical?.url,
-            TUCSON_WARDS_URL
-        );
-    });
-
-    it("marks canonical sources for manual review when review mode is enabled", () => {
-        const candidate = makeTucsonWardsCandidate();
-
-        const result = buildDiscoveryResult(
-            TUCSON_PLACE,
-            [candidate],
-            [],
-            {
-                review: true
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    1
+                );
             }
         );
-        
-        assert.ok(result.canonical);
 
-        assert.strictEqual(
-            result.canonical?.requiresReview,
-            true
+        // ---------------------------------------------------------------------
+        // Geometry
+        // ---------------------------------------------------------------------
+
+        it(
+            "rejects a non-polygon candidate",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate(
+                        {
+                            inspection:
+                                makeInspection({
+                                    geometryType:
+                                        "esriGeometryPolyline"
+                                })
+                        },
+                        {
+                            geometryType:
+                                "esriGeometryPolyline"
+                        }
+                    );
+
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate],
+                        [candidate]
+                    );
+
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    0
+                );
+
+                assert.strictEqual(
+                    result.rejectedCandidates.length,
+                    1
+                );
+            }
         );
 
-        assert.ok(
-            result.canonicalSources.every(
-                source => source.requiresReview === true
-            )
+        // ---------------------------------------------------------------------
+        // District field / values
+        // ---------------------------------------------------------------------
+
+        it(
+            "rejects a candidate with fewer than two district values",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate(
+                        {},
+                        {
+                            distinctDistrictValues:
+                                ["1"]
+                        }
+                    );
+
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate],
+                        [candidate]
+                    );
+
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    0
+                );
+
+                assert.strictEqual(
+                    result.rejectedCandidates.length,
+                    1
+                );
+            }
         );
-    });
-});
+
+        it(
+            "rejects a candidate without a district field",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate(
+                        {
+                            inspection:
+                                makeInspection({
+                                    districtFields:
+                                        [],
+
+                                    districtField:
+                                        undefined
+                                })
+                        },
+                        {
+                            districtField:
+                                undefined
+                        }
+                    );
+
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate],
+                        [candidate]
+                    );
+
+                assert.strictEqual(
+                    result.validCandidates.length,
+                    0
+                );
+
+                assert.strictEqual(
+                    result.rejectedCandidates.length,
+                    1
+                );
+            }
+        );
+
+        // ---------------------------------------------------------------------
+        // Ranking
+        // ---------------------------------------------------------------------
+
+        it(
+            "ranks the stronger Tucson ward candidate above a weaker candidate",
+            () => {
+                const strong =
+                    makeTucsonWardsCandidate();
+
+                const weak =
+                    makeTucsonWardsCandidate({
+                        candidate: {
+                            ...strong.candidate,
+
+                            itemId:
+                                "weaker-item-id",
+
+                            url:
+                                "https://example.com/weaker/FeatureServer/0",
+
+                            title:
+                                "Tucson Ward Boundaries Alternative",
+
+                            score:
+                                70,
+
+                            reasons: [
+                                "Possible Tucson ward boundary dataset"
+                            ]
+                        },
+
+                        classification: {
+                            ...strong.classification,
+
+                            officialMunicipalSource:
+                                false
+                        },
+
+                        validation: {
+                            ...strong.validation!,
+
+                            confidence:
+                                75
+                        }
+                    });
+
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [
+                            weak,
+                            strong
+                        ]
+                    );
+
+                assert.ok(
+                    result.rankedCandidates.length >= 2
+                );
+
+                assert.strictEqual(
+                    result.rankedCandidates[0]
+                        .candidate
+                        .candidate
+                        .url,
+                    TUCSON_WARDS_URL
+                );
+            }
+        );
+
+        // ---------------------------------------------------------------------
+        // Equivalence
+        // ---------------------------------------------------------------------
+
+        it(
+            "groups equivalent Tucson ward candidates",
+            () => {
+                const first =
+                    makeTucsonWardsCandidate();
+
+                const second =
+                    makeTucsonWardsCandidate({
+                        candidate: {
+                            ...first.candidate,
+
+                            itemId:
+                                "equivalent-item-id",
+
+                            url:
+                                "https://example.com/tucson/FeatureServer/0",
+
+                            title:
+                                "Tucson Ward Boundaries Alternative"
+                        },
+
+                        inspection: {
+                            ...first.inspection,
+
+                            url:
+                                "https://example.com/tucson/FeatureServer/0",
+
+                            title:
+                                "Tucson Ward Boundaries Alternative"
+                        }
+                    });
+
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [
+                            first,
+                            second
+                        ]
+                    );
+
+                assert.ok(
+                    result.equivalentGroups.length > 0
+                );
+
+                const group =
+                    result.equivalentGroups.find(
+                        group =>
+                            group.candidates.length >= 2
+                    );
+
+                assert.ok(
+                    group
+                );
+            }
+        );
+
+        // ---------------------------------------------------------------------
+        // Canonical selection
+        // ---------------------------------------------------------------------
+
+        it(
+            "selects the TucsonWards2022 layer as the canonical source",
+            () => {
+                const primary =
+                    makeTucsonWardsCandidate();
+
+                const alternative =
+                    makeTucsonWardsCandidate({
+                        candidate: {
+                            ...primary.candidate,
+
+                            itemId:
+                                "alternative-item-id",
+
+                            url:
+                                "https://example.com/alternative/FeatureServer/0",
+
+                            title:
+                                "Tucson Ward Boundaries Alternative",
+
+                            score:
+                                70,
+
+                            reasons: [
+                                "Alternative Tucson ward boundary dataset"
+                            ]
+                        },
+
+                        inspection: {
+                            ...primary.inspection,
+
+                            url:
+                                "https://example.com/alternative/FeatureServer/0",
+
+                            title:
+                                "Tucson Ward Boundaries Alternative"
+                        },
+
+                        classification: {
+                            ...primary.classification,
+
+                            officialMunicipalSource:
+                                false
+                        },
+
+                        validation: {
+                            ...primary.validation!,
+
+                            confidence:
+                                75
+                        }
+                    });
+
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [
+                            alternative,
+                            primary
+                        ]
+                    );
+
+                assert.ok(
+                    result.canonical
+                );
+
+                /*
+                 * CanonicalSource is a flattened public result.
+                 * It does not contain a nested candidate object.
+                 */
+                assert.strictEqual(
+                    result.canonical!.url,
+                    TUCSON_WARDS_URL
+                );
+
+                assert.strictEqual(
+                    result.canonical!.itemId,
+                    TUCSON_WARDS_ITEM_ID
+                );
+
+                assert.strictEqual(
+                    result.canonical!.title,
+                    "TucsonWards2022"
+                );
+
+                assert.strictEqual(
+                    result.canonical!.city,
+                    "Tucson"
+                );
+
+                assert.strictEqual(
+                    result.canonical!.state,
+                    "AZ"
+                );
+
+                assert.strictEqual(
+                    result.canonical!.placeFips,
+                    "0477000"
+                );
+
+                assert.strictEqual(
+                    result.canonical!.districtType,
+                    "ward"
+                );
+
+                assert.strictEqual(
+                    result.canonical!.districtField,
+                    "WARD"
+                );
+
+                assert.strictEqual(
+                    result.canonical!.geometryType,
+                    "esriGeometryPolygon"
+                );
+
+                assert.strictEqual(
+                    result.canonical!.officialMunicipalSource,
+                    true
+                );
+            }
+        );
+
+        it(
+            "selects the same canonical source regardless of discovery order",
+            () => {
+                const primary =
+                    makeTucsonWardsCandidate();
+
+                const alternative =
+                    makeTucsonWardsCandidate({
+                        candidate: {
+                            ...primary.candidate,
+
+                            itemId:
+                                "alternative-item-id",
+
+                            url:
+                                "https://example.com/alternative/FeatureServer/0",
+
+                            title:
+                                "Tucson Ward Boundaries Alternative",
+
+                            score:
+                                70
+                        },
+
+                        inspection: {
+                            ...primary.inspection,
+
+                            url:
+                                "https://example.com/alternative/FeatureServer/0",
+
+                            title:
+                                "Tucson Ward Boundaries Alternative"
+                        },
+
+                        classification: {
+                            ...primary.classification,
+
+                            officialMunicipalSource:
+                                false
+                        },
+
+                        validation: {
+                            ...primary.validation!,
+
+                            confidence:
+                                75
+                        }
+                    });
+
+                const resultA =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [
+                            primary,
+                            alternative
+                        ]
+                    );
+
+                const resultB =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [
+                            alternative,
+                            primary
+                        ]
+                    );
+
+                assert.ok(
+                    resultA.canonical
+                );
+
+                assert.ok(
+                    resultB.canonical
+                );
+
+                assert.strictEqual(
+                    resultA.canonical!.url,
+                    resultB.canonical!.url
+                );
+
+                assert.strictEqual(
+                    resultA.canonical!.url,
+                    TUCSON_WARDS_URL
+                );
+
+                assert.strictEqual(
+                    resultA.canonical!.itemId,
+                    TUCSON_WARDS_ITEM_ID
+                );
+
+                assert.strictEqual(
+                    resultB.canonical!.itemId,
+                    TUCSON_WARDS_ITEM_ID
+                );
+            }
+        );
+
+        // ---------------------------------------------------------------------
+        // Manual review
+        // ---------------------------------------------------------------------
+
+        it(
+            "marks canonical sources for manual review when review mode is enabled",
+            () => {
+                const candidate =
+                    makeTucsonWardsCandidate();
+
+                const result =
+                    buildDiscoveryResult(
+                        TUCSON_PLACE,
+                        [candidate],
+                        [],
+                        {
+                            review:
+                                true
+                        }
+                    );
+
+                assert.ok(
+                    result.canonical
+                );
+
+                assert.strictEqual(
+                    result.canonical!.requiresReview,
+                    true
+                );
+
+                assert.ok(
+                    result.canonicalSources.every(
+                        source =>
+                            source.requiresReview === true
+                    )
+                );
+            }
+        );
+    }
+);
