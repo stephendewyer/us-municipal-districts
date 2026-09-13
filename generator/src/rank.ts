@@ -306,27 +306,36 @@ export function scoreCandidate(
             "+25 validated political boundary"
         );
 
-        if (validation.confidence >= 0.90) {
+        /*
+         * Validation confidence uses a 0–100 scale.
+         *
+         * 90+ = high confidence
+         * 80+ = strong confidence
+         * 70+ = moderate confidence
+         *
+         * The hard minimum validation gate above remains 60.
+         */
+        if (validation.confidence >= 90) {
             score += 20;
 
             reasons.push(
-                "+20 validation confidence >= 0.90"
+                "+20 validation confidence >= 90"
             );
         } else if (
-            validation.confidence >= 0.80
+            validation.confidence >= 80
         ) {
             score += 15;
 
             reasons.push(
-                "+15 validation confidence >= 0.80"
+                "+15 validation confidence >= 80"
             );
         } else if (
-            validation.confidence >= 0.70
+            validation.confidence >= 70
         ) {
             score += 8;
 
             reasons.push(
-                "+8 validation confidence >= 0.70"
+                "+8 validation confidence >= 70"
             );
         }
 

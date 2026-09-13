@@ -693,7 +693,7 @@ test(
             result.selectionReasons.some(
                 reason =>
                     reason ===
-                    "+20 validation confidence >= 0.90"
+                    "+20 validation confidence >= 90"
             )
         );
     }

@@ -1132,10 +1132,10 @@ export function selectCanonicalSource(
                     ?.confidence !== undefined &&
                 candidate
                     .validation
-                    .confidence < 0.70
+                    .confidence < 70
             ) ||
 
-            group.confidence < 0.75
+            group.confidence < 75
         );
 
 
