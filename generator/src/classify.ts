@@ -364,15 +364,23 @@ const CENSUS_PATTERNS: Pattern[] = [
     },
     {
         label: "block group",
-        regex: /\bblock\s+groups?\b/i
+        regex: /\bcensus\s+block\s+groups?\b/i
     },
     {
         label: "census tract",
         regex: /\bcensus\s+tracts?\b/i
     },
     {
-        label: "tract",
-        regex: /\btracts?\b/i
+        label: "block",
+        regex: /\bcensus\s+blocks?\b/i
+    },
+    {
+        label: "tabulation block",
+        regex: /\btabulation\s+blocks?\b/i
+    },
+    {
+        label: "block group",
+        regex: /\bblock\s+groups?\b/i
     }
 ];
 
@@ -917,7 +925,7 @@ export function classifyCandidate(
 
         census:
             findMatches(
-                datasetClassificationText,
+                identityText,
                 CENSUS_PATTERNS
             ),
 

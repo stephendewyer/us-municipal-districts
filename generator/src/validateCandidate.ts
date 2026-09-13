@@ -676,6 +676,37 @@ function determineAcceptance(
         return false;
     }
 
+    // =========================================================================
+    // Strong semantic political-boundary path
+    // =========================================================================
+    //
+    // Accept a polygon when:
+    //   - the classifier identifies it as a political boundary,
+    //   - boundary semantics are stronger than thematic semantics, and
+    //   - confidence is already high.
+    //
+    // This handles legitimate municipal boundary layers whose
+    // district values were not sampled during inspection.
+    //
+    // Example:
+    //   Phoenix "Council Districts and Members"
+    //   boundaryScore = 20
+    //   thematicScore = 0
+    //   confidence = 75
+    //
+    // This intentionally does NOT accept thematic datasets such as:
+    //   "Eviction Filings by Council Districts"
+    // where thematicScore > boundaryScore.
+    if (
+        isPolygon &&
+        classification.isPoliticalBoundary &&
+        semanticEvidence.boundaryScore >
+            semanticEvidence.thematicScore &&
+        confidence >= 70
+    ) {
+        return true;
+    }
+
     // -------------------------------------------------------------------------
     // Basic distinct-value guard
     // -------------------------------------------------------------------------
