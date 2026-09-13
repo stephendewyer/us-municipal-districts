@@ -22,6 +22,7 @@ import {
     selectMunicipalityCanonicalSource
 } from "./canonical.js";
 
+
 // =============================================================================
 // Options
 // =============================================================================
@@ -48,36 +49,98 @@ const DEFAULT_EQUIVALENCE_THRESHOLD = 0.60;
 
 
 // =============================================================================
+// Candidate identity
+// =============================================================================
+
+/**
+ * Generate a stable identity for an inspected candidate.
+ *
+ * Candidates may pass through several stages of the discovery pipeline,
+ * so bookkeeping should not depend exclusively on object identity.
+ */
+function candidateKey(
+    candidate: InspectedCandidate
+): string {
+
+    return [
+        candidate.candidate.url,
+        candidate.inspection.url,
+        candidate.inspection.itemId,
+        candidate.inspection.serviceUrl,
+        candidate.inspection.layerId
+    ]
+        .filter(
+            value =>
+                value !== undefined &&
+                value !== null
+        )
+        .join("|");
+}
+
+
+// =============================================================================
 // Build discovery result
 // =============================================================================
 
 export function buildDiscoveryResult(
     place: CensusPlace,
     candidates: InspectedCandidate[],
+    rejectedCandidates: InspectedCandidate[] = [],
     options: PipelineOptions = {}
 ): DiscoveryResult {
 
     /*
+     * =========================================================================
+     * Discovery bookkeeping
+     * =========================================================================
+     *
      * Discovery has three different concepts:
      *
-     * 1. inspected
-     * 2. accepted
-     * 3. canonical
+     *     1. inspected
+     *     2. accepted
+     *     3. canonical
      *
-     * Classification says:
+     * An inspected candidate has reached the ArcGIS inspection stage.
      *
-     *     "This looks promising."
+     * A rejected candidate was inspected but failed one of the downstream
+     * validation gates.
      *
-     * Validation says:
+     * A valid candidate passed all required validation gates.
      *
-     *     "The actual feature data supports that conclusion."
+     * The important invariant is:
      *
-     * Only candidates that pass BOTH classification and validation
-     * should become valid registry candidates.
+     *     inspectedCandidates
+     *         ├── rejectedCandidates
+     *         └── validCandidates
+     *
+     * Therefore:
+     *
+     *     rejectedCandidates ⊆ inspectedCandidates
+     *
+     * and:
+     *
+     *     validCandidates ∩ rejectedCandidates = ∅
+     *
+     * Rejection decisions are made by discover.ts. This function should
+     * organize those results rather than independently reconstructing
+     * rejection status.
      */
 
     const inspectedCandidates =
         candidates;
+
+
+    // =========================================================================
+    // Rejected candidates
+    // =========================================================================
+
+    const rejectedKeys =
+        new Set(
+            rejectedCandidates.map(
+                candidate =>
+                    candidateKey(candidate)
+            )
+        );
 
 
     // =========================================================================
@@ -87,21 +150,8 @@ export function buildDiscoveryResult(
     const validCandidates =
         inspectedCandidates.filter(
             candidate =>
-                isValidatedPoliticalBoundary(
-                    candidate
-                )
-        );
-
-
-    // =========================================================================
-    // Rejected candidates
-    // =========================================================================
-
-    const rejectedCandidates =
-        inspectedCandidates.filter(
-            candidate =>
-                !isValidatedPoliticalBoundary(
-                    candidate
+                !rejectedKeys.has(
+                    candidateKey(candidate)
                 )
         );
 
@@ -194,6 +244,13 @@ export function buildDiscoveryResult(
 
         place,
 
+        /*
+         * `candidates` represents the candidates that reached inspection.
+         *
+         * It is intentionally equivalent to inspectedCandidates at this
+         * stage. Search-result candidates that were discarded before
+         * inspection should not be counted here.
+         */
         candidates:
             inspectedCandidates.map(
                 candidate =>
@@ -204,9 +261,9 @@ export function buildDiscoveryResult(
 
         validCandidates,
 
-        rankedCandidates,
-
         rejectedCandidates,
+
+        rankedCandidates,
 
         equivalentGroups,
 
@@ -215,202 +272,4 @@ export function buildDiscoveryResult(
         canonical:
             reviewedCanonical
     };
-}
-
-
-// =============================================================================
-// Validation gate
-// =============================================================================
-
-/**
- * Determine whether an inspected candidate is strong enough to enter
- * the political-boundary pipeline.
- *
- * This is intentionally stricter than classification.
- *
- * In particular:
- *
- *     WARD field
- *     DISTRICT field
- *
- * are NOT sufficient by themselves.
- *
- * A thematic layer can legitimately contain those fields. For example,
- * a parks or recreation dataset may include the ward in which a facility
- * is located. That does not make the dataset a ward-boundary layer.
- */
-function isValidatedPoliticalBoundary(
-    candidate: InspectedCandidate
-): boolean {
-
-    const classification =
-        candidate.classification;
-
-    const validation =
-        candidate.validation;
-
-
-    // =========================================================================
-    // 1. Classifier gate
-    // =========================================================================
-
-    if (
-        !classification.isPoliticalBoundary
-    ) {
-        return false;
-    }
-
-
-    // =========================================================================
-    // 2. Explicit negative dataset gate
-    // =========================================================================
-
-    /*
-     * Census, parcel, and housing terminology can appear in otherwise
-     * legitimate political-boundary datasets because descriptions,
-     * metadata, or related fields may reference those concepts.
-     *
-     * Therefore these classifications are only strong negative evidence
-     * when there is no explicit political identity.
-     *
-     * A candidate explicitly identified as a political boundary should
-     * continue through to the actual geometry/data validation stage.
-     */
-
-    const explicitPoliticalMatches =
-        classification.matches
-            .political ?? [];
-
-    const hasStrongPoliticalIdentity =
-        explicitPoliticalMatches.length > 0;
-
-    if (
-        !hasStrongPoliticalIdentity &&
-        (
-            classification.isCensusDataset ||
-            classification.isParcelDataset ||
-            classification.isHousingDataset
-        )
-    ) {
-        return false;
-    }
-
-
-    // =========================================================================
-    // 3. Thematic contamination gate
-    // =========================================================================
-
-    /*
-     * A thematic dataset can contain a field called WARD or DISTRICT.
-     *
-     * Example:
-     *
-     *     TPRD_TRACK_AND_FIELD
-     *
-     * contains WARD and DISTRICT fields, but it represents recreation
-     * facilities rather than ward boundaries.
-     *
-     * Do not allow a candidate with strong thematic evidence to pass
-     * solely because it has political-looking fields.
-     *
-     * Explicit political identity is allowed to coexist with thematic
-     * metadata because legitimate political layers sometimes have
-     * descriptions containing words such as "project" or "maintenance".
-     */
-    const thematicMatches =
-        candidate.classification.matches
-            .thematic ?? [];
-
-    const hasThematicEvidence =
-        thematicMatches.length > 0;
-
-
-    if (
-        hasThematicEvidence &&
-        !hasStrongPoliticalIdentity
-    ) {
-        return false;
-    }
-
-
-    // =========================================================================
-    // 4. Validation is mandatory
-    // =========================================================================
-
-    if (
-        !validation
-    ) {
-        return false;
-    }
-
-
-    if (
-        !validation.isLikelyPoliticalBoundary
-    ) {
-        return false;
-    }
-
-
-    // =========================================================================
-    // 5. Confidence floor
-    // =========================================================================
-
-    if (
-        validation.confidence < 0.60
-    ) {
-        return false;
-    }
-
-
-    // =========================================================================
-    // 6. Polygon requirement
-    // =========================================================================
-
-    const polygon =
-        validation.geometryType ===
-            "esriGeometryPolygon" ||
-        validation.geometryType ===
-            "polygon";
-
-    if (
-        !polygon
-    ) {
-        return false;
-    }
-
-
-    // =========================================================================
-    // 7. Multiple actual district values
-    // =========================================================================
-
-    if (
-        validation.distinctDistrictValues.length < 2
-    ) {
-        return false;
-    }
-
-
-    // =========================================================================
-    // 8. Usable district field
-    // =========================================================================
-
-    if (
-        !validation.districtField
-    ) {
-        return false;
-    }
-
-
-    // =========================================================================
-    // 9. District type
-    // =========================================================================
-
-    if (
-        !classification.districtType
-    ) {
-        return false;
-    }
-
-
-    return true;
 }

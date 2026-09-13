@@ -768,9 +768,8 @@ async function discoverMunicipality(
 
     const inspectedCandidates:
         InspectedCandidate[] = [];
-
     const rejectedCandidates:
-        RejectedCandidate[] = [];
+        InspectedCandidate[] = [];
 
     for (
         const candidate of layerCandidates
@@ -858,9 +857,7 @@ async function discoverMunicipality(
                 municipalityValidation.score <
                 MUNICIPALITY_VALIDATION_THRESHOLD
             ) {
-
                 if (options.verbose) {
-
                     console.log(
                         `      REJECTED: municipality validation ` +
                         `score ${municipalityValidation.score} ` +
@@ -869,6 +866,23 @@ async function discoverMunicipality(
                     );
                 }
 
+                const rejectedCandidate: InspectedCandidate = {
+                    candidate,
+                    inspection,
+                    classification,
+                    validation: undefined,
+                    municipalityValidation,
+                    municipalityGeographyValidation:
+                        undefined
+                };
+
+                inspectedCandidates.push(
+                    rejectedCandidate
+                );
+
+                rejectedCandidates.push(
+                    rejectedCandidate
+                );
 
                 continue;
             }
@@ -892,16 +906,38 @@ async function discoverMunicipality(
                 // Candidate validation gate
                 // -----------------------------------------------------------------
                 if (!validation.isLikelyPoliticalBoundary) {
-                    rejectedCandidates.push({
+                    const rejectedCandidate: InspectedCandidate = {
                         candidate,
                         inspection,
                         classification,
                         validation,
-                        reason:
-                            validation.evidence.length > 0
-                                ? validation.evidence.join("; ")
-                                : "failed political-boundary validation"
-                    });
+                        municipalityValidation,
+                        municipalityGeographyValidation:
+                            undefined
+                    };
+
+                    inspectedCandidates.push(
+                        rejectedCandidate
+                    );
+
+                    rejectedCandidates.push(
+                        rejectedCandidate
+                    );
+
+                    if (options.verbose) {
+                        console.log(
+                            `      REJECTED: political-boundary validation`
+                        );
+
+                        if (
+                            validation.rejectionReasons &&
+                            validation.rejectionReasons.length > 0
+                        ) {
+                            console.log(
+                                `      ${validation.rejectionReasons.join("; ")}`
+                            );
+                        }
+                    }
 
                     continue;
                 }
@@ -1079,6 +1115,7 @@ async function discoverMunicipality(
         buildDiscoveryResult(
             place,
             inspectedCandidates,
+            rejectedCandidates,
             {
                 review:
                     options.review

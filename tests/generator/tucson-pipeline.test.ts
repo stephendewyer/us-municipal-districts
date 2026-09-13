@@ -765,11 +765,12 @@ describe("Tucson discovery pipeline", () => {
         const result = buildDiscoveryResult(
             TUCSON_PLACE,
             [candidate],
+            [],
             {
                 review: true
             }
         );
-
+        
         assert.ok(result.canonical);
 
         assert.strictEqual(
