@@ -1,23 +1,8 @@
 import type {
     DiscoveryCandidate,
-    DistrictType
+    DistrictType,
+    ExpectedDistrictCount
 } from "./types.js";
-
-// =============================================================================
-// Types
-// =============================================================================
-
-export type ExpectedDistrictCountSource =
-    | "municipal-source"
-    | "state"
-    | "official-election"
-    | "manual";
-
-export interface ExpectedDistrictCount {
-    count: number;
-    source: ExpectedDistrictCountSource;
-    confidence: number;
-}
 
 // =============================================================================
 // Known municipal district counts
@@ -43,7 +28,7 @@ interface DistrictCountEntry {
     state: string;
     districtType: DistrictType;
     count: number;
-    source: ExpectedDistrictCountSource;
+    source: ExpectedDistrictCount["source"];
     confidence: number;
 }
 
