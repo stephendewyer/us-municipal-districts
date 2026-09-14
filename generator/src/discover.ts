@@ -983,7 +983,7 @@ async function discoverMunicipality(
             // -----------------------------------------------------------------------------
             // Expected district count
             // -----------------------------------------------------------------------------
-            
+
             const expectedDistrictCount =
                 getExpectedDistrictCount(
                     candidate,

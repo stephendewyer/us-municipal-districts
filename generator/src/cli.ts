@@ -1,15 +1,22 @@
 import path from "node:path";
 
 import { generateCensusPlaces } from "./generateCensusPlaces.js";
-import { discoverArcGIS } from "./discover.js";
+
+import {
+    discoverArcGISWithTiming,
+    type DiscoveryTiming
+} from "./discover.js";
+
 import {
     writeRegistry,
     loadGeneratedRegistry
 } from "./registry.js";
+
 import {
     validateRegistry,
     validateRegistryFile
 } from "./validate.js";
+
 import {
     generateGeometry
 } from "./geometry.js";
@@ -17,7 +24,6 @@ import {
 import type {
     DiscoveryResult
 } from "./types.js";
-
 
 // =============================================================================
 // Commands
@@ -32,26 +38,18 @@ type Command =
     | "validate"
     | undefined;
 
-
 // =============================================================================
 // CLI options
 // =============================================================================
 
 interface CliOptions {
-
     city?: string;
-
     state?: string;
-
     placeFips?: string;
-
     review?: boolean;
-
     verbose?: boolean;
-
     registry?: string;
 }
-
 
 // =============================================================================
 // Main
@@ -60,14 +58,11 @@ interface CliOptions {
 const command =
     process.argv[2] as Command;
 
-
 async function main(): Promise<void> {
-
     const options =
         parseOptions(
             process.argv.slice(3)
         );
-
 
     switch (command) {
 
@@ -76,35 +71,35 @@ async function main(): Promise<void> {
         // ---------------------------------------------------------------------
 
         case "places": {
-
             await generateCensusPlaces();
-
             break;
         }
-
 
         // ---------------------------------------------------------------------
         // Discover
         // ---------------------------------------------------------------------
 
         case "discover": {
-
-            const results =
-                await discoverArcGIS(
+            const {
+                results,
+                timings
+            } =
+                await discoverArcGISWithTiming(
                     options
                 );
-
 
             printDiscoverySummary(
                 results
             );
 
+            printDiscoveryTiming(
+                timings
+            );
 
             const registry =
                 writeRegistry(
                     results
                 );
-
 
             console.log(
                 `\nRegistry entries: ${registry.entries.length}`
@@ -113,20 +108,17 @@ async function main(): Promise<void> {
             break;
         }
 
-
         // ---------------------------------------------------------------------
         // Generate
         // ---------------------------------------------------------------------
 
         case "generate": {
-
             await generateRegistryGeometry(
                 options
             );
 
             break;
         }
-
 
         // ---------------------------------------------------------------------
         // Build
@@ -149,7 +141,6 @@ async function main(): Promise<void> {
             break;
         }
 
-
         // ---------------------------------------------------------------------
         // Geometry
         // ---------------------------------------------------------------------
@@ -170,7 +161,6 @@ async function main(): Promise<void> {
             break;
         }
 
-
         // ---------------------------------------------------------------------
         // Validate
         // ---------------------------------------------------------------------
@@ -180,34 +170,26 @@ async function main(): Promise<void> {
             if (
                 options.registry !== undefined
             ) {
-
                 await validateRegistryFile(
                     options.registry
                 );
-
             } else {
-
                 await validateRegistry();
-
             }
 
             break;
         }
-
 
         // ---------------------------------------------------------------------
         // Help
         // ---------------------------------------------------------------------
 
         default: {
-
             printUsage();
-
             process.exitCode = 1;
         }
     }
 }
-
 
 // =============================================================================
 // Generate geometry from registry
@@ -220,10 +202,8 @@ async function generateRegistryGeometry(
     const registry =
         loadGeneratedRegistry();
 
-
     let entries =
         registry.entries;
-
 
     // =========================================================================
     // Filter
@@ -232,7 +212,6 @@ async function generateRegistryGeometry(
     if (
         options.city !== undefined
     ) {
-
         const city =
             normalizeName(
                 options.city
@@ -247,11 +226,9 @@ async function generateRegistryGeometry(
             );
     }
 
-
     if (
         options.state !== undefined
     ) {
-
         const state =
             options.state.toUpperCase();
 
@@ -263,11 +240,9 @@ async function generateRegistryGeometry(
             );
     }
 
-
     if (
         options.placeFips !== undefined
     ) {
-
         entries =
             entries.filter(
                 entry =>
@@ -276,7 +251,6 @@ async function generateRegistryGeometry(
             );
     }
 
-
     // =========================================================================
     // Nothing found
     // =========================================================================
@@ -284,14 +258,12 @@ async function generateRegistryGeometry(
     if (
         entries.length === 0
     ) {
-
         console.log(
             "\nNo registry entries matched the supplied options."
         );
 
         return;
     }
-
 
     console.log(
         `\nGenerating geometry for ${entries.length} registry entr${
@@ -300,7 +272,6 @@ async function generateRegistryGeometry(
                 : "ies"
         }...`
     );
-
 
     // =========================================================================
     // Output root
@@ -324,13 +295,11 @@ async function generateRegistryGeometry(
             "data"
         );
 
-
     let successful =
         0;
 
     let failed =
         0;
-
 
     // =========================================================================
     // Generate each geometry file
@@ -339,7 +308,6 @@ async function generateRegistryGeometry(
     for (
         const entry of entries
     ) {
-
         console.log(
             `\n  ${entry.city}, ${entry.state} — ${entry.boundaryType}`
         );
@@ -347,7 +315,6 @@ async function generateRegistryGeometry(
         console.log(
             `    Source: ${entry.source.url}`
         );
-
 
         try {
 
@@ -357,11 +324,9 @@ async function generateRegistryGeometry(
                     outputRoot
                 );
 
-
             console.log(
                 `    ✓ ${outputPath}`
             );
-
 
             successful++;
 
@@ -369,29 +334,23 @@ async function generateRegistryGeometry(
 
             failed++;
 
-
             console.error(
                 `    ✗ Geometry generation failed`
             );
 
-
             if (
                 error instanceof Error
             ) {
-
                 console.error(
                     `      ${error.message}`
                 );
-
             } else {
-
                 console.error(
                     `      ${String(error)}`
                 );
             }
         }
     }
-
 
     // =========================================================================
     // Summary
@@ -413,15 +372,12 @@ async function generateRegistryGeometry(
         `  Failed: ${failed}`
     );
 
-
     if (
         failed > 0
     ) {
-
         process.exitCode = 1;
     }
 }
-
 
 // =============================================================================
 // Name normalization
@@ -457,7 +413,6 @@ function normalizeName(
         .trim();
 }
 
-
 // =============================================================================
 // Discovery summary
 // =============================================================================
@@ -472,13 +427,11 @@ function printDiscoverySummary(
                 result.canonical !== undefined
         );
 
-
     const failed =
         results.filter(
             result =>
                 result.error !== undefined
         );
-
 
     const noCanonical =
         results.filter(
@@ -486,7 +439,6 @@ function printDiscoverySummary(
                 result.error === undefined &&
                 result.canonical === undefined
         );
-
 
     const totalCandidates =
         results.reduce(
@@ -499,7 +451,6 @@ function printDiscoverySummary(
             0
         );
 
-
     const totalInspected =
         results.reduce(
             (
@@ -510,7 +461,6 @@ function printDiscoverySummary(
                 result.inspectedCandidates.length,
             0
         );
-
 
     const totalValid =
         results.reduce(
@@ -523,7 +473,6 @@ function printDiscoverySummary(
             0
         );
 
-
     const totalRejected =
         results.reduce(
             (
@@ -534,7 +483,6 @@ function printDiscoverySummary(
                 result.rejectedCandidates.length,
             0
         );
-
 
     const totalGroups =
         results.reduce(
@@ -547,77 +495,61 @@ function printDiscoverySummary(
             0
         );
 
-
     console.log(
         "\nDiscovery complete."
     );
-
 
     console.log(
         `  Municipalities: ${results.length}`
     );
 
-
     console.log(
         `  Search candidates: ${totalCandidates}`
     );
-
 
     console.log(
         `  Inspected: ${totalInspected}`
     );
 
-
     console.log(
         `  Valid: ${totalValid}`
     );
-
 
     console.log(
         `  Rejected: ${totalRejected}`
     );
 
-
     console.log(
         `  Equivalence groups: ${totalGroups}`
     );
-
 
     console.log(
         `  Canonical sources: ${successful.length}`
     );
 
-
     console.log(
         `  No canonical source: ${noCanonical.length}`
     );
-
 
     console.log(
         `  Failed municipalities: ${failed.length}`
     );
 
-
     if (
         failed.length > 0
     ) {
-
         console.log(
             "\nFailed municipalities:"
         );
 
-
         for (
             const result of failed
         ) {
-
             console.log(
                 `  ${result.place.city}, ${result.place.state}`
             );
 
-
             if (result.error) {
-
                 console.log(
                     `    ${result.error}`
                 );
@@ -625,34 +557,129 @@ function printDiscoverySummary(
         }
     }
 
-
     if (
         noCanonical.length > 0
     ) {
-
         console.log(
             "\nMunicipalities without canonical sources:"
         );
 
-
         for (
             const result of noCanonical
         ) {
-
             console.log(
                 `  ${result.place.city}, ${result.place.state}`
             );
         }
     }
 
-    printValidCandidates( 
-        results 
+    printValidCandidates(
+        results
     );
 
     printRejectionReport(
         results
     );
 }
+
+// =============================================================================
+// Discovery timing
+// =============================================================================
+
+function printDiscoveryTiming(
+    timings: DiscoveryTiming[]
+): void {
+
+    const totals =
+        new Map<
+            string,
+            {
+                runtimeMs: number;
+                count: number;
+            }
+        >();
+
+    for (
+        const timing of timings
+    ) {
+        for (
+            const stage of timing.stages
+        ) {
+            const existing =
+                totals.get(
+                    stage.name
+                );
+
+            if (
+                existing
+            ) {
+                existing.runtimeMs +=
+                    stage.runtimeMs;
+
+                existing.count +=
+                    stage.count;
+
+            } else {
+
+                totals.set(
+                    stage.name,
+                    {
+                        runtimeMs:
+                            stage.runtimeMs,
+                        count:
+                            stage.count
+                    }
+                );
+            }
+        }
+    }
+
+    const stages =
+        [...totals.entries()]
+            .sort(
+                (
+                    [, a],
+                    [, b]
+                ) =>
+                    b.runtimeMs -
+                    a.runtimeMs
+            );
+
+    console.log(
+        "\nDiscovery timing:"
+    );
+
+    if (
+        stages.length === 0
+    ) {
+        console.log(
+            "  No timing data recorded."
+        );
+
+        return;
+    }
+
+    for (
+        const [name, timing] of stages
+    ) {
+        const average =
+            timing.count > 0
+                ? timing.runtimeMs /
+                  timing.count
+                : 0;
+
+        console.log(
+            `  ${name}: ` +
+            `${timing.runtimeMs.toFixed(0)} ms ` +
+            `(${timing.count} calls, ` +
+            `${average.toFixed(0)} ms avg)`
+        );
+    }
+}
+
+// =============================================================================
+// Valid candidates
+// =============================================================================
 
 function printValidCandidates(
     results: DiscoveryResult[]
@@ -803,7 +830,6 @@ function printValidCandidates(
     }
 }
 
-
 // =============================================================================
 // Rejection report
 // =============================================================================
@@ -812,13 +838,12 @@ function printRejectionReport(
     results: DiscoveryResult[]
 ): void {
 
-    let totalRejected = 0;
-
+    let totalRejected =
+        0;
 
     console.log(
         "\nRejection report:"
     );
-
 
     for (
         const result of results
@@ -830,11 +855,9 @@ function printRejectionReport(
             continue;
         }
 
-
         console.log(
             `\n  ${result.place.city}, ${result.place.state}`
         );
-
 
         for (
             const rejected of
@@ -843,39 +866,32 @@ function printRejectionReport(
 
             totalRejected++;
 
-
             const title =
                 rejected.inspection.title ??
                 rejected.inspection.layerName ??
                 rejected.inspection.serviceName ??
                 "(untitled)";
 
-
             const reasons =
                 getRejectionReasons(
                     rejected
                 );
 
-
             console.log(
                 `\n    ✗ ${title}`
             );
-
 
             console.log(
                 `      ${rejected.inspection.url}`
             );
 
-
             console.log(
                 `      Reasons: ${reasons.join("; ")}`
             );
 
-
             if (
                 rejected.classification.matches.political.length > 0
             ) {
-
                 console.log(
                     `      Political matches: ${
                         rejected.classification.matches.political.join(", ")
@@ -883,11 +899,9 @@ function printRejectionReport(
                 );
             }
 
-
             if (
                 rejected.classification.matches.thematic.length > 0
             ) {
-
                 console.log(
                     `      Thematic matches: ${
                         rejected.classification.matches.thematic.join(", ")
@@ -895,11 +909,9 @@ function printRejectionReport(
                 );
             }
 
-
             if (
                 rejected.inspection.districtFields.length > 0
             ) {
-
                 console.log(
                     `      District fields: ${
                         rejected.inspection.districtFields.join(", ")
@@ -907,11 +919,9 @@ function printRejectionReport(
                 );
             }
 
-
             if (
                 rejected.inspection.nameFields.length > 0
             ) {
-
                 console.log(
                     `      Name fields: ${
                         rejected.inspection.nameFields.join(", ")
@@ -921,12 +931,10 @@ function printRejectionReport(
         }
     }
 
-
     console.log(
         `\n  Total rejected candidates: ${totalRejected}`
     );
 }
-
 
 // =============================================================================
 // Rejection reasons
@@ -939,14 +947,11 @@ function getRejectionReasons(
 
     const reasons: string[] = [];
 
-
     const classification =
         candidate.classification;
 
-
     const inspection =
         candidate.inspection;
-
 
     const isPolygon =
         inspection.geometryType ===
@@ -954,51 +959,41 @@ function getRejectionReasons(
         inspection.geometryType ===
             "polygon";
 
-
     if (
         !isPolygon
     ) {
-
         reasons.push(
             "not polygon geometry"
         );
     }
 
-
     if (
         classification.isCensusDataset
     ) {
-
         reasons.push(
             "census dataset"
         );
     }
 
-
     if (
         classification.isParcelDataset
     ) {
-
         reasons.push(
             "parcel/property dataset"
         );
     }
 
-
     if (
         classification.isHousingDataset &&
         !classification.isPoliticalBoundary
     ) {
-
         reasons.push(
             "housing dataset"
         );
     }
 
-
     const hasDistrictField =
         inspection.districtFields.length > 0;
-
 
     const politicalDistrictField =
         inspection.districtFields.some(
@@ -1008,10 +1003,9 @@ function getRejectionReasons(
                     field
                         .toLowerCase()
                         .replace(
-                            /[_-]+/g,
+                            /[\_-]+/g,
                             " "
                         );
-
 
                 return (
                     /\bward\b/.test(normalized) ||
@@ -1022,33 +1016,27 @@ function getRejectionReasons(
             }
         );
 
-
     if (
         hasDistrictField &&
         !politicalDistrictField &&
         !classification.isPoliticalBoundary
     ) {
-
         reasons.push(
             "district field does not appear political"
         );
     }
 
-
     if (
         !classification.isPoliticalBoundary
     ) {
-
         reasons.push(
             "did not meet political-boundary threshold"
         );
     }
 
-
     if (
         classification.matches.thematic.length > 0
     ) {
-
         reasons.push(
             `thematic evidence: ${
                 classification.matches.thematic.join(", ")
@@ -1056,20 +1044,16 @@ function getRejectionReasons(
         );
     }
 
-
     if (
         reasons.length === 0
     ) {
-
         reasons.push(
             "classification.rejected = true"
         );
     }
 
-
     return reasons;
 }
-
 
 // =============================================================================
 // CLI options
@@ -1082,7 +1066,6 @@ function parseOptions(
     const options:
         CliOptions = {};
 
-
     for (
         let i = 0;
         i < args.length;
@@ -1092,7 +1075,6 @@ function parseOptions(
         const argument =
             args[i];
 
-
         switch (argument) {
 
             case "--city": {
@@ -1100,14 +1082,11 @@ function parseOptions(
                 const value =
                     args[++i];
 
-
                 if (!value) {
-
                     throw new Error(
                         "--city requires a value."
                     );
                 }
-
 
                 options.city =
                     value;
@@ -1115,20 +1094,16 @@ function parseOptions(
                 break;
             }
 
-
             case "--state": {
 
                 const value =
                     args[++i];
 
-
                 if (!value) {
-
                     throw new Error(
                         "--state requires a value."
                     );
                 }
-
 
                 options.state =
                     value.toUpperCase();
@@ -1136,20 +1111,16 @@ function parseOptions(
                 break;
             }
 
-
             case "--placeFips": {
 
                 const value =
                     args[++i];
 
-
                 if (!value) {
-
                     throw new Error(
                         "--placeFips requires a value."
                     );
                 }
-
 
                 options.placeFips =
                     value;
@@ -1157,27 +1128,22 @@ function parseOptions(
                 break;
             }
 
-
             case "--registry": {
 
                 const value =
                     args[++i];
 
-
                 if (!value) {
-
                     throw new Error(
                         "--registry requires a value."
                     );
                 }
-
 
                 options.registry =
                     value;
 
                 break;
             }
-
 
             case "--review": {
 
@@ -1187,7 +1153,6 @@ function parseOptions(
                 break;
             }
 
-
             case "--verbose": {
 
                 options.verbose =
@@ -1195,7 +1160,6 @@ function parseOptions(
 
                 break;
             }
-
 
             default: {
 
@@ -1206,10 +1170,8 @@ function parseOptions(
         }
     }
 
-
     return options;
 }
-
 
 // =============================================================================
 // Usage
@@ -1218,6 +1180,7 @@ function parseOptions(
 function printUsage(): void {
 
     console.log(`
+
 U.S. Municipal Districts Generator
 
 Usage:
@@ -1251,6 +1214,7 @@ Usage:
   npm run validate -- --registry data/municipalities/registry.json
 
 
+
 Commands:
 
   places
@@ -1276,9 +1240,9 @@ Commands:
   validate
       Validate the generated municipal registry.
       By default, validate data/municipalities/registry.json.
-
       Use --registry <path> to validate a specific
       registry file.
+
 
 
 Discover options:
@@ -1299,13 +1263,14 @@ Discover options:
       Print detailed discovery information.
 
 
+
 Validate options:
 
   --registry <path>
       Validate the specified registry file.
+
 `);
 }
-
 
 // =============================================================================
 // Error handling
@@ -1318,11 +1283,9 @@ main().catch(
             "\nGenerator failed:\n"
         );
 
-
         console.error(
             error
         );
-
 
         process.exitCode = 1;
     }

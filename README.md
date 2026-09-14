@@ -486,13 +486,13 @@ The CLI accepts a municipality and state abbreviation.
 For example:
 
 ```bash
-npm run discover Tucson AZ
+npm run discover -- --city Tucson --state AZ
 ```
 
 or:
 
 ```bash
-npm run discover Phoenix AZ
+npm run discover -- --city Phoenix --state AZ
 ```
 
 The state should currently be supplied as a two-letter abbreviation.

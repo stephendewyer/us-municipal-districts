@@ -1,3 +1,5 @@
+import { performance } from "node:perf_hooks";
+
 import type {
     ArcGISField,
     ArcGISFieldSample,
@@ -10,10 +12,15 @@ type FetchLike = typeof fetch;
 
 type JsonObject = Record<string, unknown>;
 
+function formatTimingMs(value: number): string {
+    return `${value.toFixed(0)} ms`;
+}
+
 
 // =============================================================================
 // Public API
 // =============================================================================
+
 /**
  * Inspect an ArcGIS REST service or layer.
  *
@@ -30,6 +37,16 @@ export async function inspectArcGIS(
     url: string,
     fetchImpl: FetchLike = fetch
 ): Promise<ArcGISInspection> {
+
+    /*
+     * Start the overall inspection timer before any work is performed.
+     *
+     * This is intentionally separate from the individual stage timers
+     * below so that "total" represents the actual elapsed runtime of
+     * inspectArcGIS(), rather than the sum of selected measurements.
+     */
+    const totalStart =
+        performance.now();
 
     /*
      * Preserve URL casing.
@@ -102,12 +119,23 @@ export async function inspectArcGIS(
     inspection.layerId =
         layerId;
 
+    // =========================================================================
+    // Metadata
+    // =========================================================================
+
+    const metadataStart =
+        performance.now();
+
     const metadata =
         await fetchJson(
             requestUrl,
             fetchImpl
         );
-    
+
+    const metadataMs =
+        performance.now() -
+        metadataStart;
+
     inspection.objectIdField =
         stringValue(
             metadata?.objectIdField
@@ -199,25 +227,71 @@ export async function inspectArcGIS(
             inspection.districtFields
         );
 
+    // =========================================================================
+    // Query evidence
+    // =========================================================================
+
+    let featureCountMs = 0;
+    let distinctValuesMs = 0;
+
     if (
         inspection.isLayer &&
         inspection.supportsQuery
     ) {
+        const featureCountStart =
+            performance.now();
+
         inspection.featureCount =
             await getFeatureCount(
                 requestUrl,
                 fetchImpl
             );
 
+        featureCountMs =
+            performance.now() -
+            featureCountStart;
+
         if (inspection.districtField) {
+            const distinctValuesStart =
+                performance.now();
+
             inspection.distinctDistrictValues =
                 await extractDistinctDistrictValues(
                     requestUrl,
                     inspection.districtField,
                     fetchImpl
                 );
+
+            distinctValuesMs =
+                performance.now() -
+                distinctValuesStart;
         }
     }
+
+    // =========================================================================
+    // Post-processing
+    // =========================================================================
+
+    /*
+     * Everything below this point is synchronous post-processing of the
+     * metadata already fetched above.
+     *
+     * This timer intentionally begins AFTER:
+     *
+     * - metadata fetch
+     * - feature-count query
+     * - distinct-district-values query
+     *
+     * and intentionally covers:
+     *
+     * - name-field detection
+     * - name-field selection
+     * - service-root extraction
+     * - item/source metadata extraction
+     * - field-sample extraction
+     */
+    const postProcessingStart =
+        performance.now();
 
     inspection.nameFields =
         findNameFields(
@@ -295,8 +369,56 @@ export async function inspectArcGIS(
             metadata
         );
 
+    const postProcessingMs =
+        performance.now() -
+        postProcessingStart;
+
+    // =========================================================================
+    // Timing
+    // =========================================================================
+
+    const totalMs =
+        performance.now() -
+        totalStart;
+
+    console.log(
+        "INSPECTION TIMING:",
+        {
+            title:
+                inspection.title ??
+                inspection.layerName ??
+                requestUrl,
+
+            metadata:
+                formatTimingMs(
+                    metadataMs
+                ),
+
+            featureCount:
+                formatTimingMs(
+                    featureCountMs
+                ),
+
+            distinctValues:
+                formatTimingMs(
+                    distinctValuesMs
+                ),
+
+            postProcessing:
+                formatTimingMs(
+                    postProcessingMs
+                ),
+
+            total:
+                formatTimingMs(
+                    totalMs
+                )
+        }
+    );
+
     return inspection;
 }
+
 
 async function extractDistinctDistrictValues(
     layerUrl: string,
@@ -304,6 +426,139 @@ async function extractDistinctDistrictValues(
     fetchImpl: FetchLike = fetch
 ): Promise<string[]> {
 
+    /*
+     * =========================================================================
+     * Fast path: request distinct district values directly from ArcGIS.
+     * =========================================================================
+     *
+     * This avoids walking through potentially thousands of features on large
+     * thematic datasets such as "Eviction Filings by Council Districts".
+     */
+    try {
+
+        const queryUrl =
+            new URL(
+                `${layerUrl}/query`
+            );
+
+        queryUrl.searchParams.set(
+            "where",
+            "1=1"
+        );
+
+        queryUrl.searchParams.set(
+            "outFields",
+            districtField
+        );
+
+        queryUrl.searchParams.set(
+            "returnGeometry",
+            "false"
+        );
+
+        queryUrl.searchParams.set(
+            "returnDistinctValues",
+            "true"
+        );
+
+        queryUrl.searchParams.set(
+            "f",
+            "json"
+        );
+
+        const response =
+            await fetchImpl(
+                queryUrl.toString(),
+                {
+                    headers: {
+                        Accept:
+                            "application/json"
+                    }
+                }
+            );
+
+        if (response.ok) {
+
+            const data: unknown =
+                await response.json();
+
+            if (
+                isObject(data) &&
+                !(
+                    "error" in data &&
+                    data.error
+                )
+            ) {
+
+                const features =
+                    Array.isArray(data.features)
+                        ? data.features
+                        : [];
+
+                const distinctValues =
+                    new Set<string>();
+
+                for (const feature of features) {
+
+                    if (!isObject(feature)) {
+                        continue;
+                    }
+
+                    const attributes =
+                        feature.attributes;
+
+                    if (!isObject(attributes)) {
+                        continue;
+                    }
+
+                    const value =
+                        attributes[districtField];
+
+                    if (
+                        value === undefined ||
+                        value === null
+                    ) {
+                        continue;
+                    }
+
+                    const normalized =
+                        String(value).trim();
+
+                    if (normalized) {
+                        distinctValues.add(
+                            normalized
+                        );
+                    }
+                }
+
+                /*
+                 * A successful response containing values is enough.
+                 * No pagination is necessary.
+                 */
+                if (
+                    distinctValues.size > 0
+                ) {
+                    return [
+                        ...distinctValues
+                    ];
+                }
+            }
+        }
+
+    } catch {
+        /*
+         * Fall through to the paginated fallback below.
+         */
+    }
+
+    /*
+     * =========================================================================
+     * Fallback: paginated feature queries.
+     * =========================================================================
+     *
+     * Preserve the existing behavior for ArcGIS services that do not support
+     * returnDistinctValues or return an otherwise unusable response.
+     */
     const values =
         new Set<string>();
 
@@ -481,12 +736,16 @@ async function extractDistinctDistrictValues(
     }
 }
 
+
 async function getFeatureCount(
     layerUrl: string,
     fetchImpl: FetchLike = fetch
 ): Promise<number | undefined> {
+
     const queryUrl =
-        new URL(`${layerUrl}/query`);
+        new URL(
+            `${layerUrl}/query`
+        );
 
     queryUrl.searchParams.set(
         "where",
@@ -545,11 +804,11 @@ async function getFeatureCount(
         }
 
         return count;
+
     } catch {
         return undefined;
     }
 }
-
 
 
 // =============================================================================
@@ -733,7 +992,8 @@ export function canonicalizeArcGISUrl(
 function isArcGISRestUrl(
     url: URL
 ): boolean {
-    const pathname = url.pathname;
+    const pathname =
+        url.pathname;
 
     return (
         /\/arcgis\/rest\//i.test(pathname) ||
@@ -776,7 +1036,8 @@ function extractLayerNumber(
         return undefined;
     }
 
-    const value = Number(match[1]);
+    const value =
+        Number(match[1]);
 
     return Number.isFinite(value)
         ? value
@@ -792,6 +1053,7 @@ async function fetchJson(
     url: string,
     fetchImpl: FetchLike = fetch
 ): Promise<JsonObject | undefined> {
+
     try {
         const requestUrl =
             appendJsonFormat(url);
@@ -801,7 +1063,8 @@ async function fetchJson(
                 requestUrl,
                 {
                     headers: {
-                        Accept: "application/json"
+                        Accept:
+                            "application/json"
                     }
                 }
             );
@@ -825,6 +1088,7 @@ async function fetchJson(
         }
 
         return data;
+
     } catch {
         return undefined;
     }
@@ -872,7 +1136,9 @@ function extractFields(
         }
 
         const name =
-            stringValue(field.name);
+            stringValue(
+                field.name
+            );
 
         if (!name) {
             continue;
@@ -882,13 +1148,19 @@ function extractFields(
             name,
 
             alias:
-                stringValue(field.alias),
+                stringValue(
+                    field.alias
+                ),
 
             type:
-                stringValue(field.type),
+                stringValue(
+                    field.type
+                ),
 
             length:
-                numberValue(field.length),
+                numberValue(
+                    field.length
+                ),
 
             domain:
                 field.domain
@@ -910,7 +1182,10 @@ function findDistrictFields(
     return fields
         .map(field => ({
             field,
-            score: scoreDistrictField(field)
+            score:
+                scoreDistrictField(
+                    field
+                )
         }))
         .filter(
             item =>
@@ -932,10 +1207,14 @@ function scoreDistrictField(
 ): number {
 
     const name =
-        normalizeFieldText(field.name);
+        normalizeFieldText(
+            field.name
+        );
 
     const alias =
-        normalizeFieldText(field.alias);
+        normalizeFieldText(
+            field.alias
+        );
 
     let score = 0;
 
@@ -944,19 +1223,25 @@ function scoreDistrictField(
     // -------------------------------------------------------------------------
 
     if (
-        /^(district|dist|districtno|districtnum|districtnumber)$/.test(name)
+        /^(district|dist|districtno|districtnum|districtnumber)$/.test(
+            name
+        )
     ) {
         score += 70;
     }
 
     if (
-        /^(ward|wardno|wardnum|wardnumber)$/.test(name)
+        /^(ward|wardno|wardnum|wardnumber)$/.test(
+            name
+        )
     ) {
         score += 70;
     }
 
     if (
-        /^(councildistrict|councildist|councilward)$/.test(name)
+        /^(councildistrict|councildist|councilward)$/.test(
+            name
+        )
     ) {
         score += 75;
     }
@@ -965,19 +1250,35 @@ function scoreDistrictField(
     // Strong keywords
     // -------------------------------------------------------------------------
 
-    if (/\bdistrict\b/.test(name)) {
+    if (
+        /\bdistrict\b/.test(
+            name
+        )
+    ) {
         score += 50;
     }
 
-    if (/\bward\b/.test(name)) {
+    if (
+        /\bward\b/.test(
+            name
+        )
+    ) {
         score += 50;
     }
 
-    if (/\bcouncil\b/.test(name)) {
+    if (
+        /\bcouncil\b/.test(
+            name
+        )
+    ) {
         score += 40;
     }
 
-    if (/\balderman/.test(name)) {
+    if (
+        /\balderman/.test(
+            name
+        )
+    ) {
         score += 40;
     }
 
@@ -992,19 +1293,35 @@ function scoreDistrictField(
     // Alias
     // -------------------------------------------------------------------------
 
-    if (/\bdistrict\b/.test(alias)) {
+    if (
+        /\bdistrict\b/.test(
+            alias
+        )
+    ) {
         score += 25;
     }
 
-    if (/\bward\b/.test(alias)) {
+    if (
+        /\bward\b/.test(
+            alias
+        )
+    ) {
         score += 25;
     }
 
-    if (/\bcouncil\b/.test(alias)) {
+    if (
+        /\bcouncil\b/.test(
+            alias
+        )
+    ) {
         score += 20;
     }
 
-    if (/\balderman/.test(alias)) {
+    if (
+        /\balderman/.test(
+            alias
+        )
+    ) {
         score += 20;
     }
 
@@ -1012,35 +1329,66 @@ function scoreDistrictField(
     // Negative evidence
     // -------------------------------------------------------------------------
 
-    if (/\bcounty\b/.test(name)) {
+    if (
+        /\bcounty\b/.test(
+            name
+        )
+    ) {
         score -= 60;
     }
 
-    if (/\bstate\b/.test(name)) {
+    if (
+        /\bstate\b/.test(
+            name
+        )
+    ) {
         score -= 60;
     }
 
-    if (/\bzip\b/.test(name)) {
+    if (
+        /\bzip\b/.test(
+            name
+        )
+    ) {
         score -= 60;
     }
 
-    if (/\btract\b/.test(name)) {
+    if (
+        /\btract\b/.test(
+            name
+        )
+    ) {
         score -= 50;
     }
 
-    if (/\bprecinct\b/.test(name)) {
+    if (
+        /\bprecinct\b/.test(
+            name
+        )
+    ) {
         score -= 30;
     }
 
-    if (/\bbeat\b/.test(name)) {
+    if (
+        /\bbeat\b/.test(
+            name
+        )
+    ) {
         score -= 25;
     }
 
-    if (/\bplace\b/.test(name)) {
+    if (
+        /\bplace\b/.test(
+            name
+        )
+    ) {
         score -= 20;
     }
 
-    return Math.max(score, 0);
+    return Math.max(
+        score,
+        0
+    );
 }
 
 
@@ -1049,7 +1397,9 @@ function selectBestDistrictField(
     districtFields: string[]
 ): string | undefined {
 
-    if (districtFields.length === 0) {
+    if (
+        districtFields.length === 0
+    ) {
         return undefined;
     }
 
@@ -1064,9 +1414,13 @@ function selectBestDistrictField(
 
             return {
                 name,
-                score: field
-                    ? scoreDistrictField(field)
-                    : 0
+
+                score:
+                    field
+                        ? scoreDistrictField(
+                            field
+                        )
+                        : 0
             };
         })
         .sort(
@@ -1087,7 +1441,10 @@ function findNameFields(
     return fields
         .map(field => ({
             field,
-            score: scoreNameField(field)
+            score:
+                scoreNameField(
+                    field
+                )
         }))
         .filter(
             item =>
@@ -1109,10 +1466,14 @@ function scoreNameField(
 ): number {
 
     const name =
-        normalizeFieldText(field.name);
+        normalizeFieldText(
+            field.name
+        );
 
     const alias =
-        normalizeFieldText(field.alias);
+        normalizeFieldText(
+            field.alias
+        );
 
     let score = 0;
 
@@ -1121,7 +1482,9 @@ function scoreNameField(
     // -------------------------------------------------------------------------
 
     if (
-        /^(name|districtname|wardname|councilname)$/.test(name)
+        /^(name|districtname|wardname|councilname)$/.test(
+            name
+        )
     ) {
         score += 60;
     }
@@ -1163,15 +1526,21 @@ function scoreNameField(
     // Alias
     // -------------------------------------------------------------------------
 
-    if (/\bname\b/.test(alias)) {
+    if (
+        /\bname\b/.test(alias)
+    ) {
         score += 25;
     }
 
-    if (/\bdistrict\b/.test(alias)) {
+    if (
+        /\bdistrict\b/.test(alias)
+    ) {
         score += 20;
     }
 
-    if (/\bward\b/.test(alias)) {
+    if (
+        /\bward\b/.test(alias)
+    ) {
         score += 20;
     }
 
@@ -1184,7 +1553,9 @@ function selectBestNameField(
     nameFields: string[]
 ): string | undefined {
 
-    if (nameFields.length === 0) {
+    if (
+        nameFields.length === 0
+    ) {
         return undefined;
     }
 
@@ -1199,9 +1570,13 @@ function selectBestNameField(
 
             return {
                 name,
-                score: field
-                    ? scoreNameField(field)
-                    : 0
+
+                score:
+                    field
+                        ? scoreNameField(
+                            field
+                        )
+                        : 0
             };
         })
         .sort(
@@ -1220,7 +1595,9 @@ function detectSupportsQuery(
 ): boolean {
 
     const capabilities =
-        stringValue(metadata.capabilities);
+        stringValue(
+            metadata.capabilities
+        );
 
     if (capabilities) {
 
@@ -1286,34 +1663,59 @@ function detectSupportsPagination(
 // Service URL
 // =============================================================================
 
-function getServiceRootUrl(url: string): string {
+function getServiceRootUrl(
+    url: string
+): string {
+
     try {
-        const parsed = new URL(url);
+        const parsed =
+            new URL(url);
 
-        const parts = parsed.pathname
-            .split("/")
-            .filter(Boolean);
+        const parts =
+            parsed.pathname
+                .split("/")
+                .filter(Boolean);
 
-        const serviceIndex = parts.findIndex(
-            part =>
-                /^(FeatureServer|MapServer)$/i.test(part)
-        );
+        const serviceIndex =
+            parts.findIndex(
+                part =>
+                    /^(FeatureServer|MapServer)$/i.test(
+                        part
+                    )
+            );
 
-        if (serviceIndex === -1) {
-            return url.replace(/\/+$/, "");
+        if (
+            serviceIndex === -1
+        ) {
+            return url.replace(
+                /\/+$/,
+                ""
+            );
         }
 
         parsed.pathname =
             "/" +
             parts
-                .slice(0, serviceIndex + 1)
+                .slice(
+                    0,
+                    serviceIndex + 1
+                )
                 .join("/");
 
-        parsed.search = "";
+        parsed.search =
+            "";
 
-        return parsed.toString().replace(/\/+$/, "");
+        return parsed.toString()
+            .replace(
+                /\/+$/,
+                ""
+            );
+
     } catch {
-        return url.replace(/\/+$/, "");
+        return url.replace(
+            /\/+$/,
+            ""
+        );
     }
 }
 
@@ -1327,20 +1729,31 @@ function extractFieldSamples(
 ): ArcGISFieldSample[] {
 
     const fields =
-        extractFields(metadata.fields);
+        extractFields(
+            metadata.fields
+        );
 
-    const samples: ArcGISFieldSample[] = [];
+    const samples:
+        ArcGISFieldSample[] = [];
 
     for (const field of fields) {
 
-        if (!isObject(field.domain)) {
+        if (
+            !isObject(
+                field.domain
+            )
+        ) {
             continue;
         }
 
         const codedValues =
             field.domain.codedValues;
 
-        if (!Array.isArray(codedValues)) {
+        if (
+            !Array.isArray(
+                codedValues
+            )
+        ) {
             continue;
         }
 
@@ -1353,8 +1766,12 @@ function extractFieldSamples(
                     }
 
                     return (
-                        stringValue(value.name) ??
-                        stringValue(value.code)
+                        stringValue(
+                            value.name
+                        ) ??
+                        stringValue(
+                            value.code
+                        )
                     );
                 })
                 .filter(
@@ -1363,11 +1780,18 @@ function extractFieldSamples(
                     ): value is string =>
                         Boolean(value)
                 )
-                .slice(0, 25);
+                .slice(
+                    0,
+                    25
+                );
 
-        if (values.length > 0) {
+        if (
+            values.length > 0
+        ) {
             samples.push({
-                field: field.name,
+                field:
+                    field.name,
+
                 values
             });
         }
@@ -1390,8 +1814,14 @@ function normalizeFieldText(
     )
         .trim()
         .toLowerCase()
-        .replace(/[_-]+/g, " ")
-        .replace(/\s+/g, " ");
+        .replace(
+            /[\_-]+/g,
+            " "
+        )
+        .replace(
+            /\s+/g,
+            " "
+        );
 }
 
 
@@ -1399,11 +1829,15 @@ function normalizeGeometryType(
     value: unknown
 ): ArcGISGeometryType | undefined {
 
-    if (typeof value !== "string") {
+    if (
+        typeof value !== "string"
+    ) {
         return undefined;
     }
 
-    switch (value.toLowerCase()) {
+    switch (
+        value.toLowerCase()
+    ) {
 
         case "esrigeometrypoint":
             return "esriGeometryPoint";
@@ -1481,7 +1915,9 @@ function stringArray(
     value: unknown
 ): string[] | undefined {
 
-    if (!Array.isArray(value)) {
+    if (
+        !Array.isArray(value)
+    ) {
         return undefined;
     }
 
@@ -1503,7 +1939,9 @@ function timestampToString(
     value: unknown
 ): string | undefined {
 
-    if (typeof value !== "number") {
+    if (
+        typeof value !== "number"
+    ) {
         return undefined;
     }
 
@@ -1521,6 +1959,7 @@ function timestampToString(
     return date.toISOString();
 }
 
+
 function extractSpatialReference(
     value: unknown
 ):
@@ -1531,7 +1970,9 @@ function extractSpatialReference(
     }
     | undefined {
 
-    if (!isObject(value)) {
+    if (
+        !isObject(value)
+    ) {
         return undefined;
     }
 
