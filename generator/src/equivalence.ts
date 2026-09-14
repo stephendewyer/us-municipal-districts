@@ -1,60 +1,80 @@
 import type {
-    ArcGISGeometryType,
+    DiscoveryCandidate,
+    DistrictType,
     EquivalentLayerGroup,
+    ExpectedDistrictCount,
     InspectedCandidate,
     LayerFingerprint
 } from "./types.js";
 
-
 // =============================================================================
-// Constants
-// =============================================================================
-
-const DEFAULT_EQUIVALENCE_THRESHOLD = 0.60;
-
-/**
- * Four-digit years are intentionally ignored when comparing titles.
- *
- * Example:
- *   "Chicago Wards (2015)"
- *   "Chicago Wards (2023)"
- *
- * These should be considered versions of the same underlying dataset family.
- * Temporal ranking is handled separately by temporalValidation.ts / rank.ts.
- */
-const TEMPORAL_TITLE_TOKEN_PATTERN = /^\d{4}$/;
-
-const IGNORED_TITLE_TOKENS =
-    new Set([
-        "city",
-        "county",
-        "of",
-        "the",
-        "and",
-        "open",
-        "data",
-        "gis",
-        "arcgis",
-        "layer",
-        "layers",
-        "map",
-        "service",
-        "services",
-        "boundary",
-        "boundaries"
-    ]);
-
-
-// =============================================================================
-// Normalization
+// Expected district counts
 // =============================================================================
 
-function normalize(value: string | undefined): string {
+interface DistrictCountEntry {
+    city: string;
+    state: string;
+    districtType: DistrictType;
+    expected: ExpectedDistrictCount;
+}
+
+const EXPECTED_DISTRICT_COUNTS: DistrictCountEntry[] = [
+    {
+        city: "phoenix",
+        state: "az",
+        districtType: "council-district",
+        expected: {
+            count: 8,
+            source: "municipal-source",
+            confidence: 100
+        }
+    },
+    {
+        city: "phoenix",
+        state: "az",
+        districtType: "city-council-district",
+        expected: {
+            count: 8,
+            source: "municipal-source",
+            confidence: 100
+        }
+    },
+    {
+        city: "tucson",
+        state: "az",
+        districtType: "ward",
+        expected: {
+            count: 6,
+            source: "municipal-source",
+            confidence: 100
+        }
+    }
+];
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+function normalize(
+    value: string | undefined
+): string {
     return (value ?? "")
-        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-        .replace(/([a-zA-Z])(\d+)/g, "$1 $2")
-        .replace(/[_-]+/g, " ")
-        .replace(/\s+/g, " ")
+        .replace(
+            /([a-z])([A-Z])/g,
+            "$1 $2"
+        )
+        .replace(
+            /([a-zA-Z])(\d+)/g,
+            "$1 $2"
+        )
+        .replace(
+            /[_-]+/g,
+            " "
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
         .toLowerCase()
         .trim();
 }
@@ -62,7 +82,6 @@ function normalize(value: string | undefined): string {
 function normalizeTemporalName(
     value?: string
 ): string | undefined {
-
     const normalized =
         normalize(value);
 
@@ -75,784 +94,431 @@ function normalizeTemporalName(
             /[\(\[\{]?\b(?:19|20)\d{2}\b[\)\]\}]?/g,
             ""
         )
-        .replace(
-            /\s+/g,
-            " "
-        )
+        .replace(/\s+/g, " ")
         .trim() || undefined;
 }
 
-function normalizeFieldName(
-    value?: string
-): string | undefined {
-
-    if (!value) {
-        return undefined;
-    }
-
-    return value
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "")
-        .trim() || undefined;
-}
-
-
-function normalizeArray(
-    values: string[] = []
+function unique(
+    values: string[]
 ): string[] {
-
-    return values
-        .map(normalizeFieldName)
-        .filter(
-            (value): value is string =>
-                Boolean(value)
+    return [
+        ...new Set(
+            values.filter(Boolean)
         )
-        .sort();
+    ];
 }
 
+function normalizeList(
+    values: string[] | undefined
+): string[] {
+    return unique(
+        (values ?? [])
+            .map(normalize)
+            .filter(Boolean)
+    ).sort();
+}
 
-// =============================================================================
-// URL normalization
-// =============================================================================
+function jaccardSimilarity(
+    left: string[],
+    right: string[]
+): number {
+    const a = new Set(left);
+    const b = new Set(right);
 
-/**
- * Normalize an ArcGIS layer URL.
- *
- * Query parameters and fragments are removed because they generally
- * do not identify the underlying ArcGIS layer.
- */
-function normalizeUrl(
-    url: string
-): string {
-
-    try {
-
-        const parsed =
-            new URL(
-                url.trim()
-            );
-
-        parsed.hash = "";
-        parsed.search = "";
-
-        parsed.hostname =
-            parsed.hostname.toLowerCase();
-
-        return parsed
-            .toString()
-            .replace(/\/+$/, "");
-
-    } catch {
-
-        return url
-            .trim()
-            .replace(/\/+$/, "")
-            .toLowerCase();
+    if (
+        a.size === 0 &&
+        b.size === 0
+    ) {
+        return 1;
     }
+
+    if (
+        a.size === 0 ||
+        b.size === 0
+    ) {
+        return 0;
+    }
+
+    const intersection =
+        [...a].filter(
+            value => b.has(value)
+        ).length;
+
+    const union =
+        new Set([
+            ...a,
+            ...b
+        ]).size;
+
+    return union === 0
+        ? 0
+        : intersection / union;
 }
 
+function stringSimilarity(
+    left: string | undefined,
+    right: string | undefined
+): number {
+    const a = normalize(left);
+    const b = normalize(right);
 
-// =============================================================================
-// Group ID
-// =============================================================================
+    if (!a && !b) {
+        return 1;
+    }
 
-/**
- * Create a deterministic ID for an equivalence group.
- *
- * The ID is based on the complete normalized set of member URLs rather than
- * the first candidate encountered during discovery. This makes the group ID
- * independent of discovery order.
- */
-function createGroupId(
-    candidates: InspectedCandidate[]
-): string {
+    if (!a || !b) {
+        return 0;
+    }
 
-    const urls =
-        candidates
-            .map(
-                candidate =>
-                    normalizeUrl(
-                        candidate.inspection.url ||
-                        candidate.candidate.url
-                    )
-            )
-            .sort();
+    if (a === b) {
+        return 1;
+    }
 
-    return (
-        `group-${encodeURIComponent(
-            urls.join("|")
-        )}`
+    /*
+     * Token-based similarity is intentionally simple and deterministic.
+     */
+    const aTokens =
+        a.split(" ").filter(Boolean);
+
+    const bTokens =
+        b.split(" ").filter(Boolean);
+
+    return jaccardSimilarity(
+        aTokens,
+        bTokens
     );
 }
 
-// =============================================================================
-// Geometry
-// =============================================================================
-
-function normalizeGeometry(
-    geometry?: ArcGISGeometryType
-): string | undefined {
-
-    if (!geometry) {
-        return undefined;
-    }
-
-    switch (geometry) {
-
-        case "polygon":
-        case "esriGeometryPolygon":
-            return "polygon";
-
-        case "point":
-        case "esriGeometryPoint":
-            return "point";
-
-        case "polyline":
-        case "esriGeometryPolyline":
-            return "polyline";
-
-        case "multipoint":
-        case "esriGeometryMultipoint":
-            return "multipoint";
-
-        case "esriGeometryEnvelope":
-            return "envelope";
-
-        default:
-            return normalize(
-                geometry
-            );
-    }
-}
-
-
-// =============================================================================
-// Candidate eligibility
-// =============================================================================
-
-/**
- * Only genuine political boundary layers participate in equivalence
- * detection.
- *
- * This prevents thematic datasets containing fields such as WARD or
- * DISTRICT from being grouped with actual political boundary layers.
- */
-function isEligibleForEquivalence(
+function isPolygon(
     candidate: InspectedCandidate
 ): boolean {
-
-    const classification =
-        candidate.classification;
-
     const geometry =
-        normalizeGeometry(
+        normalize(
             candidate.inspection.geometryType
         );
 
     return (
-
-        classification.rejected !== true &&
-
-        classification.isPoliticalBoundary === true &&
-
-        classification.isBoundaryLayer === true &&
-
-        Boolean(
-            classification.districtType
-        ) &&
-
-        geometry === "polygon"
+        geometry === "polygon" ||
+        geometry === "esri geometry polygon"
     );
 }
 
+function municipalityKey(
+    candidate: InspectedCandidate
+): string {
+    return [
+        normalize(candidate.candidate.city),
+        normalize(candidate.candidate.state),
+        candidate.candidate.placeFips ?? ""
+    ].join("|");
+}
+
+function districtTypeKey(
+    candidate: InspectedCandidate
+): string {
+    return normalize(
+        candidate.classification.districtType
+    );
+}
+
+function getFieldNames(
+    candidate: InspectedCandidate
+): string[] {
+    return normalizeList(
+        (candidate.inspection.fields ?? [])
+            .map(field => field.name)
+    );
+}
+
+function getDistrictFields(
+    candidate: InspectedCandidate
+): string[] {
+    return normalizeList([
+        ...(candidate.inspection.districtFields ?? []),
+        candidate.inspection.districtField ?? "",
+        ...(candidate.validation?.districtField
+            ? [candidate.validation.districtField]
+            : [])
+    ]);
+}
+
+function getNameFields(
+    candidate: InspectedCandidate
+): string[] {
+    return normalizeList([
+        ...(candidate.inspection.nameFields ?? []),
+        candidate.inspection.nameField ?? ""
+    ]);
+}
+
+function stripYear(
+    value: string
+): string {
+    return value
+        .replace(
+            /\b(?:19|20)\d{2}\b/g,
+            ""
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+}
+
+function datasetIdentity(
+    candidate: InspectedCandidate
+): string {
+    return stripYear(
+        normalize(
+            [
+                candidate.inspection.title,
+                candidate.candidate.title,
+                candidate.inspection.serviceName,
+                candidate.inspection.layerName
+            ]
+                .filter(Boolean)
+                .join(" ")
+        )
+    );
+}
+
+function serviceIdentity(
+    candidate: InspectedCandidate
+): string {
+    return normalize(
+        candidate.inspection.serviceName
+    );
+}
+
+function layerIdentity(
+    candidate: InspectedCandidate
+): string {
+    return normalize(
+        candidate.inspection.layerName ??
+        candidate.inspection.title
+    );
+}
+
+function districtFieldIdentity(
+    candidate: InspectedCandidate
+): string {
+    return normalize(
+        candidate.inspection.districtField ??
+        candidate.validation?.districtField
+    );
+}
+
+function nameFieldIdentity(
+    candidate: InspectedCandidate
+): string {
+    return normalize(
+        candidate.inspection.nameField
+    );
+}
+
+function temporalFamily(
+    candidate: InspectedCandidate
+): string {
+    return [
+        municipalityKey(candidate),
+        districtTypeKey(candidate),
+        datasetIdentity(candidate),
+        serviceIdentity(candidate),
+        layerIdentity(candidate),
+        getDistrictFields(candidate).join(","),
+        getNameFields(candidate).join(",")
+    ].join("|");
+}
 
 // =============================================================================
-// Municipality equivalence
+// Expected district count
 // =============================================================================
 
-/**
- * Candidates from different municipalities must never be considered
- * equivalent, even if they happen to use the same URL or otherwise have
- * identical metadata.
- */
-function sameMunicipality(
-    a: InspectedCandidate,
-    b: InspectedCandidate
-): boolean {
-
-    const placeFipsA =
-        a.candidate.placeFips;
-
-    const placeFipsB =
-        b.candidate.placeFips;
-
-    if (
-        !placeFipsA ||
-        !placeFipsB
-    ) {
-        return false;
+export function getExpectedDistrictCount(
+    candidate: DiscoveryCandidate,
+    districtType: DistrictType | undefined
+): ExpectedDistrictCount | undefined {
+    if (!districtType) {
+        return undefined;
     }
 
-    return (
-        placeFipsA ===
-        placeFipsB
-    );
+    const city =
+        normalize(candidate.city);
+
+    const state =
+        normalize(candidate.state);
+
+    if (!city || !state) {
+        return undefined;
+    }
+
+    const entry =
+        EXPECTED_DISTRICT_COUNTS.find(
+            item =>
+                item.city === city &&
+                item.state === state &&
+                item.districtType === districtType
+        );
+
+    if (!entry) {
+        return undefined;
+    }
+
+    return {
+        ...entry.expected
+    };
 }
 
-
 // =============================================================================
-// Fingerprint
+// Layer fingerprint
 // =============================================================================
 
 /**
- * Create a normalized structural fingerprint for a candidate.
+ * Create a normalized structural fingerprint for an inspected candidate.
  *
- * This is the only fingerprint implementation used by the project.
+ * The fingerprint intentionally excludes:
+ *
+ * - URL
+ * - item ID
+ * - place-specific search metadata
+ *
+ * Those values identify a resource, but do not establish whether two
+ * layers represent the same underlying dataset.
  */
 export function createLayerFingerprint(
     candidate: InspectedCandidate
 ): LayerFingerprint {
-
-    const inspection =
-        candidate.inspection;
-
     return {
-
         title:
-            normalize(
-                inspection.title ??
-                candidate.candidate.title
-            ),
+            candidate.inspection.title ??
+            candidate.candidate.title,
 
         serviceName:
-            normalize(
-                inspection.serviceName
-            ),
+            candidate.inspection.serviceName,
 
         layerName:
-            normalize(
-                inspection.layerName
-            ),
+            candidate.inspection.layerName,
 
         geometryType:
-            inspection.geometryType,
+            candidate.inspection.geometryType,
 
         fields:
-            normalizeArray(
-                inspection.fields?.map(
-                    field =>
-                        field.name
-                ) ?? []
-            ),
+            getFieldNames(candidate),
 
         districtFields:
-            normalizeArray(
-                inspection.districtFields
-            ),
+            getDistrictFields(candidate),
 
         nameFields:
-            normalizeArray(
-                inspection.nameFields
-            )
+            getNameFields(candidate),
+
+        featureCount:
+            candidate.inspection.featureCount
     };
 }
-
-
-// =============================================================================
-// Array similarity
-// =============================================================================
-
-function compareArrays(
-    a: string[],
-    b: string[]
-): number {
-
-    if (
-        a.length === 0 ||
-        b.length === 0
-    ) {
-        return 0;
-    }
-
-    const setA =
-        new Set(a);
-
-    const setB =
-        new Set(b);
-
-    let intersection = 0;
-
-    for (
-        const value of setA
-    ) {
-
-        if (
-            setB.has(value)
-        ) {
-            intersection++;
-        }
-    }
-
-    const union =
-        new Set([
-            ...setA,
-            ...setB
-        ]).size;
-
-    return union === 0
-        ? 0
-        : intersection / union;
-}
-
-
-// =============================================================================
-// Title similarity
-// =============================================================================
-
-function titleTokens(
-    value?: string
-): Set<string> {
-
-    if (!value) {
-        return new Set();
-    }
-
-    return new Set(
-
-        value
-            .split(/\s+/)
-            .map(
-                token =>
-                    token
-                        .replace(
-                            /^[()[\]{}]+|[()[\]{}]+$/g,
-                            ""
-                        )
-                        .trim()
-            )
-            .filter(
-                token =>
-
-                    token.length > 1 &&
-
-                    !TEMPORAL_TITLE_TOKEN_PATTERN.test(
-                        token
-                    ) &&
-
-                    !IGNORED_TITLE_TOKENS.has(
-                        token
-                    )
-            )
-    );
-}
-
-
-function titleSimilarity(
-    a?: string,
-    b?: string
-): number {
-
-    const aTokens =
-        titleTokens(a);
-
-    const bTokens =
-        titleTokens(b);
-
-    if (
-        aTokens.size === 0 ||
-        bTokens.size === 0
-    ) {
-        return 0;
-    }
-
-    let intersection = 0;
-
-    for (
-        const token of aTokens
-    ) {
-
-        if (
-            bTokens.has(token)
-        ) {
-            intersection++;
-        }
-    }
-
-    const union =
-        new Set([
-            ...aTokens,
-            ...bTokens
-        ]).size;
-
-    return union === 0
-        ? 0
-        : intersection / union;
-}
-
-
-// =============================================================================
-// URL equivalence
-// =============================================================================
-
-function sameUrl(
-    a: InspectedCandidate,
-    b: InspectedCandidate
-): boolean {
-
-    const urlA =
-        a.inspection.url ||
-        a.candidate.url;
-
-    const urlB =
-        b.inspection.url ||
-        b.candidate.url;
-
-    return (
-
-        Boolean(urlA) &&
-
-        Boolean(urlB) &&
-
-        normalizeUrl(urlA) ===
-        normalizeUrl(urlB)
-    );
-}
-
-
-// =============================================================================
-// Service equivalence
-// =============================================================================
-
-function sameService(
-    a: InspectedCandidate,
-    b: InspectedCandidate
-): boolean {
-
-    const serviceA =
-        normalizeTemporalName(
-            a.inspection.serviceName
-        );
-
-    const serviceB =
-        normalizeTemporalName(
-            b.inspection.serviceName
-        );
-
-    if (
-        !serviceA ||
-        !serviceB
-    ) {
-        return false;
-    }
-
-    return (
-        serviceA ===
-        serviceB
-    );
-}
-
-
-// =============================================================================
-// Layer equivalence
-// =============================================================================
-
-function sameLayerName(
-    a: InspectedCandidate,
-    b: InspectedCandidate
-): boolean {
-
-    const layerA =
-        normalizeTemporalName(
-            a.inspection.layerName
-        );
-
-    const layerB =
-        normalizeTemporalName(
-            b.inspection.layerName
-        );
-
-    if (
-        !layerA ||
-        !layerB
-    ) {
-        return false;
-    }
-
-    return (
-        layerA ===
-        layerB
-    );
-}
-
-
-// =============================================================================
-// District type equivalence
-// =============================================================================
-
-function sameDistrictType(
-    a: InspectedCandidate,
-    b: InspectedCandidate
-): boolean {
-
-    const typeA =
-        a.classification.districtType;
-
-    const typeB =
-        b.classification.districtType;
-
-    if (
-        !typeA ||
-        !typeB
-    ) {
-        return false;
-    }
-
-    return (
-        typeA ===
-        typeB
-    );
-}
-
 
 // =============================================================================
 // Candidate comparison
 // =============================================================================
 
-export interface EquivalenceResult {
-
+export interface CandidateComparison {
     equivalent: boolean;
-
     confidence: number;
-
     reasons: string[];
 }
 
-
 /**
- * Compare two inspected candidates.
+ * Compare two inspected candidates for structural equivalence.
  *
- * The optional threshold controls whether the calculated confidence is
- * sufficient for equivalence. Temporal status is deliberately NOT part of
- * this comparison; temporal ranking determines which equivalent version
- * should become canonical.
+ * The comparison is deliberately independent of:
+ *
+ * - ArcGIS URL
+ * - ArcGIS item ID
+ * - temporal status
+ *
+ * This allows current and historical versions of the same municipal
+ * boundary dataset to be grouped together.
  */
+
 export function compareCandidates(
     a: InspectedCandidate,
     b: InspectedCandidate,
-    threshold = DEFAULT_EQUIVALENCE_THRESHOLD
-): EquivalenceResult {
-
+    threshold = 0.60
+): CandidateComparison {
     const reasons: string[] = [];
 
-    let score = 0;
-
-
-    // -------------------------------------------------------------------------
-    // Municipality
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // Hard exclusions
+    // =========================================================================
 
     if (
-        !sameMunicipality(a, b)
+        a.classification.rejected ||
+        b.classification.rejected
     ) {
-
         return {
-
             equivalent: false,
-
             confidence: 0,
+            reasons: [
+                "rejected candidate"
+            ]
+        };
+    }
 
+    if (
+        !a.classification.isPoliticalBoundary ||
+        !b.classification.isPoliticalBoundary
+    ) {
+        return {
+            equivalent: false,
+            confidence: 0,
+            reasons: [
+                "non-political candidate"
+            ]
+        };
+    }
+
+    if (
+        municipalityKey(a) !==
+        municipalityKey(b)
+    ) {
+        return {
+            equivalent: false,
+            confidence: 0,
             reasons: [
                 "different municipalities"
             ]
         };
     }
 
-
-    // -------------------------------------------------------------------------
-    // Exact URL match
-    // -------------------------------------------------------------------------
-
     if (
-        sameUrl(a, b)
+        districtTypeKey(a) !==
+        districtTypeKey(b)
     ) {
-
         return {
-
-            equivalent: true,
-
-            confidence: 1,
-
-            reasons: [
-                "same ArcGIS layer URL"
-            ]
-        };
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Political district type
-    // -------------------------------------------------------------------------
-
-    if (
-        !sameDistrictType(a, b)
-    ) {
-
-        return {
-
             equivalent: false,
-
             confidence: 0,
-
             reasons: [
                 "different political district types"
             ]
         };
     }
 
-    score += 0.20;
-
-    reasons.push(
-        "same political district type"
-    );
-
-
-    // -------------------------------------------------------------------------
-    // Geometry
-    // -------------------------------------------------------------------------
-
-    const geometryA =
-        normalizeGeometry(
-            a.inspection.geometryType
-        );
-
-    const geometryB =
-        normalizeGeometry(
-            b.inspection.geometryType
-        );
-
     if (
-
-        geometryA &&
-
-        geometryB &&
-
-        geometryA ===
-        geometryB
+        !isPolygon(a) ||
+        !isPolygon(b)
     ) {
-
-        score += 0.15;
-
-        reasons.push(
-            "same geometry type"
-        );
+        return {
+            equivalent: false,
+            confidence: 0,
+            reasons: [
+                "different geometry types"
+            ]
+        };
     }
 
-
-    // -------------------------------------------------------------------------
-    // ArcGIS service
-    // -------------------------------------------------------------------------
-
-    if (
-        sameService(a, b)
-    ) {
-
-        score += 0.20;
-
-        reasons.push(
-            "same ArcGIS service"
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // Layer name
-    // -------------------------------------------------------------------------
-
-    if (
-        sameLayerName(a, b)
-    ) {
-
-        score += 0.15;
-
-        reasons.push(
-            "same ArcGIS layer name"
-        );
-    }
-
-
-        // -------------------------------------------------------------------------
-    // Title similarity
-    // -------------------------------------------------------------------------
-
-    const titleA =
-        normalize(
-            a.inspection.title ??
-            a.candidate.title
-        );
-
-    const titleB =
-        normalize(
-            b.inspection.title ??
-            b.candidate.title
-        );
-
-    const titles =
-        titleSimilarity(
-            titleA,
-            titleB
-        );
-
-    const temporalTitles =
-        titleSimilarity(
-            normalizeTemporalName(titleA),
-            normalizeTemporalName(titleB)
-        );
-
-    if (
-        temporalTitles >= 0.75
-    ) {
-
-        score += 0.20;
-
-        reasons.push(
-            `highly similar dataset titles after temporal normalization (${temporalTitles.toFixed(2)})`
-        );
-
-    } else if (
-        titles >= 0.75
-    ) {
-
-        score += 0.20;
-
-        reasons.push(
-            `highly similar layer titles (${titles.toFixed(2)})`
-        );
-
-    } else if (
-        titles >= 0.50
-    ) {
-
-        score += 0.15;
-
-        reasons.push(
-            `similar layer titles (${titles.toFixed(2)})`
-        );
-
-    } else if (
-        titles >= 0.30
-    ) {
-
-        score += 0.05;
-
-        reasons.push(
-            `partially similar layer titles (${titles.toFixed(2)})`
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Fingerprints
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     const fingerprintA =
         createLayerFingerprint(a);
@@ -860,417 +526,720 @@ export function compareCandidates(
     const fingerprintB =
         createLayerFingerprint(b);
 
+    // =========================================================================
+    // Identity similarity
+    // =========================================================================
 
-    // -------------------------------------------------------------------------
-    // District fields
-    // -------------------------------------------------------------------------
+    const identityA =
+        datasetIdentity(a);
 
-    const districtSimilarity =
-        compareArrays(
+    const identityB =
+        datasetIdentity(b);
 
-            fingerprintA.districtFields,
-
-            fingerprintB.districtFields
+    const identitySimilarity =
+        stringSimilarity(
+            identityA,
+            identityB
         );
 
-    if (
-
-        districtSimilarity === 1 &&
-
-        fingerprintA.districtFields.length > 0
-    ) {
-
-        score += 0.20;
-
+    if (identitySimilarity >= 0.90) {
         reasons.push(
-            "same district fields"
+            "strong dataset identity match"
         );
-
     } else if (
-        districtSimilarity >= 0.50
+        identitySimilarity >= 0.70
     ) {
-
-        score += 0.10;
-
         reasons.push(
-            "similar district fields"
+            "dataset identity match"
         );
     }
 
+    // =========================================================================
+    // Service similarity
+    // =========================================================================
 
-    // -------------------------------------------------------------------------
-    // Name fields
-    // -------------------------------------------------------------------------
+    const serviceSimilarity =
+        stringSimilarity(
+            serviceIdentity(a),
+            serviceIdentity(b)
+        );
 
-    const nameSimilarity =
-        compareArrays(
+    if (serviceSimilarity >= 0.90) {
+        reasons.push(
+            "same service identity"
+        );
+    } else if (
+        serviceSimilarity >= 0.70
+    ) {
+        reasons.push(
+            "similar service identity"
+        );
+    }
 
+    // =========================================================================
+    // Layer similarity
+    // =========================================================================
+
+    const layerSimilarity =
+        stringSimilarity(
+            layerIdentity(a),
+            layerIdentity(b)
+        );
+
+    if (layerSimilarity >= 0.90) {
+        reasons.push(
+            "same layer identity"
+        );
+    } else if (
+        layerSimilarity >= 0.70
+    ) {
+        reasons.push(
+            "similar layer identity"
+        );
+    }
+
+    // =========================================================================
+    // Temporal dataset family similarity
+    // =========================================================================
+
+    /*
+     * Compare the dataset titles after removing explicit year tokens.
+     *
+     * This allows:
+     *
+     *     Chicago Wards (2015)
+     *
+     * and:
+     *
+     *     Chicago Wards
+     *
+     * to be recognized as the same underlying dataset family.
+     *
+     * Temporal status itself is intentionally NOT used as an exclusion.
+     */
+    const temporalTitleA =
+        normalizeTemporalName(
+            a.inspection.title ??
+            a.candidate.title ??
+            a.inspection.layerName
+        );
+
+    const temporalTitleB =
+        normalizeTemporalName(
+            b.inspection.title ??
+            b.candidate.title ??
+            b.inspection.layerName
+        );
+
+    const temporalTitles =
+        stringSimilarity(
+            temporalTitleA ?? "",
+            temporalTitleB ?? ""
+        );
+
+    if (
+        temporalTitles >= 0.90
+    ) {
+        reasons.push(
+            "strong temporal dataset family match"
+        );
+    } else if (
+        temporalTitles >= 0.70
+    ) {
+        reasons.push(
+            "temporal dataset family match"
+        );
+    }
+
+    // =========================================================================
+    // Field similarity
+    // =========================================================================
+
+    const fieldSimilarity =
+        jaccardSimilarity(
+            fingerprintA.fields,
+            fingerprintB.fields
+        );
+
+    const districtFieldSimilarity =
+        jaccardSimilarity(
+            fingerprintA.districtFields,
+            fingerprintB.districtFields
+        );
+
+    const nameFieldSimilarity =
+        jaccardSimilarity(
             fingerprintA.nameFields,
-
             fingerprintB.nameFields
         );
 
     if (
-
-        nameSimilarity === 1 &&
-
-        fingerprintA.nameFields.length > 0
+        fieldSimilarity >= 0.75
     ) {
-
-        score += 0.05;
-
         reasons.push(
-            "same name fields"
+            "strong field structure match"
         );
-
     } else if (
-        nameSimilarity >= 0.50
+        fieldSimilarity >= 0.50
     ) {
-
-        score += 0.025;
-
         reasons.push(
-            "similar name fields"
+            "similar field structure"
         );
     }
-
-
-    // -------------------------------------------------------------------------
-    // General field structure
-    // -------------------------------------------------------------------------
-
-    const fieldSimilarity =
-        compareArrays(
-
-            fingerprintA.fields,
-
-            fingerprintB.fields
-        );
 
     if (
-        fieldSimilarity >= 0.80
+        districtFieldSimilarity >= 0.75
     ) {
-
-        score += 0.10;
-
         reasons.push(
-            "high field similarity"
+            "same district field structure"
         );
     }
 
+    if (
+        nameFieldSimilarity >= 0.75
+    ) {
+        reasons.push(
+            "same name field structure"
+        );
+    }
 
-    // -------------------------------------------------------------------------
-    // Final result
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // Individual field identities
+    // =========================================================================
 
-    const confidence =
-        Math.min(
-            score,
-            1
+    const districtFieldA =
+        districtFieldIdentity(a);
+
+    const districtFieldB =
+        districtFieldIdentity(b);
+
+    const districtFieldIdentitySimilarity =
+        stringSimilarity(
+            districtFieldA,
+            districtFieldB
         );
 
-    return {
+    const nameFieldA =
+        nameFieldIdentity(a);
 
+    const nameFieldB =
+        nameFieldIdentity(b);
+
+    const nameFieldIdentitySimilarity =
+        stringSimilarity(
+            nameFieldA,
+            nameFieldB
+        );
+
+    // =========================================================================
+    // Weighted confidence
+    // =========================================================================
+
+    let confidence =
+        (
+            identitySimilarity * 0.55
+        ) +
+        (
+            serviceSimilarity * 0.15
+        ) +
+        (
+            layerSimilarity * 0.10
+        ) +
+        (
+            fieldSimilarity * 0.10
+        ) +
+        (
+            districtFieldIdentitySimilarity * 0.05
+        ) +
+        (
+            nameFieldIdentitySimilarity * 0.05
+        );
+
+    // =========================================================================
+    // Strong structural floors
+    // =========================================================================
+
+    /*
+     * Exact service identity plus compatible field structure is strong
+     * evidence even when titles differ because of temporal suffixes,
+     * ArcGIS naming differences, or minor title changes.
+     */
+    if (
+        serviceSimilarity === 1 &&
+        fieldSimilarity >= 0.50 &&
+        districtFieldSimilarity >= 0.50
+    ) {
+        confidence =
+            Math.max(
+                confidence,
+                0.70
+            );
+
+        reasons.push(
+            "same service with compatible field structure"
+        );
+    }
+
+    /*
+     * Very strong normalized dataset identity should survive modest
+     * differences in service/layer naming.
+     */
+    if (
+        identitySimilarity >= 0.90
+    ) {
+        confidence =
+            Math.max(
+                confidence,
+                0.75
+            );
+    }
+
+    /*
+     * Existing temporal-family floor.
+     */
+    if (
+        temporalFamily(a) ===
+        temporalFamily(b)
+    ) {
+        confidence =
+            Math.max(
+                confidence,
+                0.75
+            );
+
+        reasons.push(
+            "same temporal dataset family"
+        );
+    }
+
+    // =========================================================================
+    // Strong temporal family override
+    // =========================================================================
+
+    /*
+     * Chicago-style temporal versions can legitimately have:
+     *
+     *     - different ArcGIS services
+     *     - different layer names
+     *     - different field names
+     *     - different service URLs
+     *     - different temporal status
+     *
+     * The combination of:
+     *
+     *     same municipality
+     *     same political district type
+     *     polygon geometry
+     *     strong year-stripped title similarity
+     *
+     * is sufficient to establish equivalence.
+     *
+     * The municipality, district type, political-boundary, and polygon
+     * checks above remain hard requirements.
+     */
+    if (
+        temporalTitles >= 0.90 &&
+        a.classification.districtType ===
+            b.classification.districtType &&
+        isPolygon(a) &&
+        isPolygon(b)
+    ) {
+        confidence =
+            Math.max(
+                confidence,
+                0.80
+            );
+
+        reasons.push(
+            "strong temporal dataset family match"
+        );
+    }
+
+    // =========================================================================
+    // Clamp confidence
+    // =========================================================================
+
+    confidence =
+        Math.max(
+            0,
+            Math.min(
+                1,
+                confidence
+            )
+        );
+
+    // =========================================================================
+    // Return
+    // =========================================================================
+
+    return {
         equivalent:
             confidence >= threshold,
 
         confidence,
 
-        reasons
+        reasons:
+            unique(reasons)
     };
 }
-
 
 // =============================================================================
 // Grouping
 // =============================================================================
 
+interface CandidateGroup {
+    candidates: InspectedCandidate[];
+    confidence: number;
+    reasons: string[];
+}
+
 /**
- * Group equivalent political-boundary candidates.
+ * Group equivalent candidates.
  *
- * Only eligible candidates participate.
- *
- * Temporal versions of the same dataset are intentionally grouped together.
- * The canonical-selection stage is responsible for choosing the current
- * version from within the group.
- *
- * Every group receives a deterministic ID based on its complete membership.
+ * This function is retained as a public compatibility API for dedupe.ts.
  */
-export function detectEquivalentLayers(
+export function groupEquivalentCandidates(
     candidates: InspectedCandidate[],
-    threshold = DEFAULT_EQUIVALENCE_THRESHOLD
+    threshold = 0.60
 ): EquivalentLayerGroup[] {
+    const eligible =
+        candidates
+            .filter(
+                candidate =>
+                    !candidate.classification.rejected &&
+                    candidate.classification.isPoliticalBoundary &&
+                    candidate.classification.isBoundaryLayer &&
+                    isPolygon(candidate)
+            );
 
-    const eligibleCandidates =
-        candidates.filter(
-            isEligibleForEquivalence
+    if (
+        eligible.length === 0
+    ) {
+        return [];
+    }
+
+    /*
+     * Sort before grouping so the result does not depend on input order.
+     */
+    const sorted =
+        [...eligible].sort(
+            (a, b) =>
+                candidateSortKey(a)
+                    .localeCompare(
+                        candidateSortKey(b)
+                    )
         );
 
-
-    // -------------------------------------------------------------------------
-    // Build an equivalence graph.
-    //
-    // Each candidate is a node.
-    //
-    // An edge between two candidates means that compareCandidates()
-    // considers them equivalent.
-    //
-    // This makes grouping independent of discovery order.
-    // -------------------------------------------------------------------------
-
-    const adjacency =
-        eligibleCandidates.map(
-            () => new Set<number>()
+    const parent =
+        sorted.map(
+            (_, index) => index
         );
 
-    const comparisons:
-        {
-            left: number;
-            right: number;
-            confidence: number;
-            reasons: string[];
-        }[] = [];
+    function find(
+        index: number
+    ): number {
+        let root = index;
 
+        while (
+            parent[root] !== root
+        ) {
+            root = parent[root];
+        }
+
+        while (
+            parent[index] !== index
+        ) {
+            const next =
+                parent[index];
+
+            parent[index] =
+                root;
+
+            index = next;
+        }
+
+        return root;
+    }
+
+    function union(
+        left: number,
+        right: number
+    ): void {
+        const leftRoot =
+            find(left);
+
+        const rightRoot =
+            find(right);
+
+        if (
+            leftRoot === rightRoot
+        ) {
+            return;
+        }
+
+        if (
+            leftRoot < rightRoot
+        ) {
+            parent[rightRoot] =
+                leftRoot;
+        } else {
+            parent[leftRoot] =
+                rightRoot;
+        }
+    }
+
+    const pairComparisons =
+        new Map<
+            string,
+            CandidateComparison
+        >();
 
     for (
-        let left = 0;
-        left < eligibleCandidates.length;
-        left++
+        let i = 0;
+        i < sorted.length;
+        i++
     ) {
-
         for (
-            let right = left + 1;
-            right < eligibleCandidates.length;
-            right++
+            let j = i + 1;
+            j < sorted.length;
+            j++
         ) {
-
             const comparison =
                 compareCandidates(
-                    eligibleCandidates[left],
-                    eligibleCandidates[right],
+                    sorted[i],
+                    sorted[j],
                     threshold
                 );
 
+            pairComparisons.set(
+                `${i}|${j}`,
+                comparison
+            );
 
             if (
-                !comparison.equivalent
+                comparison.equivalent
             ) {
-                continue;
+                union(i, j);
             }
-
-
-            adjacency[left].add(
-                right
-            );
-
-            adjacency[right].add(
-                left
-            );
-
-
-            comparisons.push({
-
-                left,
-
-                right,
-
-                confidence:
-                    comparison.confidence,
-
-                reasons:
-                    comparison.reasons
-            });
         }
     }
 
-
-    // -------------------------------------------------------------------------
-    // Find connected components in the equivalence graph.
-    // -------------------------------------------------------------------------
-
-    const visited =
-        new Set<number>();
-
-    const groups:
-        EquivalentLayerGroup[] = [];
-
+    const groups =
+        new Map<
+            number,
+            CandidateGroup
+        >();
 
     for (
-        let start = 0;
-        start < eligibleCandidates.length;
-        start++
+        let index = 0;
+        index < sorted.length;
+        index++
     ) {
+        const root =
+            find(index);
 
-        if (
-            visited.has(start)
-        ) {
-            continue;
-        }
+        const group =
+            groups.get(root);
 
-
-        const component:
-            number[] = [];
-
-        const queue:
-            number[] = [
-                start
-            ];
-
-        visited.add(
-            start
-        );
-
-
-        while (
-            queue.length > 0
-        ) {
-
-            const current =
-                queue.shift()!;
-
-            component.push(
-                current
+        if (group) {
+            group.candidates.push(
+                sorted[index]
             );
-
-
-            for (
-                const neighbor of
-                adjacency[current]
-            ) {
-
-                if (
-                    visited.has(neighbor)
-                ) {
-                    continue;
+        } else {
+            groups.set(
+                root,
+                {
+                    candidates: [
+                        sorted[index]
+                    ],
+                    confidence: 1,
+                    reasons: []
                 }
-
-
-                visited.add(
-                    neighbor
-                );
-
-                queue.push(
-                    neighbor
-                );
-            }
-        }
-
-
-        // ---------------------------------------------------------------------
-        // Sort candidates within the component so the resulting group is
-        // deterministic regardless of discovery order.
-        // ---------------------------------------------------------------------
-
-        component.sort(
-            (left, right) =>
-                eligibleCandidates[left].candidate.url.localeCompare(
-                    eligibleCandidates[right].candidate.url
-                )
-        );
-
-
-        const groupCandidates =
-            component.map(
-                index =>
-                    eligibleCandidates[index]
             );
-
-
-        // ---------------------------------------------------------------------
-        // Collect confidence and reasons from equivalence edges belonging
-        // to this component.
-        // ---------------------------------------------------------------------
-
-        const componentIndexes =
-            new Set(component);
-
-        let confidence =
-            1;
-
-        const reasons =
-            new Set<string>([
-                "equivalent candidate group"
-            ]);
-
-
-        for (
-            const comparison of
-            comparisons
-        ) {
-
-            if (
-                !componentIndexes.has(
-                    comparison.left
-                ) ||
-                !componentIndexes.has(
-                    comparison.right
-                )
-            ) {
-                continue;
-            }
-
-
-            confidence =
-                Math.max(
-                    confidence,
-                    comparison.confidence
-                );
-
-
-            for (
-                const reason of
-                comparison.reasons
-            ) {
-
-                reasons.add(
-                    reason
-                );
-            }
         }
-
-
-        groups.push({
-
-            id:
-                createGroupId(
-                    groupCandidates
-                ),
-
-            candidates:
-                groupCandidates,
-
-            confidence,
-
-            reasons:
-                [...reasons]
-        });
     }
 
+    const result: EquivalentLayerGroup[] =
+        [...groups.values()]
+            .map(
+                group => {
+                    const reasons =
+                        new Set<string>();
 
-    // -------------------------------------------------------------------------
-    // Sort groups deterministically.
-    // -------------------------------------------------------------------------
+                    let minimumConfidence =
+                        1;
 
-    groups.sort(
-        (left, right) =>
-            left.id.localeCompare(
-                right.id
-            )
+                    for (
+                        let i = 0;
+                        i < group.candidates.length;
+                        i++
+                    ) {
+                        for (
+                            let j = i + 1;
+                            j < group.candidates.length;
+                            j++
+                        ) {
+                            const aIndex =
+                                sorted.indexOf(
+                                    group.candidates[i]
+                                );
+
+                            const bIndex =
+                                sorted.indexOf(
+                                    group.candidates[j]
+                                );
+
+                            const key =
+                                aIndex < bIndex
+                                    ? `${aIndex}|${bIndex}`
+                                    : `${bIndex}|${aIndex}`;
+
+                            const comparison =
+                                pairComparisons.get(
+                                    key
+                                );
+
+                            if (
+                                comparison
+                            ) {
+                                minimumConfidence =
+                                    Math.min(
+                                        minimumConfidence,
+                                        comparison.confidence
+                                    );
+
+                                for (
+                                    const reason of
+                                    comparison.reasons
+                                ) {
+                                    reasons.add(
+                                        reason
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    if (
+                        group.candidates.length === 1
+                    ) {
+                        minimumConfidence =
+                            1;
+
+                        reasons.add(
+                            "single eligible candidate"
+                        );
+                    }
+
+                    return {
+                        id:
+                            createGroupId(
+                                group.candidates
+                            ),
+
+                        candidates:
+                            group.candidates,
+
+                        confidence:
+                            minimumConfidence,
+
+                        reasons:
+                            [...reasons]
+                    };
+                }
+            );
+
+    return result.sort(
+        (a, b) =>
+            a.id.localeCompare(b.id)
     );
-
-
-    return groups;
 }
 
-
-// =============================================================================
-// Compatibility aliases
-// =============================================================================
-
 /**
- * Backwards-compatible alias.
+ * Primary equivalence-grouping API.
  *
- * New code should use detectEquivalentLayers().
+ * Kept separate from groupEquivalentCandidates() because this is the
+ * API used by pipeline.ts.
  */
-export const groupEquivalentCandidates =
-    detectEquivalentLayers;
+export function detectEquivalentLayers(
+    candidates: InspectedCandidate[],
+    threshold = 0.60
+): EquivalentLayerGroup[] {
+    return groupEquivalentCandidates(
+        candidates,
+        threshold
+    );
+}
+
+// =============================================================================
+// Deterministic identifiers
+// =============================================================================
+
+function candidateSortKey(
+    candidate: InspectedCandidate
+): string {
+    return [
+        municipalityKey(candidate),
+        districtTypeKey(candidate),
+        datasetIdentity(candidate),
+        serviceIdentity(candidate),
+        layerIdentity(candidate),
+        districtFieldIdentity(candidate),
+        nameFieldIdentity(candidate),
+        normalize(candidate.candidate.url),
+        normalize(candidate.inspection.url)
+    ].join("|");
+}
+
+function createGroupId(
+    candidates: InspectedCandidate[]
+): string {
+    const identity =
+        [...candidates]
+            .sort(
+                (a, b) =>
+                    candidateSortKey(a)
+                        .localeCompare(
+                            candidateSortKey(b)
+                        )
+            )
+            .map(
+                candidate =>
+                    candidateSortKey(candidate)
+            )
+            .join("||");
+
+    return `equivalent-${hashString(identity)}`;
+}
+
+function hashString(
+    value: string
+): string {
+    /*
+     * Small deterministic non-cryptographic hash.
+     *
+     * Group IDs only need to be stable; they do not provide security.
+     */
+    let hash = 2166136261;
+
+    for (
+        let index = 0;
+        index < value.length;
+        index++
+    ) {
+        hash ^=
+            value.charCodeAt(index);
+
+        hash =
+            Math.imul(
+                hash,
+                16777619
+            );
+    }
+
+    return (
+        hash >>> 0
+    )
+        .toString(16)
+        .padStart(8, "0");
+}

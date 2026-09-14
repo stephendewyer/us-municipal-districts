@@ -304,105 +304,180 @@ async function extractDistinctDistrictValues(
     fetchImpl: FetchLike = fetch
 ): Promise<string[]> {
 
-    const queryUrl =
-        new URL(
-            `${layerUrl}/query`
-        );
+    const values =
+        new Set<string>();
 
-    queryUrl.searchParams.set(
-        "where",
-        "1=1"
-    );
+    const pageSize =
+        100;
 
-    queryUrl.searchParams.set(
-        "outFields",
-        districtField
-    );
-
-    queryUrl.searchParams.set(
-        "returnGeometry",
-        "false"
-    );
-
-    queryUrl.searchParams.set(
-        "f",
-        "json"
-    );
+    let resultOffset =
+        0;
 
     try {
-        const response =
-            await fetchImpl(
-                queryUrl.toString(),
-                {
-                    headers: {
-                        Accept:
-                            "application/json"
-                    }
-                }
+
+        while (true) {
+
+            const queryUrl =
+                new URL(
+                    `${layerUrl}/query`
+                );
+
+            queryUrl.searchParams.set(
+                "where",
+                "1=1"
             );
 
-        if (!response.ok) {
-            return [];
-        }
+            queryUrl.searchParams.set(
+                "outFields",
+                districtField
+            );
 
-        const data: unknown =
-            await response.json();
+            queryUrl.searchParams.set(
+                "returnGeometry",
+                "false"
+            );
 
-        if (!isObject(data)) {
-            return [];
-        }
+            queryUrl.searchParams.set(
+                "resultRecordCount",
+                String(pageSize)
+            );
 
-        if (
-            "error" in data &&
-            data.error
-        ) {
-            return [];
-        }
+            queryUrl.searchParams.set(
+                "resultOffset",
+                String(resultOffset)
+            );
 
-        const features =
-            Array.isArray(data.features)
-                ? data.features
-                : [];
+            queryUrl.searchParams.set(
+                "f",
+                "json"
+            );
 
-        const values: string[] = [];
+            const response =
+                await fetchImpl(
+                    queryUrl.toString(),
+                    {
+                        headers: {
+                            Accept:
+                                "application/json"
+                        }
+                    }
+                );
 
-        for (const feature of features) {
-
-            if (!isObject(feature)) {
-                continue;
+            if (!response.ok) {
+                return [
+                    ...values
+                ];
             }
 
-            const attributes =
-                feature.attributes;
+            const data: unknown =
+                await response.json();
 
-            if (!isObject(attributes)) {
-                continue;
+            if (!isObject(data)) {
+                return [
+                    ...values
+                ];
             }
-
-            const value =
-                attributes[districtField];
 
             if (
-                value === undefined ||
-                value === null
+                "error" in data &&
+                data.error
             ) {
-                continue;
+                return [
+                    ...values
+                ];
             }
 
-            const normalized =
-                String(value).trim();
+            const features =
+                Array.isArray(data.features)
+                    ? data.features
+                    : [];
 
-            if (normalized) {
-                values.push(normalized);
+            /*
+             * Extract district values from this page.
+             */
+            for (const feature of features) {
+
+                if (!isObject(feature)) {
+                    continue;
+                }
+
+                const attributes =
+                    feature.attributes;
+
+                if (!isObject(attributes)) {
+                    continue;
+                }
+
+                const value =
+                    attributes[districtField];
+
+                if (
+                    value === undefined ||
+                    value === null
+                ) {
+                    continue;
+                }
+
+                const normalized =
+                    String(value).trim();
+
+                if (normalized) {
+                    values.add(
+                        normalized
+                    );
+                }
+            }
+
+            /*
+             * No features means there are no more pages.
+             */
+            if (
+                features.length === 0
+            ) {
+                break;
+            }
+
+            /*
+             * ArcGIS indicates that additional records are
+             * available through exceededTransferLimit.
+             *
+             * If it is not true, this page is the final page.
+             */
+            const exceededTransferLimit =
+                data.exceededTransferLimit === true;
+
+            if (
+                !exceededTransferLimit
+            ) {
+                break;
+            }
+
+            /*
+             * Advance to the next page.
+             */
+            resultOffset +=
+                features.length;
+
+            /*
+             * Defensive protection against a malformed service
+             * repeatedly returning the same page size without
+             * making progress.
+             */
+            if (
+                features.length < pageSize
+            ) {
+                break;
             }
         }
 
         return [
-            ...new Set(values)
+            ...values
         ];
 
     } catch {
-        return [];
+        return [
+            ...values
+        ];
     }
 }
 
