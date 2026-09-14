@@ -448,6 +448,20 @@ export interface ArcGISInspection {
 
     districtField?: string;
 
+     /**
+     * Distinct values observed in the selected district field.
+     *
+     * Example:
+     *
+     *     ["1", "2", "3", "4", "5", "6", "7", "8"]
+     *
+     * This is populated during ArcGIS inspection and consumed by
+     * validateCandidate() when determining district-value coverage.
+     */
+    distinctDistrictValues?: string[];
+
+    featureCount?: number;
+
     nameFields: string[];
 
     nameField?: string;
@@ -477,6 +491,17 @@ export interface ArcGISInspection {
     created?: string;
 
     modified?: string;
+}
+
+export interface ExpectedDistrictCount {
+    count: number;
+    source:
+        | "municipal-metadata"
+        | "municipal-source"
+        | "authoritative-registry"
+        | "explicit-source"
+        | "manual";
+    confidence: number;
 }
 
 // =============================================================================

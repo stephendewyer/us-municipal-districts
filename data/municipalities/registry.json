@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-13T22:30:19.266Z",
+  "generatedAt": "2026-09-14T00:05:49.520Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-13T22:30:19.266Z",
+        "generatedAt": "2026-09-14T00:05:49.520Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -29,10 +29,10 @@
             "title": "Council Districts and Members Hash",
             "serviceType": "MapServer",
             "official": false,
-            "score": 195
+            "score": 213
           }
         ],
-        "requiresReview": false
+        "requiresReview": true
       }
     },
     {

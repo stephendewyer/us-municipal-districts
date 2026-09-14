@@ -3,7 +3,8 @@ import type {
     ArcGISCandidateValidation,
     CandidateClassification,
     DiscoveryCandidate,
-    LayerSemanticEvidence
+    LayerSemanticEvidence,
+    ExpectedDistrictCount
 } from "./types.js";
 
 // =============================================================================
@@ -293,8 +294,59 @@ export function scoreLayerSemantics(
 
 interface FieldAnalysis {
     field: string;
+
+    /*
+     * District identifiers actually observed in the layer.
+     */
     distinctValues: string[];
-    coverage: number;
+
+    /*
+     * Number of distinct district identifiers actually observed.
+     *
+     * This is intentionally different from featureCount because
+     * multiple polygon features may belong to the same district.
+     */
+    observedDistrictCount: number;
+
+    /*
+     * Independently established expected district count.
+     *
+     * This MUST NOT be inferred from the observed values.
+     */
+    expectedDistrictCount?: number;
+
+    /*
+     * Provenance for the expected district count, when available.
+     */
+    expectedDistrictSource?:
+        ExpectedDistrictCount["source"];
+
+    /*
+     * Confidence in the expected district count.
+     */
+    expectedDistrictConfidence?: number;
+
+    /*
+     * observedDistrictCount / expectedDistrictCount.
+     *
+     * Undefined means the expected district count is unknown.
+     */
+    observedCoverage?: number;
+
+    /*
+     * True only when the authoritative expectation is satisfied.
+     *
+     * Undefined means completeness cannot be established.
+     */
+    completeDistrictCoverage?: boolean;
+
+    /*
+     * Missing district values can only be established when the
+     * expected values are themselves known or can safely be represented
+     * numerically from an authoritative expected count.
+     */
+    missingDistrictValues: string[];
+
     pattern:
         | "numeric"
         | "ward-number"
@@ -302,6 +354,10 @@ interface FieldAnalysis {
         | "named"
         | "unknown";
 }
+
+// =============================================================================
+// District-value pattern
+// =============================================================================
 
 function classifyValuePattern(
     values: string[]
@@ -376,8 +432,149 @@ function classifyValuePattern(
     return "unknown";
 }
 
+// =============================================================================
+// Missing district values
+// =============================================================================
+
+function inferMissingDistrictValues(
+    values: string[],
+    expectedDistrictCount:
+        number | undefined
+): string[] {
+    if (
+        expectedDistrictCount === undefined ||
+        expectedDistrictCount <= 0
+    ) {
+        return [];
+    }
+
+    /*
+     * Missing values may only be inferred safely for numeric
+     * district identifiers in the conventional 1..N form.
+     *
+     * This function does NOT establish the expected count.
+     *
+     * The expected count must already have been established
+     * independently by the caller.
+     */
+    const normalizedValues =
+        values.map(
+            value =>
+                normalizeField(value)
+        );
+
+    let numericValues:
+        number[] = [];
+
+    if (
+        normalizedValues.every(
+            value =>
+                /^\d+$/.test(value)
+        )
+    ) {
+        numericValues =
+            normalizedValues.map(
+                value =>
+                    Number(value)
+            );
+    } else if (
+        normalizedValues.every(
+            value =>
+                /^ward\s+\d+[a-z]?$/i.test(value)
+        )
+    ) {
+        numericValues =
+            normalizedValues.map(
+                value =>
+                    Number(
+                        value
+                            .replace(
+                                /^ward\s+/i,
+                                ""
+                            )
+                            .replace(
+                                /[a-z]$/i,
+                                ""
+                            )
+                    )
+            );
+    } else if (
+        normalizedValues.every(
+            value =>
+                /^(?:district|council\s+district)\s+\d+[a-z]?$/i.test(
+                    value
+                )
+        )
+    ) {
+        numericValues =
+            normalizedValues.map(
+                value =>
+                    Number(
+                        value
+                            .replace(
+                                /^(?:district|council\s+district)\s+/i,
+                                ""
+                            )
+                            .replace(
+                                /[a-z]$/i,
+                                ""
+                            )
+                    )
+            );
+    } else {
+        /*
+         * Named districts cannot be reconstructed from a count alone.
+         *
+         * Example:
+         *
+         *     observed: North, Central, South
+         *     expected: 5
+         *
+         * We know that two districts are missing, but we do not know
+         * their names.
+         */
+        return [];
+    }
+
+    const observed =
+        new Set(
+            numericValues
+                .filter(
+                    value =>
+                        Number.isInteger(value) &&
+                        value >= 1
+                )
+        );
+
+    const missing: string[] = [];
+
+    for (
+        let district = 1;
+        district <= expectedDistrictCount;
+        district += 1
+    ) {
+        if (
+            !observed.has(
+                district
+            )
+        ) {
+            missing.push(
+                String(district)
+            );
+        }
+    }
+
+    return missing;
+}
+
+// =============================================================================
+// District field analysis
+// =============================================================================
+
 function analyzeDistrictField(
-    inspection: ArcGISInspection
+    inspection: ArcGISInspection,
+    expectedDistrictCount?:
+        ExpectedDistrictCount
 ): FieldAnalysis {
     const fields =
         inspection.fields ?? [];
@@ -385,6 +582,7 @@ function analyzeDistrictField(
     const candidateFields =
         unique([
             ...(inspection.districtFields ?? []),
+
             ...fields
                 .filter(
                     field =>
@@ -412,8 +610,29 @@ function analyzeDistrictField(
     ) {
         return {
             field: "",
+
             distinctValues: [],
-            coverage: 0,
+
+            observedDistrictCount:
+                0,
+
+            expectedDistrictCount:
+                expectedDistrictCount?.count,
+
+            expectedDistrictSource:
+                expectedDistrictCount?.source,
+
+            expectedDistrictConfidence:
+                expectedDistrictCount?.confidence,
+
+            observedCoverage:
+                undefined,
+
+            completeDistrictCoverage:
+                undefined,
+
+            missingDistrictValues: [],
+
             pattern: "unknown"
         };
     }
@@ -426,16 +645,10 @@ function analyzeDistrictField(
     const field =
         candidateFields[0];
 
-    const inspectionDistrictFields =
-        inspection.districtFields ?? [];
-
     /*
      * ArcGISInspection does not necessarily contain sampled field
      * values directly. The caller may provide them through the
      * district field metadata.
-     *
-     * For the current architecture, use the known district values
-     * supplied by inspection when available.
      */
     const fieldMetadata =
         fields.find(
@@ -472,16 +685,14 @@ function analyzeDistrictField(
         );
 
     /*
-     * If the inspection layer already exposes distinct district values,
+     * If inspection already exposes distinct district values,
      * prefer those.
+     *
+     * These values come from the dedicated district-value query
+     * performed by inspectArcGIS().
      */
     const inspectionValues =
-        (
-            inspection as
-            ArcGISInspection & {
-                distinctDistrictValues?: string[];
-            }
-        ).distinctDistrictValues;
+        inspection.distinctDistrictValues;
 
     const finalValues =
         inspectionValues &&
@@ -494,37 +705,99 @@ function analyzeDistrictField(
             )
             : distinctValues;
 
-    const featureCount =
-        (
-            inspection as
-            ArcGISInspection & {
-                featureCount?: number;
-            }
-        ).featureCount;
+    const distinctDistrictValues =
+        [...new Set(
+            finalValues
+                .map(
+                    value =>
+                        value.trim()
+                )
+                .filter(Boolean)
+        )];
 
-    const sampledCount =
-        finalValues.length;
+    const observedDistrictCount =
+        distinctDistrictValues.length;
 
-    const coverage =
-        featureCount &&
-        featureCount > 0
+    /*
+     * IMPORTANT:
+     *
+     * We do NOT infer expectedDistrictCount from the observed values.
+     *
+     * For example:
+     *
+     *     observed = 1,2,3,4,5,6,7,8
+     *
+     * does not itself prove that Phoenix has eight council districts.
+     *
+     * The expected count must come from independent authoritative
+     * evidence.
+     */
+    const expectedCount =
+        expectedDistrictCount?.count;
+
+    /*
+     * Coverage is only calculated when an independently established
+     * expected count is available.
+     */
+    const observedCoverage =
+        expectedCount !== undefined &&
+        expectedCount > 0
             ? Math.min(
                 1,
-                sampledCount /
-                featureCount
+                observedDistrictCount /
+                    expectedCount
             )
-            : sampledCount > 0
-                ? 1
-                : 0;
+            : undefined;
+
+    /*
+     * Complete coverage cannot be established when we do not know
+     * the expected district count.
+     */
+    const completeDistrictCoverage =
+        expectedCount !== undefined
+            ? observedDistrictCount >=
+                expectedCount
+            : undefined;
+
+    /*
+     * Missing values can be inferred for conventional numeric
+     * 1..N district identifiers.
+     *
+     * For named districts, this remains empty unless the expected
+     * district VALUE SET is introduced later.
+     */
+    const missingDistrictValues =
+        inferMissingDistrictValues(
+            distinctDistrictValues,
+            expectedCount
+        );
 
     return {
         field,
+
         distinctValues:
-            finalValues,
-        coverage,
+            distinctDistrictValues,
+
+        observedDistrictCount,
+
+        expectedDistrictCount:
+            expectedCount,
+
+        expectedDistrictSource:
+            expectedDistrictCount?.source,
+
+        expectedDistrictConfidence:
+            expectedDistrictCount?.confidence,
+
+        observedCoverage,
+
+        completeDistrictCoverage,
+
+        missingDistrictValues,
+
         pattern:
             classifyValuePattern(
-                finalValues
+                distinctDistrictValues
             )
     };
 }
@@ -547,8 +820,10 @@ function calculateConfidence(
         );
 
     const isPolygon =
-        geometryType === "esri geometry polygon" ||
-        geometryType === "polygon";
+        geometryType ===
+            "esri geometry polygon" ||
+        geometryType ===
+            "polygon";
 
     if (isPolygon) {
         confidence += 25;
@@ -590,9 +865,37 @@ function calculateConfidence(
         confidence += 10;
     }
 
+    /*
+     * Expected district evidence contributes confidence independently
+     * from observed coverage.
+     *
+     * This rewards the existence of authoritative expectation evidence
+     * without treating that evidence as observed geometry.
+     */
     if (
-        best.coverage >=
-        MIN_COVERAGE
+        best.expectedDistrictCount !==
+        undefined
+    ) {
+        confidence += 5;
+    }
+
+    /*
+     * Only award coverage confidence when coverage is actually known.
+     */
+    if (
+        best.observedCoverage !== undefined &&
+        best.observedCoverage >=
+            MIN_COVERAGE
+    ) {
+        confidence += 5;
+    }
+
+    /*
+     * Complete district coverage is stronger evidence than merely
+     * meeting the 50% threshold.
+     */
+    if (
+        best.completeDistrictCoverage === true
     ) {
         confidence += 5;
     }
@@ -679,24 +982,17 @@ function determineAcceptance(
     // =========================================================================
     // Strong semantic political-boundary path
     // =========================================================================
-    //
-    // Accept a polygon when:
-    //   - the classifier identifies it as a political boundary,
-    //   - boundary semantics are stronger than thematic semantics, and
-    //   - confidence is already high.
-    //
-    // This handles legitimate municipal boundary layers whose
-    // district values were not sampled during inspection.
-    //
-    // Example:
-    //   Phoenix "Council Districts and Members"
-    //   boundaryScore = 20
-    //   thematicScore = 0
-    //   confidence = 75
-    //
-    // This intentionally does NOT accept thematic datasets such as:
-    //   "Eviction Filings by Council Districts"
-    // where thematicScore > boundaryScore.
+
+    /*
+     * Accept a polygon when:
+     *
+     *   - the classifier identifies it as a political boundary,
+     *   - boundary semantics are stronger than thematic semantics, and
+     *   - confidence is already high.
+     *
+     * This allows a legitimate municipal boundary layer to remain valid
+     * even when district-value inspection is incomplete or unavailable.
+     */
     if (
         isPolygon &&
         classification.isPoliticalBoundary &&
@@ -715,10 +1011,18 @@ function determineAcceptance(
         best.distinctValues.length <
         MIN_DISTINCT_VALUES
     ) {
+        /*
+         * If coverage is unknown, do not treat it as zero.
+         *
+         * A boundary-native official layer may still be valid through
+         * the strong semantic path above, but this structural path
+         * requires enough observed district values.
+         */
         return (
             classification.isPoliticalBoundary &&
             classification.officialMunicipalSource &&
-            best.coverage >=
+            best.observedCoverage !== undefined &&
+            best.observedCoverage >=
                 MIN_COVERAGE
         );
     }
@@ -759,9 +1063,16 @@ function determineAcceptance(
         best.pattern ===
             "named";
 
+    /*
+     * Coverage is populated only when an authoritative expected
+     * district count is available.
+     *
+     * Unknown coverage is not interpreted as zero coverage.
+     */
     const populated =
-        best.coverage >=
-        MIN_COVERAGE;
+        best.observedCoverage !== undefined &&
+        best.observedCoverage >=
+            MIN_COVERAGE;
 
     // -------------------------------------------------------------------------
     // Strong political field
@@ -842,7 +1153,9 @@ function determineAcceptance(
 export function validateCandidate(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection,
-    classification: CandidateClassification
+    classification: CandidateClassification,
+    expectedDistrictCount?:
+        ExpectedDistrictCount
 ): ArcGISCandidateValidation {
     // =========================================================================
     // Semantic analysis
@@ -859,14 +1172,19 @@ export function validateCandidate(
         {
             title:
                 inspection.title,
+
             serviceName:
                 inspection.serviceName,
+
             layerName:
                 inspection.layerName,
+
             boundaryScore:
                 semanticEvidence.boundaryScore,
+
             thematicScore:
                 semanticEvidence.thematicScore,
+
             evidence:
                 semanticEvidence.evidence
         }
@@ -878,7 +1196,8 @@ export function validateCandidate(
 
     const best =
         analyzeDistrictField(
-            inspection
+            inspection,
+            expectedDistrictCount
         );
 
     // =========================================================================
@@ -911,13 +1230,48 @@ export function validateCandidate(
         {
             title:
                 inspection.title,
+
             boundaryScore:
                 semanticEvidence.boundaryScore,
+
             thematicScore:
                 semanticEvidence.thematicScore,
+
             confidence,
+
             classificationPolitical:
                 classification.isPoliticalBoundary,
+
+            districtField:
+                best.field,
+
+            distinctDistrictValues:
+                best.distinctValues,
+
+            observedDistrictCount:
+                best.observedDistrictCount,
+
+            expectedDistrictCount:
+                best.expectedDistrictCount,
+
+            expectedDistrictSource:
+                best.expectedDistrictSource,
+
+            expectedDistrictConfidence:
+                best.expectedDistrictConfidence,
+
+            coverage:
+                best.observedCoverage,
+
+            completeDistrictCoverage:
+                best.completeDistrictCoverage,
+
+            missingDistrictValues:
+                best.missingDistrictValues,
+
+            featureCount:
+                inspection.featureCount,
+
             accepted
         }
     );
@@ -957,12 +1311,38 @@ export function validateCandidate(
             );
         }
 
+        /*
+         * Only report insufficient coverage when an expected district
+         * count is known.
+         */
         if (
-            best.coverage <
-            MIN_COVERAGE
+            best.observedCoverage !== undefined &&
+            best.observedCoverage <
+                MIN_COVERAGE
         ) {
             rejectionReasons.push(
                 "insufficient district-field coverage"
+            );
+        }
+
+        /*
+         * Unknown coverage is diagnostic information, not automatically
+         * a rejection reason.
+         *
+         * The strong semantic path can still accept a boundary-native
+         * political layer when expected district count is unavailable.
+         */
+        if (
+            best.observedCoverage === undefined &&
+            best.distinctValues.length > 0 &&
+            !(
+                classification.isPoliticalBoundary &&
+                semanticEvidence.boundaryScore >
+                    semanticEvidence.thematicScore
+            )
+        ) {
+            rejectionReasons.push(
+                "district-field coverage could not be established"
             );
         }
 
@@ -1018,13 +1398,86 @@ export function validateCandidate(
         best.distinctValues.length > 0
     ) {
         evidence.push(
-            `Distinct district values: ${best.distinctValues.length}.`
+            `Distinct district values observed: ${best.distinctValues.length}.`
         );
     }
 
-    if (best.coverage > 0) {
+    /*
+     * Report feature count separately from district count.
+     *
+     * Feature count describes polygon records.
+     * Observed district count describes unique district identifiers.
+     */
+    if (
+        inspection.featureCount !== undefined
+    ) {
         evidence.push(
-            `District-field coverage: ${(best.coverage * 100).toFixed(1)}%.`
+            `ArcGIS feature count: ${inspection.featureCount}.`
+        );
+    }
+
+    if (
+        best.expectedDistrictCount !==
+        undefined
+    ) {
+        evidence.push(
+            `Expected district count: ${best.expectedDistrictCount}.`
+        );
+    } else {
+        evidence.push(
+            "Expected district count: unknown."
+        );
+    }
+
+    if (
+        best.expectedDistrictSource !==
+        undefined
+    ) {
+        evidence.push(
+            `Expected district count source: ${best.expectedDistrictSource}.`
+        );
+    }
+
+    if (
+        best.expectedDistrictConfidence !==
+        undefined
+    ) {
+        evidence.push(
+            `Expected district count confidence: ${best.expectedDistrictConfidence}.`
+        );
+    }
+
+    if (
+        best.observedCoverage !== undefined
+    ) {
+        evidence.push(
+            `District-field coverage: ${(best.observedCoverage * 100).toFixed(1)}%.`
+        );
+    } else {
+        evidence.push(
+            "District-field coverage: unknown."
+        );
+    }
+
+    if (
+        best.completeDistrictCoverage !==
+        undefined
+    ) {
+        evidence.push(
+            `Complete district coverage: ${best.completeDistrictCoverage}.`
+        );
+    } else {
+        evidence.push(
+            "Complete district coverage: unknown."
+        );
+    }
+
+    if (
+        best.missingDistrictValues.length >
+        0
+    ) {
+        evidence.push(
+            `Missing district values: ${best.missingDistrictValues.join(", ")}.`
         );
     }
 
@@ -1035,30 +1488,6 @@ export function validateCandidate(
     evidence.push(
         `Validation confidence: ${confidence}.`
     );
-
-    // =========================================================================
-    // Expected district count
-    // =========================================================================
-
-    const expectedDistrictCount =
-        (
-            inspection as
-            ArcGISInspection & {
-                expectedDistrictCount?: number;
-            }
-        ).expectedDistrictCount;
-
-    const distinctDistrictValues =
-        best.distinctValues;
-
-    const completeDistrictCoverage =
-        expectedDistrictCount !== undefined
-            ? distinctDistrictValues.length >=
-                expectedDistrictCount
-            : undefined;
-
-    const missingDistrictValues:
-        string[] = [];
 
     // =========================================================================
     // Return
@@ -1074,18 +1503,18 @@ export function validateCandidate(
             best.field ||
             undefined,
 
+        /*
+         * sampleCount historically represented the number of distinct
+         * district values. Preserve that behavior for compatibility.
+         */
         sampleCount:
             best.distinctValues.length,
 
         featureCount:
-            (
-                inspection as
-                ArcGISInspection & {
-                    featureCount?: number;
-                }
-            ).featureCount,
+            inspection.featureCount,
 
-        distinctDistrictValues,
+        distinctDistrictValues:
+            best.distinctValues,
 
         districtValuePattern:
             best.pattern,
@@ -1098,11 +1527,14 @@ export function validateCandidate(
 
         evidence,
 
-        expectedDistrictCount,
+        expectedDistrictCount:
+            best.expectedDistrictCount,
 
-        completeDistrictCoverage,
+        completeDistrictCoverage:
+            best.completeDistrictCoverage,
 
-        missingDistrictValues,
+        missingDistrictValues:
+            best.missingDistrictValues,
 
         rejectionReasons
     };

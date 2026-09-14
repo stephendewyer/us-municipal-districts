@@ -14,17 +14,15 @@ type JsonObject = Record<string, unknown>;
 // =============================================================================
 // Public API
 // =============================================================================
-
 /**
  * Inspect an ArcGIS REST service or layer.
  *
- * Inspection is metadata-only.
+ * Inspection gathers service metadata and lightweight field evidence.
  *
  * This function does NOT:
  * - determine whether a dataset is political
  * - determine whether it represents municipal districts
  * - validate a boundary
- * - query features
  * - rank candidates
  * - select a canonical source
  */
@@ -175,28 +173,6 @@ export async function inspectArcGIS(
     inspection.fields =
         fields;
 
-    inspection.districtFields =
-        findDistrictFields(
-            fields
-        );
-
-    inspection.districtField =
-        selectBestDistrictField(
-            fields,
-            inspection.districtFields
-        );
-
-    inspection.nameFields =
-        findNameFields(
-            fields
-        );
-
-    inspection.nameField =
-        selectBestNameField(
-            fields,
-            inspection.nameFields
-        );
-
     inspection.supportsQuery =
         detectSupportsQuery(
             metadata
@@ -210,6 +186,48 @@ export async function inspectArcGIS(
     inspection.supportsPagination =
         detectSupportsPagination(
             metadata
+        );
+
+    inspection.districtFields =
+        findDistrictFields(
+            fields
+        );
+
+    inspection.districtField =
+        selectBestDistrictField(
+            fields,
+            inspection.districtFields
+        );
+
+    if (
+        inspection.isLayer &&
+        inspection.supportsQuery
+    ) {
+        inspection.featureCount =
+            await getFeatureCount(
+                requestUrl,
+                fetchImpl
+            );
+
+        if (inspection.districtField) {
+            inspection.distinctDistrictValues =
+                await extractDistinctDistrictValues(
+                    requestUrl,
+                    inspection.districtField,
+                    fetchImpl
+                );
+        }
+    }
+
+    inspection.nameFields =
+        findNameFields(
+            fields
+        );
+
+    inspection.nameField =
+        selectBestNameField(
+            fields,
+            inspection.nameFields
         );
 
     inspection.serviceUrl =
@@ -279,6 +297,184 @@ export async function inspectArcGIS(
 
     return inspection;
 }
+
+async function extractDistinctDistrictValues(
+    layerUrl: string,
+    districtField: string,
+    fetchImpl: FetchLike = fetch
+): Promise<string[]> {
+
+    const queryUrl =
+        new URL(
+            `${layerUrl}/query`
+        );
+
+    queryUrl.searchParams.set(
+        "where",
+        "1=1"
+    );
+
+    queryUrl.searchParams.set(
+        "outFields",
+        districtField
+    );
+
+    queryUrl.searchParams.set(
+        "returnGeometry",
+        "false"
+    );
+
+    queryUrl.searchParams.set(
+        "f",
+        "json"
+    );
+
+    try {
+        const response =
+            await fetchImpl(
+                queryUrl.toString(),
+                {
+                    headers: {
+                        Accept:
+                            "application/json"
+                    }
+                }
+            );
+
+        if (!response.ok) {
+            return [];
+        }
+
+        const data: unknown =
+            await response.json();
+
+        if (!isObject(data)) {
+            return [];
+        }
+
+        if (
+            "error" in data &&
+            data.error
+        ) {
+            return [];
+        }
+
+        const features =
+            Array.isArray(data.features)
+                ? data.features
+                : [];
+
+        const values: string[] = [];
+
+        for (const feature of features) {
+
+            if (!isObject(feature)) {
+                continue;
+            }
+
+            const attributes =
+                feature.attributes;
+
+            if (!isObject(attributes)) {
+                continue;
+            }
+
+            const value =
+                attributes[districtField];
+
+            if (
+                value === undefined ||
+                value === null
+            ) {
+                continue;
+            }
+
+            const normalized =
+                String(value).trim();
+
+            if (normalized) {
+                values.push(normalized);
+            }
+        }
+
+        return [
+            ...new Set(values)
+        ];
+
+    } catch {
+        return [];
+    }
+}
+
+async function getFeatureCount(
+    layerUrl: string,
+    fetchImpl: FetchLike = fetch
+): Promise<number | undefined> {
+    const queryUrl =
+        new URL(`${layerUrl}/query`);
+
+    queryUrl.searchParams.set(
+        "where",
+        "1=1"
+    );
+
+    queryUrl.searchParams.set(
+        "returnCountOnly",
+        "true"
+    );
+
+    queryUrl.searchParams.set(
+        "f",
+        "json"
+    );
+
+    try {
+        const response =
+            await fetchImpl(
+                queryUrl.toString(),
+                {
+                    headers: {
+                        Accept:
+                            "application/json"
+                    }
+                }
+            );
+
+        if (!response.ok) {
+            return undefined;
+        }
+
+        const data: unknown =
+            await response.json();
+
+        if (!isObject(data)) {
+            return undefined;
+        }
+
+        if (
+            "error" in data &&
+            data.error
+        ) {
+            return undefined;
+        }
+
+        const count =
+            data.count;
+
+        if (
+            typeof count !== "number" ||
+            !Number.isFinite(count) ||
+            count < 0
+        ) {
+            return undefined;
+        }
+
+        return count;
+    } catch {
+        return undefined;
+    }
+}
+
 
 
 // =============================================================================

@@ -895,12 +895,11 @@ async function discoverMunicipality(
                 undefined;
 
             try {
-                validation =
-                    await validateCandidate(
-                        candidate,
-                        inspection,
-                        classification
-                    );
+                validation = validateCandidate(
+                    candidate,
+                    inspection,
+                    classification,
+                );
 
                 // -----------------------------------------------------------------
                 // Candidate validation gate
