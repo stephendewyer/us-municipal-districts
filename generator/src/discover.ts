@@ -20,6 +20,10 @@ import type {
 } from "./types.js";
 
 import {
+    getExpectedDistrictCount
+} from "./expectedDistrictCount.js";
+
+import {
     discoverArcGISServer,
     type ArcGISServerServiceResult
 } from "./discoverArcGISServer.js";
@@ -375,6 +379,139 @@ export async function discoverArcGISWithTiming(
         results,
         timings
     };
+}
+
+
+// =============================================================================
+// Pre-inspection candidate gate
+// =============================================================================
+
+const POLITICAL_IDENTITY_PATTERNS: RegExp[] = [
+    /\bwards?\b/i,
+    /\bcouncil\s+districts?\b/i,
+    /\bcity\s+council\b/i,
+    /\baldermanic\b/i,
+    /\balderman\b/i,
+    /\bmunicipal\s+districts?\b/i,
+    /\belection\s+districts?\b/i,
+    /\belectoral\s+districts?\b/i,
+    /\bvoting\s+districts?\b/i,
+    /\bvoting\s+precincts?\b/i,
+    /\bpolitical\s+districts?\b/i,
+    /\blegislative\s+districts?\b/i
+];
+
+const THEMATIC_ONLY_PATTERNS: RegExp[] = [
+    /\bevictions?\b/i,
+    /\bfilings?\b/i,
+    /\bev\s+charging\b/i,
+    /\bcharging\s+sites?\b/i,
+    /\blibraries?\b/i,
+    /\bgolf\b/i,
+    /\bparks?\b/i,
+    /\btransit\b/i,
+    /\btransit\s+routes?\b/i,
+    /\bmaintenance\b/i,
+    /\bsewers?\b/i,
+    /\bstorm[-\s]?drains?\b/i,
+    /\bwater\b/i,
+    /\baquatics?\b/i,
+    /\bpools?\b/i,
+    /\bschools?\b/i,
+    /\bairports?\b/i,
+    /\bparcels?\b/i,
+    /\bproperties?\b/i,
+    /\bhousing\b/i,
+    /\bresidential\b/i
+];
+
+function normalizeCandidateIdentity(
+    candidate: DiscoveryCandidate
+): string {
+    return [
+        candidate.title,
+        candidate.url
+    ]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/([a-zA-Z])(\d+)/g, "$1 $2")
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .toLowerCase()
+        .trim();
+}
+
+/**
+ * Determine whether a candidate contains enough cheap identity evidence
+ * to justify an expensive ArcGIS layer inspection.
+ *
+ * This function intentionally does not inspect fields, geometry, or make
+ * network requests. It is a conservative performance optimization:
+ *
+ *     political identity
+ *         -> inspect
+ *
+ *     political + thematic identity
+ *         -> inspect
+ *
+ *     thematic-only identity
+ *         -> skip
+ *
+ *     no useful identity
+ *         -> skip
+ *
+ * In particular, a thematic dataset containing political terminology must
+ * remain eligible for inspection.
+ *
+ * Example:
+ *
+ *     "Eviction Filings by Council Districts"
+ *
+ * contains both thematic and political identity, so it is inspected.
+ *
+ * Examples that should be skipped:
+ *
+ *     "Phoenix EV Charging Sites: Public"
+ *     "Public Libraries"
+ */
+export function shouldInspectCandidate(
+    candidate: DiscoveryCandidate
+): boolean {
+    const identity =
+        normalizeCandidateIdentity(
+            candidate
+        );
+
+    if (!identity) {
+        return false;
+    }
+
+    const hasPoliticalIdentity =
+        POLITICAL_IDENTITY_PATTERNS.some(
+            pattern =>
+                pattern.test(identity)
+        );
+
+    if (hasPoliticalIdentity) {
+        return true;
+    }
+
+    const hasThematicIdentity =
+        THEMATIC_ONLY_PATTERNS.some(
+            pattern =>
+                pattern.test(identity)
+        );
+
+    if (hasThematicIdentity) {
+        return false;
+    }
+
+    /*
+     * Candidates without either political or clearly thematic identity
+     * are not sufficiently promising to justify expensive inspection.
+     */
+    return false;
 }
 
 
@@ -775,6 +912,25 @@ async function discoverMunicipality(
         const candidate of layerCandidates
     ) {
 
+
+        if (
+            !shouldInspectCandidate(
+                candidate
+            )
+        ) {
+            if (options.verbose) {
+                console.log(
+                    `    Skipping pre-inspection candidate:`
+                );
+
+                console.log(
+                    `      ${candidate.title ?? candidate.url}`
+                );
+            }
+
+            continue;
+        }
+
         try {
 
             // -----------------------------------------------------------------
@@ -823,6 +979,16 @@ async function discoverMunicipality(
                     classification
                 );
             }
+
+            // -----------------------------------------------------------------------------
+            // Expected district count
+            // -----------------------------------------------------------------------------
+            
+            const expectedDistrictCount =
+                getExpectedDistrictCount(
+                    candidate,
+                    classification.districtType
+                );
 
 
             // -----------------------------------------------------------------
@@ -899,6 +1065,7 @@ async function discoverMunicipality(
                     candidate,
                     inspection,
                     classification,
+                    expectedDistrictCount
                 );
 
                 // -----------------------------------------------------------------
