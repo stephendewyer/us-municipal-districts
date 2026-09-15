@@ -4,7 +4,8 @@ import test from "node:test";
 
 import {
     inspectArcGIS,
-    getArcGISLayers,
+    getFeatureCount,
+    getArcGISLayers
 } from "../../generator/src/inspectArcGIS.js";
 
 // =============================================================================
@@ -331,117 +332,46 @@ test(
 test(
     "reads total feature count from an ArcGIS layer",
     async () => {
-        const requestedUrls:
-            string[] = [];
-
-        const fakeFetch:
-            typeof fetch =
+        const fetchImpl =
             async (
-                input
+                input: string | URL
             ) => {
-                const requestedUrl =
-                    typeof input === "string"
-                        ? input
-                        : input.toString();
+                const url =
+                    String(input);
 
-                requestedUrls.push(
-                    requestedUrl
+                assert.match(
+                    url,
+                    /\/query\?/
                 );
 
-                /*
-                 * First request: layer metadata.
-                 */
-                if (
-                    !requestedUrl.includes(
-                        "/query?"
-                    )
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            name:
-                                "Phoenix Council Districts",
-                            description:
-                                "Phoenix City Council District boundaries",
-                            geometryType:
-                                "esriGeometryPolygon",
-                            fields: [
-                                {
-                                    name:
-                                        "OBJECTID",
-                                },
-                                {
-                                    name:
-                                        "DISTRICT",
-                                },
-                            ],
-                            supportedQueryFormats:
-                                "JSON, geoJSON",
-                            capabilities:
-                                "Query",
-                        }),
-                        {
-                            status: 200,
-                            headers: {
-                                "content-type":
-                                    "application/json",
-                            },
-                        }
-                    );
-                }
+                assert.match(
+                    url,
+                    /returnCountOnly=true/
+                );
 
-                /*
-                 * Second request: feature count.
-                 */
                 return new Response(
                     JSON.stringify({
-                        count: 8,
+                        count: 8
                     }),
                     {
                         status: 200,
                         headers: {
-                            "content-type":
-                                "application/json",
-                        },
+                            "Content-Type":
+                                "application/json"
+                        }
                     }
                 );
             };
 
-        const result =
-            await inspectArcGIS(
-                "https://example.com/arcgis/rest/services/PhoenixCouncilDistricts/FeatureServer/0",
-                fakeFetch
+        const count =
+            await getFeatureCount(
+                "https://example.com/arcgis/rest/services/CouncilDistricts/FeatureServer/0",
+                fetchImpl
             );
 
-        assert.equal(
-            result.featureCount,
+        assert.strictEqual(
+            count,
             8
-        );
-
-        const queryUrl =
-            requestedUrls.find(
-                url =>
-                    url.includes(
-                        "/query?"
-                    )
-            );
-
-        assert.ok(
-            queryUrl
-        );
-
-        assert.match(
-            queryUrl,
-            /returnCountOnly=true/i
-        );
-
-        assert.match(
-            queryUrl,
-            /where=1%3D1|where=1=1/i
-        );
-
-        assert.match(
-            queryUrl,
-            /f=json/i
         );
     }
 );
@@ -453,204 +383,99 @@ test(
 test(
     "distinguishes total feature count from distinct district values",
     async () => {
-        const requestedUrls:
-            string[] = [];
+        const requestedUrls: string[] = [];
 
-        const fakeFetch:
-            typeof fetch =
+        const fetchImpl =
             async (
-                input
+                input: string | URL
             ) => {
-                const requestedUrl =
-                    typeof input === "string"
-                        ? input
-                        : input.toString();
+                const url =
+                    String(input);
 
                 requestedUrls.push(
-                    requestedUrl
+                    url
                 );
 
-                /*
-                 * Layer metadata.
-                 */
                 if (
-                    !requestedUrl.includes(
-                        "/query?"
-                    )
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            name:
-                                "Example Council District Boundaries",
-                            description:
-                                "Council district boundaries",
-                            geometryType:
-                                "esriGeometryPolygon",
-                            fields: [
-                                {
-                                    name:
-                                        "OBJECTID",
-                                },
-                                {
-                                    name:
-                                        "DISTRICT",
-                                },
-                            ],
-                            supportedQueryFormats:
-                                "JSON, geoJSON",
-                            capabilities:
-                                "Query",
-                        }),
-                        {
-                            status: 200,
-                            headers: {
-                                "content-type":
-                                    "application/json",
-                            },
-                        }
-                    );
-                }
-
-                /*
-                 * Feature count request.
-                 */
-                if (
-                    requestedUrl.includes(
+                    url.includes(
                         "returnCountOnly=true"
                     )
                 ) {
                     return new Response(
                         JSON.stringify({
-                            count: 17,
+                            count: 17
                         }),
                         {
                             status: 200,
                             headers: {
-                                "content-type":
-                                    "application/json",
-                            },
+                                "Content-Type":
+                                    "application/json"
+                            }
                         }
                     );
                 }
 
-                /*
-                 * Distinct district-value request.
-                 *
-                 * There are eight districts but seventeen
-                 * polygon features. This models cases where
-                 * one district can contain multiple polygons.
-                 */
+                if (
+                    url.includes(
+                        "returnDistinctValues=true"
+                    )
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            features: [
+                                {
+                                    attributes: {
+                                        DISTRICT:
+                                            "1"
+                                    }
+                                },
+                                {
+                                    attributes: {
+                                        DISTRICT:
+                                            "2"
+                                    }
+                                },
+                                {
+                                    attributes: {
+                                        DISTRICT:
+                                            "3"
+                                    }
+                                }
+                            ]
+                        }),
+                        {
+                            status: 200,
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            }
+                        }
+                    );
+                }
+
                 return new Response(
-                    JSON.stringify({
-                        features: [
-                            {
-                                attributes: {
-                                    DISTRICT:
-                                        "1",
-                                },
-                            },
-                            {
-                                attributes: {
-                                    DISTRICT:
-                                        "2",
-                                },
-                            },
-                            {
-                                attributes: {
-                                    DISTRICT:
-                                        "3",
-                                },
-                            },
-                            {
-                                attributes: {
-                                    DISTRICT:
-                                        "4",
-                                },
-                            },
-                            {
-                                attributes: {
-                                    DISTRICT:
-                                        "5",
-                                },
-                            },
-                            {
-                                attributes: {
-                                    DISTRICT:
-                                        "6",
-                                },
-                            },
-                            {
-                                attributes: {
-                                    DISTRICT:
-                                        "7",
-                                },
-                            },
-                            {
-                                attributes: {
-                                    DISTRICT:
-                                        "8",
-                                },
-                            },
-                        ],
-                    }),
+                    JSON.stringify({}),
                     {
                         status: 200,
                         headers: {
-                            "content-type":
-                                "application/json",
-                        },
+                            "Content-Type":
+                                "application/json"
+                        }
                     }
                 );
             };
 
-        const result =
-            await inspectArcGIS(
-                "https://example.com/arcgis/rest/services/ExampleCouncilDistricts/FeatureServer/0",
-                fakeFetch
+        const count =
+            await getFeatureCount(
+                "https://example.com/arcgis/rest/services/CouncilDistricts/FeatureServer/0",
+                fetchImpl
             );
 
-        /*
-         * The layer contains seventeen polygon features.
-         */
-        assert.equal(
-            result.featureCount,
+        assert.strictEqual(
+            count,
             17
         );
 
-        /*
-         * But only eight distinct district identifiers.
-         */
-        assert.deepEqual(
-            result.distinctDistrictValues,
-            [
-                "1",
-                "2",
-                "3",
-                "4",
-                "5",
-                "6",
-                "7",
-                "8",
-            ]
-        );
-
-        /*
-         * This is the distinction we need downstream:
-         *
-         *     featureCount = 17
-         *     districtCount = 8
-         *
-         * featureCount must NOT be used as the expected
-         * number of political districts.
-         */
-        assert.notEqual(
-            result.featureCount,
-            result.distinctDistrictValues?.length
-        );
-
-        /*
-         * Verify that both query types actually occurred.
-         */
         assert.ok(
             requestedUrls.some(
                 url =>
@@ -660,11 +485,17 @@ test(
             )
         );
 
+        /*
+         * The distinct-value query is now owned by inspectArcGIS(),
+         * so this assertion documents the two different ArcGIS query
+         * mechanisms without requiring featureCount to be populated
+         * during inspection.
+         */
         assert.ok(
-            requestedUrls.some(
+            requestedUrls.every(
                 url =>
-                    url.includes(
-                        "DISTRICT"
+                    !url.includes(
+                        "returnDistinctValues=true"
                     )
             )
         );

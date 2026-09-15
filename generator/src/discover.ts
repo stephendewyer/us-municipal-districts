@@ -45,6 +45,7 @@ import {
 } from "./resolveArcGISItem.js";
 
 import {
+    getFeatureCount,
     inspectArcGIS
 } from "./inspectArcGIS.js";
 
@@ -1056,6 +1057,24 @@ async function discoverMunicipality(
             // -----------------------------------------------------------------
             // Validate political boundary
             // -----------------------------------------------------------------
+
+            if (
+                inspection.isLayer &&
+                inspection.supportsQuery &&
+                classification.isPoliticalBoundary &&
+                !classification.rejected
+            ) {
+                inspection.featureCount =
+                    await measureStage(
+                        timing,
+                        "Query candidate feature count",
+                        () =>
+                            getFeatureCount(
+                                candidate.url
+                            )
+                    );
+            }
+            
             let validation:
                 ArcGISCandidateValidation |
                 undefined;
