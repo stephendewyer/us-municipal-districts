@@ -273,13 +273,17 @@ const SEARCH_CACHE_TTL_MS =
  *          ↓
  *     ArcGIS inspection
  *          ↓
- *     municipality metadata validation
- *          ↓
  *     classification
  *          ↓
- *     municipality geographic validation
+ *     municipality metadata validation
+ *          ↓
+ *     distinct district-value extraction
  *          ↓
  *     political-boundary validation
+ *          ↓
+ *     feature count
+ *          ↓
+ *     municipality geographic validation
  *          ↓
  *     pipeline ranking / canonical selection
  */
@@ -1007,21 +1011,7 @@ async function discoverMunicipality(
             // Classification rejection gate
             // -----------------------------------------------------------------
 
-            /*
-             * Classification is intentionally the first inexpensive
-             * rejection gate after ArcGIS inspection.
-             *
-             * In particular, datasets such as:
-             *
-             *     Eviction Filings by Council Districts
-             *
-             * can contain a political-looking DISTRICT field while still
-             * being explicitly classified as a rejected/non-boundary
-             * dataset. Do not issue expensive district-value or feature-count
-             * queries for those candidates.
-             */
             if (classification.rejected) {
-
                 const rejectedCandidate: InspectedCandidate = {
                     candidate,
                     inspection,
@@ -1046,10 +1036,15 @@ async function discoverMunicipality(
                     );
 
                     if (
+                        classification.rejectionReasons &&
                         classification.rejectionReasons.length > 0
                     ) {
                         console.log(
-                            `      ${classification.rejectionReasons.join("; ")}`
+                            `      ${
+                                classification.rejectionReasons.join(
+                                    "; "
+                                )
+                            }`
                         );
                     }
                 }
@@ -1057,6 +1052,23 @@ async function discoverMunicipality(
                 continue;
             }
 
+            // -----------------------------------------------------------------
+            // Classification rejection gate
+            // -----------------------------------------------------------------
+
+            /*
+             * Classification is intentionally the first inexpensive
+             * rejection gate after ArcGIS inspection.
+             *
+             * In particular, datasets such as:
+             *
+             *     Eviction Filings by Council Districts
+             *
+             * can contain a political-looking DISTRICT field while still
+             * being explicitly classified as a rejected/non-boundary
+             * dataset. Do not issue expensive district-value or feature-count
+             * queries for those candidates.
+             */
 
             // -----------------------------------------------------------------------------
             // Expected district count
@@ -1132,20 +1144,24 @@ async function discoverMunicipality(
             }
 
             // -----------------------------------------------------------------
-            // Query district values and feature count
+            // Query distinct district values
             // -----------------------------------------------------------------
 
             /*
-             * These are deliberately deferred until after classification
-             * and municipality metadata validation. Both queries can be
-             * expensive on ArcGIS services, and neither is necessary for
-             * candidates that have already failed the cheaper gates above.
-             *
-             * inspectArcGIS() identifies the district field but does not
-             * enumerate its values. That work happens here, immediately
-             * before validateCandidate(), which is the first stage that
-             * needs the district-value evidence.
-             */
+            * validateCandidate() uses distinct district values as part of
+            * political-boundary validation.
+            *
+            * Therefore this query must happen BEFORE validateCandidate(),
+            * but only after the inexpensive classification and municipality
+            * metadata gates have passed.
+            *
+            * This prevents thematic datasets such as:
+            *
+            *     Eviction Filings by Council Districts
+            *
+            * from triggering an expensive district-value query.
+            */
+
             if (
                 inspection.isLayer &&
                 inspection.supportsQuery &&
@@ -1153,55 +1169,54 @@ async function discoverMunicipality(
                 inspection.districtField
             ) {
                 inspection.distinctDistrictValues =
-                    inspection.distinctDistrictValues =
-                        await measureStage(
-                            timing,
-                            "Query candidate distinct district values",
-                            () =>
-                                extractDistinctDistrictValues(
-                                    inspection.url,
-                                    inspection.districtField!,
-                                    fetch,
-                                    expectedDistrictCount?.count
-                                )
-                        );
-
-                inspection.featureCount =
                     await measureStage(
                         timing,
-                        "Query candidate feature count",
+                        "Query candidate distinct district values",
                         () =>
-                            getFeatureCount(
-                                candidate.url
+                            extractDistinctDistrictValues(
+                                inspection.url,
+                                inspection.districtField!,
+                                fetch,
+                                expectedDistrictCount?.count
                             )
                     );
             }
-            
+
+            // -----------------------------------------------------------------
+            // Candidate validation
+            // -----------------------------------------------------------------
+
             let validation:
                 ArcGISCandidateValidation |
                 undefined;
 
             try {
-                validation = validateCandidate(
-                    candidate,
-                    inspection,
-                    classification,
-                    expectedDistrictCount
-                );
+
+                validation =
+                    validateCandidate(
+                        candidate,
+                        inspection,
+                        classification,
+                        expectedDistrictCount
+                    );
 
                 // -----------------------------------------------------------------
                 // Candidate validation gate
                 // -----------------------------------------------------------------
-                if (!validation.isLikelyPoliticalBoundary) {
-                    const rejectedCandidate: InspectedCandidate = {
-                        candidate,
-                        inspection,
-                        classification,
-                        validation,
-                        municipalityValidation,
-                        municipalityGeographyValidation:
-                            undefined
-                    };
+
+                if (
+                    !validation.isLikelyPoliticalBoundary
+                ) {
+                    const rejectedCandidate:
+                        InspectedCandidate = {
+                            candidate,
+                            inspection,
+                            classification,
+                            validation,
+                            municipalityValidation,
+                            municipalityGeographyValidation:
+                                undefined
+                        };
 
                     inspectedCandidates.push(
                         rejectedCandidate
@@ -1221,7 +1236,9 @@ async function discoverMunicipality(
                             validation.rejectionReasons.length > 0
                         ) {
                             console.log(
-                                `      ${validation.rejectionReasons.join("; ")}`
+                                `      ${
+                                    validation.rejectionReasons.join("; ")
+                                }`
                             );
                         }
                     }
@@ -1230,6 +1247,7 @@ async function discoverMunicipality(
                 }
 
             } catch (error) {
+
                 if (options.verbose) {
                     console.warn(
                         `\n    Validation failed:`
@@ -1243,6 +1261,29 @@ async function discoverMunicipality(
                 }
 
                 continue;
+            }
+
+            // -----------------------------------------------------------------
+            // Query feature count
+            // -----------------------------------------------------------------
+
+            /*
+            * Feature count is not required by validateCandidate(), so defer
+            * this query until after political-boundary validation succeeds.
+            */
+            if (
+                inspection.isLayer &&
+                inspection.supportsQuery
+            ) {
+                inspection.featureCount =
+                    await measureStage(
+                        timing,
+                        "Query candidate feature count",
+                        () =>
+                            getFeatureCount(
+                                candidate.url
+                            )
+                    );
             }
                         
             // -----------------------------------------------------------------
