@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-15T00:46:20.726Z",
+  "generatedAt": "2026-09-22T16:37:15.967Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-15T00:46:20.726Z",
+        "generatedAt": "2026-09-22T16:37:15.967Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -55,22 +55,30 @@
       },
       "generatedFile": "geometry/0477000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-12T21:34:16.165Z",
+        "generatedAt": "2026-09-19T00:34:15.714Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
-          {
-            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards_SubsidizedHousing/FeatureServer/0",
-            "itemId": "8e3fbdbf55da4ac7a836324f161ca649",
-            "title": "Wards_SubsidizedHousing",
-            "serviceType": "FeatureServer",
-            "official": false,
-            "score": 168
-          },
           {
             "url": "https://utility.arcgis.com/usrsvcs/servers/0657741d9e4a4289912330077707ad39/rest/services/PublicMaps/Boundaries/MapServer/15",
             "itemId": "0657741d9e4a4289912330077707ad39",
             "title": "WARD_COT",
             "serviceType": "MapServer",
+            "official": false,
+            "score": 168
+          },
+          {
+            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Section_8_Housing_per_Ward/FeatureServer/0",
+            "itemId": "61afee64dcaf4b199cc7322c15c1e24b",
+            "title": "Section 8 Housing per Ward",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 168
+          },
+          {
+            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards_SubsidizedHousing/FeatureServer/0",
+            "itemId": "8e3fbdbf55da4ac7a836324f161ca649",
+            "title": "Wards_SubsidizedHousing",
+            "serviceType": "FeatureServer",
             "official": false,
             "score": 168
           },
@@ -81,17 +89,9 @@
             "serviceType": "FeatureServer",
             "official": false,
             "score": 108
-          },
-          {
-            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Boundaries_2000/FeatureServer/9",
-            "itemId": "6d32fef8867b4cf3beb47659db4b797a",
-            "title": "Wards_2000",
-            "serviceType": "FeatureServer",
-            "official": false,
-            "score": 108
           }
         ],
-        "requiresReview": false
+        "requiresReview": true
       }
     },
     {

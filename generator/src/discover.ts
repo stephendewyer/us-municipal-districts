@@ -79,6 +79,10 @@ import {
     performance
 } from "node:perf_hooks";
 
+import {
+    extractDistinctDistrictValues
+} from "./extractDistinctDistrictValues.js";
+
 // =============================================================================
 // Timing helpers
 // =============================================================================
@@ -300,6 +304,7 @@ export interface DiscoveryRun {
  * This is intentionally separate from discoverArcGIS() so timing data does
  * not become part of the public DiscoveryResult model.
  */
+
 export async function discoverArcGISWithTiming(
     options: DiscoverOptions = {}
 ): Promise<DiscoveryRun> {
@@ -335,6 +340,8 @@ export async function discoverArcGISWithTiming(
             `${place.city}, ${place.state}`
         );
 
+        const municipalityStart =
+            performance.now();
 
         try {
 
@@ -344,14 +351,20 @@ export async function discoverArcGISWithTiming(
                     options
                 );
 
-            results.push(
-                result
-            );
-            timings.push(
-                timing
+            recordStageTiming(
+                timing,
+                "Municipality discovery",
+                performance.now() -
+                    municipalityStart
             );
 
+            results.push(result);
+            timings.push(timing);
+
         } catch (error) {
+            const municipalityRuntimeMs =
+                performance.now() -
+                municipalityStart;
 
             console.error(
                 `\nFailed to process ` +
@@ -369,8 +382,17 @@ export async function discoverArcGISWithTiming(
                     error
                 )
             );
+
             timings.push({
-                stages: []
+                stages: [
+                    {
+                        name:
+                            "Municipality discovery",
+                        runtimeMs:
+                            municipalityRuntimeMs,
+                        count: 1
+                    }
+                ]
             });
         }
     }
@@ -981,6 +1003,61 @@ async function discoverMunicipality(
                 );
             }
 
+            // -----------------------------------------------------------------
+            // Classification rejection gate
+            // -----------------------------------------------------------------
+
+            /*
+             * Classification is intentionally the first inexpensive
+             * rejection gate after ArcGIS inspection.
+             *
+             * In particular, datasets such as:
+             *
+             *     Eviction Filings by Council Districts
+             *
+             * can contain a political-looking DISTRICT field while still
+             * being explicitly classified as a rejected/non-boundary
+             * dataset. Do not issue expensive district-value or feature-count
+             * queries for those candidates.
+             */
+            if (classification.rejected) {
+
+                const rejectedCandidate: InspectedCandidate = {
+                    candidate,
+                    inspection,
+                    classification,
+                    validation: undefined,
+                    municipalityValidation: undefined,
+                    municipalityGeographyValidation:
+                        undefined
+                };
+
+                inspectedCandidates.push(
+                    rejectedCandidate
+                );
+
+                rejectedCandidates.push(
+                    rejectedCandidate
+                );
+
+                if (options.verbose) {
+                    console.log(
+                        `      REJECTED: classification`
+                    );
+
+                    if (
+                        classification.rejectionReasons.length > 0
+                    ) {
+                        console.log(
+                            `      ${classification.rejectionReasons.join("; ")}`
+                        );
+                    }
+                }
+
+                continue;
+            }
+
+
             // -----------------------------------------------------------------------------
             // Expected district count
             // -----------------------------------------------------------------------------
@@ -1055,15 +1132,40 @@ async function discoverMunicipality(
             }
 
             // -----------------------------------------------------------------
-            // Validate political boundary
+            // Query district values and feature count
             // -----------------------------------------------------------------
 
+            /*
+             * These are deliberately deferred until after classification
+             * and municipality metadata validation. Both queries can be
+             * expensive on ArcGIS services, and neither is necessary for
+             * candidates that have already failed the cheaper gates above.
+             *
+             * inspectArcGIS() identifies the district field but does not
+             * enumerate its values. That work happens here, immediately
+             * before validateCandidate(), which is the first stage that
+             * needs the district-value evidence.
+             */
             if (
                 inspection.isLayer &&
                 inspection.supportsQuery &&
                 classification.isPoliticalBoundary &&
-                !classification.rejected
+                inspection.districtField
             ) {
+                inspection.distinctDistrictValues =
+                    inspection.distinctDistrictValues =
+                        await measureStage(
+                            timing,
+                            "Query candidate distinct district values",
+                            () =>
+                                extractDistinctDistrictValues(
+                                    inspection.url,
+                                    inspection.districtField!,
+                                    fetch,
+                                    expectedDistrictCount?.count
+                                )
+                        );
+
                 inspection.featureCount =
                     await measureStage(
                         timing,
