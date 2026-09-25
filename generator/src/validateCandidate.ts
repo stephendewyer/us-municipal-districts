@@ -1250,6 +1250,8 @@ export function validateCandidate(
 
             expectedDistrictCount:
                 best.expectedDistrictCount,
+            unexpectedDistrictValueCount:
+                best.unexpectedDistrictValueCount,
 
             expectedDistrictSource:
                 best.expectedDistrictSource,
