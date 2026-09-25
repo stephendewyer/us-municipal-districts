@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-22T19:13:21.983Z",
+  "generatedAt": "2026-09-25T22:20:32.047Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-22T19:13:21.983Z",
+        "generatedAt": "2026-09-25T22:20:32.047Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -30,6 +30,22 @@
             "serviceType": "MapServer",
             "official": false,
             "score": 213
+          },
+          {
+            "url": "https://services.arcgis.com/cfKakmeHE95cgeEK/arcgis/rest/services/Council_Districts/FeatureServer/0",
+            "itemId": "2c4f191e72ac42348098344281cf408a",
+            "title": "Council Districts and Members",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 163
+          },
+          {
+            "url": "https://services.arcgis.com/cfKakmeHE95cgeEK/arcgis/rest/services/Council_Districts/FeatureServer/1",
+            "itemId": "2c4f191e72ac42348098344281cf408a",
+            "title": "Council Districts and Members Hash",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 163
           }
         ],
         "requiresReview": true

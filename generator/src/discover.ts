@@ -939,7 +939,6 @@ async function discoverMunicipality(
         const candidate of layerCandidates
     ) {
 
-
         if (
             !shouldInspectCandidate(
                 candidate
@@ -999,7 +998,23 @@ async function discoverMunicipality(
                     inspection
                 );
 
-
+            console.log(
+                "CLASSIFICATION RESULT:",
+                {
+                    title: inspection.title,
+                    isCensusDataset:
+                        classification.isCensusDataset,
+                    isPoliticalBoundary:
+                        classification.isPoliticalBoundary,
+                    rejected:
+                        classification.rejected,
+                    matches:
+                        classification.matches,
+                    rejectionReasons:
+                        classification.rejectionReasons
+                }
+            );
+            
             if (options.verbose) {
 
                 printClassification(
@@ -1019,7 +1034,10 @@ async function discoverMunicipality(
                     validation: undefined,
                     municipalityValidation: undefined,
                     municipalityGeographyValidation:
-                        undefined
+                        undefined,
+                    rejectionStage: "classification",
+                    rejectionReason:
+                        classification.rejectionReasons.join("; ")
                 };
 
                 inspectedCandidates.push(
@@ -1105,20 +1123,29 @@ async function discoverMunicipality(
 
 
             /*
-             * Reject candidates with insufficient municipality
-             * metadata evidence before performing the more expensive
-             * geometry query.
-             */
+            * Municipality metadata validation is supporting evidence, not a
+            * hard eligibility gate.
+            *
+            * ArcGIS Online-hosted municipal layers frequently have no municipality
+            * name in their item metadata or URL because they are hosted on shared
+            * Esri infrastructure such as services.arcgis.com.
+            *
+            * A candidate with weak/unknown municipality metadata should therefore
+            * continue to geographic validation. Geographic validation can determine
+            * whether the actual polygon geometries belong to the target municipality.
+            *
+            * Strong negative municipality evidence is still handled by
+            * validateMunicipality() and can be used later by ranking/rejection logic.
+            */
             if (
                 municipalityValidation.score <
-                MUNICIPALITY_VALIDATION_THRESHOLD
+                MUNICIPALITY_VALIDATION_THRESHOLD &&
+                municipalityValidation.score < 0
             ) {
                 if (options.verbose) {
                     console.log(
-                        `      REJECTED: municipality validation ` +
-                        `score ${municipalityValidation.score} ` +
-                        `< threshold ` +
-                        `${MUNICIPALITY_VALIDATION_THRESHOLD}`
+                        `      REJECTED: strong negative municipality validation ` +
+                        `score ${municipalityValidation.score}`
                     );
                 }
 
@@ -1362,7 +1389,56 @@ async function discoverMunicipality(
                             geometryResult.geometries,
                             place
                         );
+                    /*
+                    * Geographic validation is the authoritative municipality-membership
+                    * test when metadata cannot establish the municipality.
+                    *
+                    * This is particularly important for ArcGIS Online layers hosted on
+                    * shared Esri infrastructure, where the service URL may contain no
+                    * municipality name.
+                    */
 
+                    if (
+                        municipalityGeographyValidation.status ===
+                            "no-match"
+                    ) {
+                        if (options.verbose) {
+                            console.log(
+                                `      REJECTED: geographic municipality validation`
+                            );
+
+                            if (
+                                municipalityGeographyValidation.reasons.length > 0
+                            ) {
+                                console.log(
+                                    `      ${
+                                        municipalityGeographyValidation.reasons.join(
+                                            "; "
+                                        )
+                                    }`
+                                );
+                            }
+                        }
+
+                        const rejectedCandidate: InspectedCandidate = {
+                            candidate,
+                            inspection,
+                            classification,
+                            validation,
+                            municipalityValidation,
+                            municipalityGeographyValidation
+                        };
+
+                        inspectedCandidates.push(
+                            rejectedCandidate
+                        );
+
+                        rejectedCandidates.push(
+                            rejectedCandidate
+                        );
+
+                        continue;
+                    }
 
                     if (options.verbose) {
 

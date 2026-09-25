@@ -333,6 +333,10 @@ interface FieldAnalysis {
      */
     observedCoverage?: number;
 
+    unexpectedDistrictValueCount: number;
+
+    districtCountConsistent?: boolean;
+
     /*
      * True only when the authoritative expectation is satisfied.
      *
@@ -352,6 +356,7 @@ interface FieldAnalysis {
         | "ward-number"
         | "district-number"
         | "named"
+        | "mixed"
         | "unknown";
 }
 
@@ -408,28 +413,29 @@ function classifyValuePattern(
         return "numeric";
     }
 
-    /*
-     * A named political district is still legitimate.
-     *
-     * Examples:
-     *
-     *     Central
-     *     North
-     *     Downtown
-     *     Ward A
-     */
     const namedPattern =
         normalized.every(
             value =>
                 value.length > 0 &&
-                !/^\d+$/.test(value)
+                !/^\d+[a-z]?$/i.test(value)
         );
 
     if (namedPattern) {
         return "named";
     }
 
-    return "unknown";
+    /*
+     * Values contain more than one semantic pattern.
+     *
+     * Example:
+     *
+     *     1, 2, 3, 4, 5, 6, 7, 8,
+     *     ACACIA, BARREL, CACTUS
+     *
+     * This is strong evidence that the selected field is not
+     * actually a clean district identifier field.
+     */
+    return "mixed";
 }
 
 // =============================================================================
@@ -610,29 +616,15 @@ function analyzeDistrictField(
     ) {
         return {
             field: "",
-
             distinctValues: [],
-
-            observedDistrictCount:
-                0,
-
-            expectedDistrictCount:
-                expectedDistrictCount?.count,
-
-            expectedDistrictSource:
-                expectedDistrictCount?.source,
-
-            expectedDistrictConfidence:
-                expectedDistrictCount?.confidence,
-
-            observedCoverage:
-                undefined,
-
-            completeDistrictCoverage:
-                undefined,
-
+            observedDistrictCount: 0,
+            expectedDistrictCount: expectedDistrictCount?.count,
+            expectedDistrictSource: expectedDistrictCount?.source,
+            expectedDistrictConfidence: expectedDistrictCount?.confidence,
+            observedCoverage: undefined,
+            unexpectedDistrictValueCount: 0,
+            completeDistrictCoverage: undefined,
             missingDistrictValues: [],
-
             pattern: "unknown"
         };
     }
@@ -719,26 +711,20 @@ function analyzeDistrictField(
         distinctDistrictValues.length;
 
     /*
-     * IMPORTANT:
-     *
-     * We do NOT infer expectedDistrictCount from the observed values.
-     *
-     * For example:
-     *
-     *     observed = 1,2,3,4,5,6,7,8
-     *
-     * does not itself prove that Phoenix has eight council districts.
-     *
-     * The expected count must come from independent authoritative
-     * evidence.
-     */
+    * IMPORTANT:
+    *
+    * We do NOT infer expectedDistrictCount from observed values.
+    *
+    * The expected count must come from independent authoritative
+    * evidence.
+    */
     const expectedCount =
         expectedDistrictCount?.count;
 
     /*
-     * Coverage is only calculated when an independently established
-     * expected count is available.
-     */
+    * Coverage is only calculated when an independently established
+    * expected count is available.
+    */
     const observedCoverage =
         expectedCount !== undefined &&
         expectedCount > 0
@@ -749,23 +735,25 @@ function analyzeDistrictField(
             )
             : undefined;
 
-    /*
-     * Complete coverage cannot be established when we do not know
-     * the expected district count.
-     */
-    const completeDistrictCoverage =
+    const unexpectedDistrictValueCount =
         expectedCount !== undefined
-            ? observedDistrictCount >=
-                expectedCount
-            : undefined;
+            ? Math.max(
+                0,
+                observedDistrictCount -
+                    expectedCount
+            )
+            : 0;
 
     /*
-     * Missing values can be inferred for conventional numeric
-     * 1..N district identifiers.
-     *
-     * For named districts, this remains empty unless the expected
-     * district VALUE SET is introduced later.
-     */
+    * Complete district coverage means the observed number of
+    * distinct district identifiers exactly matches the
+    * independently established expected count.
+    */
+    const completeDistrictCoverage =
+        expectedCount !== undefined
+            ? observedDistrictCount === expectedCount
+            : undefined;
+
     const missingDistrictValues =
         inferMissingDistrictValues(
             distinctDistrictValues,
@@ -790,6 +778,8 @@ function analyzeDistrictField(
             expectedDistrictCount?.confidence,
 
         observedCoverage,
+
+        unexpectedDistrictValueCount,
 
         completeDistrictCoverage,
 
@@ -975,6 +965,13 @@ function determineAcceptance(
     if (
         semanticEvidence.thematicScore >
         semanticEvidence.boundaryScore
+    ) {
+        return false;
+    }
+
+    if (
+        best.pattern === "mixed" &&
+        best.expectedDistrictCount !== undefined
     ) {
         return false;
     }
@@ -1308,6 +1305,15 @@ export function validateCandidate(
         ) {
             rejectionReasons.push(
                 "insufficient distinct district values"
+            );
+        }
+
+        if (
+            best.pattern === "mixed" &&
+            best.expectedDistrictCount !== undefined
+        ) {
+            rejectionReasons.push(
+                "district field contains mixed numeric and named values"
             );
         }
 

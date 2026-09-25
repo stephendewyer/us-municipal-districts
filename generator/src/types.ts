@@ -533,6 +533,7 @@ export interface ArcGISCandidateValidation {
         | "ward-number"
         | "district-number"
         | "named"
+        | "mixed"
         | "unknown";
 
     geometryType?: ArcGISGeometryType;
@@ -730,6 +731,14 @@ export interface InspectedCandidate {
     municipalityValidation?: MunicipalityValidation;
 
     municipalityGeographyValidation?: MunicipalityGeographyValidation;
+
+    rejectionStage?: 
+        | "classification"
+        | "municipality"
+        | "political-validation"
+        | "geography";
+
+     rejectionReason?: string;
 }
 
 

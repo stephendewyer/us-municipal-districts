@@ -424,16 +424,28 @@ const CENSUS_PATTERNS: Pattern[] = [
         regex: /\bcensus\b/i
     },
     {
-        label: "block group",
-        regex: /\bblock\s+groups?\b/i
-    },
-    {
         label: "census tract",
         regex: /\bcensus\s+tracts?\b/i
     },
     {
-        label: "tract",
-        regex: /\btracts?\b/i
+        label: "census block group",
+        regex: /\bcensus\s+block\s+groups?\b/i
+    },
+    {
+        label: "census block",
+        regex: /\bcensus\s+blocks?\b/i
+    },
+    {
+        label: "tabulation block",
+        regex: /\btabulation\s+blocks?\b/i
+    },
+    {
+        label: "TIGER/Line",
+        regex: /\btiger(?:\/|\s+)line\b/i
+    },
+    {
+        label: "ZCTA",
+        regex: /\bzcta\b/i
     }
 ];
 
@@ -1030,7 +1042,7 @@ export function classifyCandidate(
 
     // =========================================================================
     // Matches
-    // =========================================================================
+    // ========================================================================= 
 
     const matches: ClassificationMatches = {
         thematic:
@@ -1039,9 +1051,25 @@ export function classifyCandidate(
                 THEMATIC_PATTERNS
             ),
 
+        /*
+        * Census classification describes what the dataset represents,
+        * not whether the dataset happens to contain census-related
+        * attributes.
+        *
+        * A political boundary may legitimately contain fields such as:
+        *
+        *     TRACT
+        *     BLOCK
+        *     ZCTA
+        *     PRECINCT
+        *
+        * Those fields do not make the geometry a census dataset.
+        *
+        * Therefore census detection is based on dataset identity only.
+        */
         census:
             findMatches(
-                datasetClassificationText,
+                identityText,
                 CENSUS_PATTERNS
             ),
 
