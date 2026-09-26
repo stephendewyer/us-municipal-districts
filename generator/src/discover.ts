@@ -1097,6 +1097,16 @@ async function discoverMunicipality(
                     candidate,
                     classification.districtType
                 );
+            
+            console.log(
+                "EXPECTED DISTRICT COUNT:",
+                {
+                    city: place.city,
+                    state: place.state,
+                    districtType: classification.districtType,
+                    expectedDistrictCount
+                }
+            );
 
 
             // -----------------------------------------------------------------

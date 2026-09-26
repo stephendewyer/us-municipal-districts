@@ -56,6 +56,14 @@ const EXPECTED_DISTRICT_COUNTS: DistrictCountEntry[] = [
         count: 6,
         source: "municipal-source",
         confidence: 100
+    },
+    {
+        city: "chicago",
+        state: "il",
+        districtType: "ward",
+        count: 50,
+        source: "municipal-source",
+        confidence: 100
     }
 ];
 

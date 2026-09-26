@@ -941,33 +941,84 @@ function determineAcceptance(
         geometryType ===
             "polygon";
 
-    /*
-     * =========================================================================
-     * Semantic rejection
-     * =========================================================================
-     *
-     * This must happen before the structural field checks.
-     *
-     * A thematic dataset can contain:
-     *
-     *     DISTRICT
-     *     WARD
-     *     COUNCIL_DISTRICT
-     *
-     * and even contain polygon geometry.
-     *
-     * Therefore field evidence alone must not allow something like:
-     *
-     *     "Eviction Filings by Council Districts"
-     *
-     * through validation.
-     */
+    // =========================================================================
+    // Semantic rejection
+    // =========================================================================
+    //
+    // A thematic dataset can contain political-looking fields such as
+    // WARD or DISTRICT. Thematic evidence therefore has priority over
+    // structural field evidence.
+    //
+
     if (
         semanticEvidence.thematicScore >
         semanticEvidence.boundaryScore
     ) {
         return false;
     }
+
+    // =========================================================================
+    // Derived dataset rejection
+    // =========================================================================
+    //
+    // Derived datasets may contain valid political geometry and complete
+    // district values, but they are analytical products rather than the
+    // underlying municipal boundary source.
+    //
+    // Examples:
+    //
+    //     Aggregation of Intersect of Chicago Crimes and Wards_NA
+    //     Summarize Business Licenses within Chicago Ward Boundaries
+    //
+    // These datasets should remain discoverable/diagnostic, but they must
+    // not be accepted as political-boundary candidates.
+    //
+
+    if (
+        classification.sourceRole ===
+        "derived"
+    ) {
+        return false;
+    }
+
+    // =========================================================================
+    // Basic distinct-value guard
+    // =========================================================================
+    //
+    // A candidate cannot be accepted as a political boundary unless
+    // we have actually observed at least two distinct district values.
+    //
+    // This guard MUST occur before the strong semantic political-boundary
+    // path. Otherwise a boundary-native dataset with zero observed
+    // district values can be accepted solely from its title/metadata.
+    //
+    // Example:
+    //
+    //     Chicago Wards 2015
+    //     -----------------
+    //     expected districts: 50
+    //     observed districts: 0
+    //
+    // This must not be accepted as a validated boundary.
+    //
+
+    if (
+        best.observedDistrictCount <
+        MIN_DISTINCT_VALUES
+    ) {
+        return false;
+    }
+
+    if (
+        best.observedDistrictCount >
+        MAX_DISTINCT_VALUES
+    ) {
+        return false;
+    }
+
+    // =========================================================================
+    // Mixed-value rejection
+    // =========================================================================
 
     if (
         best.pattern === "mixed" &&
@@ -979,17 +1030,19 @@ function determineAcceptance(
     // =========================================================================
     // Strong semantic political-boundary path
     // =========================================================================
+    //
+    // At this point we know:
+    //
+    //     - geometry is polygonal
+    //     - thematic evidence does not dominate
+    //     - candidate is not a derived analytical dataset
+    //     - at least two district values were actually observed
+    //
+    // A strong boundary-native semantic identity can therefore
+    // validate the candidate even when an authoritative expected
+    // district count is unavailable.
+    //
 
-    /*
-     * Accept a polygon when:
-     *
-     *   - the classifier identifies it as a political boundary,
-     *   - boundary semantics are stronger than thematic semantics, and
-     *   - confidence is already high.
-     *
-     * This allows a legitimate municipal boundary layer to remain valid
-     * even when district-value inspection is incomplete or unavailable.
-     */
     if (
         isPolygon &&
         classification.isPoliticalBoundary &&
@@ -1000,40 +1053,9 @@ function determineAcceptance(
         return true;
     }
 
-    // -------------------------------------------------------------------------
-    // Basic distinct-value guard
-    // -------------------------------------------------------------------------
-
-    if (
-        best.distinctValues.length <
-        MIN_DISTINCT_VALUES
-    ) {
-        /*
-         * If coverage is unknown, do not treat it as zero.
-         *
-         * A boundary-native official layer may still be valid through
-         * the strong semantic path above, but this structural path
-         * requires enough observed district values.
-         */
-        return (
-            classification.isPoliticalBoundary &&
-            classification.officialMunicipalSource &&
-            best.observedCoverage !== undefined &&
-            best.observedCoverage >=
-                MIN_COVERAGE
-        );
-    }
-
-    if (
-        best.distinctValues.length >
-        MAX_DISTINCT_VALUES
-    ) {
-        return false;
-    }
-
-    if (!isPolygon) {
-        return false;
-    }
+    // =========================================================================
+    // Structural validation
+    // =========================================================================
 
     const explicitPoliticalField =
         isPoliticalFieldName(
@@ -1071,9 +1093,9 @@ function determineAcceptance(
         best.observedCoverage >=
             MIN_COVERAGE;
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Strong political field
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     if (
         explicitPoliticalField &&
@@ -1084,13 +1106,13 @@ function determineAcceptance(
         return true;
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Ward field
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     if (
         wardField &&
-        best.distinctValues.length >=
+        best.observedDistrictCount >=
             MIN_DISTINCT_VALUES &&
         populated &&
         confidence >= 50
@@ -1098,9 +1120,9 @@ function determineAcceptance(
         return true;
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Explicit political identity
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     if (
         classification.isPoliticalBoundary &&
@@ -1111,14 +1133,14 @@ function determineAcceptance(
         return true;
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Generic district field
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     if (
         genericDistrictField &&
         classification.isPoliticalBoundary &&
-        best.distinctValues.length >=
+        best.observedDistrictCount >=
             MIN_DISTINCT_VALUES &&
         populated &&
         confidence >= 65
@@ -1126,9 +1148,9 @@ function determineAcceptance(
         return true;
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
     // Official municipal source
-    // -------------------------------------------------------------------------
+    // =========================================================================
 
     if (
         classification.officialMunicipalSource &&
@@ -1142,6 +1164,9 @@ function determineAcceptance(
 
     return false;
 }
+
+
+
 
 // =============================================================================
 // Main validation function
@@ -1250,6 +1275,7 @@ export function validateCandidate(
 
             expectedDistrictCount:
                 best.expectedDistrictCount,
+
             unexpectedDistrictValueCount:
                 best.unexpectedDistrictValueCount,
 

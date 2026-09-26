@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-25T22:20:32.047Z",
+  "generatedAt": "2026-09-26T00:03:48.216Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-25T22:20:32.047Z",
+        "generatedAt": "2026-09-25T22:51:00.291Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -71,7 +71,7 @@
       },
       "generatedFile": "geometry/0477000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-19T00:34:15.714Z",
+        "generatedAt": "2026-09-25T22:49:38.179Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -117,40 +117,23 @@
       "boundaryType": "ward",
       "source": {
         "sourceType": "arcgis",
-        "url": "https://gis.cookcountyil.gov/traditional/rest/services/clerkTaxDistricts/MapServer/17",
-        "itemId": "9f4ca36df7d04239bb838c97616d744e",
-        "serviceType": "MapServer",
-        "title": "Chicago Wards 2015",
-        "official": true,
+        "url": "https://services.arcgis.com/rD2ylXRs80UroD90/arcgis/rest/services/Ward_Boundaries/FeatureServer/0",
+        "itemId": "39cc9015bf744957954145e788afc723",
+        "serviceType": "FeatureServer",
+        "title": "Ward Boundaries",
+        "official": false,
         "verified": true,
         "fieldMapping": {
-          "district": "WARD",
-          "name": "WARD"
+          "district": "ward",
+          "name": "ward"
         }
       },
       "generatedFile": "geometry/1714000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-11T21:44:00.047Z",
+        "generatedAt": "2026-09-26T00:03:48.216Z",
         "generatorVersion": "0.1.0",
-        "alternatives": [
-          {
-            "url": "https://services6.arcgis.com/4KusU4lvaw9xX02y/arcgis/rest/services/Aggregation%20of%20Intersect%20of%20Chicago%20Crimes%20and%20Wards_NA/FeatureServer/0",
-            "itemId": "188dc57da4114735947eb73abea80af6",
-            "title": "Aggregation of Intersect of Chicago Crimes and Wards_NA",
-            "serviceType": "FeatureServer",
-            "official": false,
-            "score": 168
-          },
-          {
-            "url": "https://services8.arcgis.com/NxqmZt019CIOnKfc/arcgis/rest/services/Chicago_Wards/FeatureServer/0",
-            "itemId": "53023f68d93d45e1b35a9107d3cb6d6f",
-            "title": "Chicago_Wards",
-            "serviceType": "FeatureServer",
-            "official": false,
-            "score": 168
-          }
-        ],
-        "requiresReview": false
+        "alternatives": [],
+        "requiresReview": true
       }
     }
   ]
