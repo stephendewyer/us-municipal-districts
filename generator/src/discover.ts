@@ -792,8 +792,6 @@ async function discoverMunicipality(
     // =========================================================================
     // 2. Resolve ArcGIS item metadata
     // =========================================================================
-    const resolvedItemMetadata =
-        new Map<string, ArcGISItemResolution>();
 
     const resolvedCandidates:
         DiscoveryCandidate[] = [];
@@ -836,11 +834,6 @@ async function discoverMunicipality(
                             candidate.itemId!
                         )
                 );
-
-            resolvedItemMetadata.set(
-                item.id.toLowerCase(),
-                item
-            );
 
 
             if (options.verbose) {
@@ -935,12 +928,38 @@ async function discoverMunicipality(
 
     // =========================================================================
     // 5. Inspect and validate candidates
+    //
+    // This stage is intentionally split into two phases:
+    //
+    //     Phase A: cheap inspection/classification/metadata validation
+    //              ↓
+    //     group candidates by ArcGIS layer identity
+    //              ↓
+    //     Phase B: expensive district-value/feature-count/geometry queries
+    //
+    // MapServer and FeatureServer representations of the same ArcGIS item
+    // and layer therefore share the expensive query results.
     // =========================================================================
 
     const inspectedCandidates:
         InspectedCandidate[] = [];
     const rejectedCandidates:
         InspectedCandidate[] = [];
+
+    interface PendingCandidate {
+        candidate: DiscoveryCandidate;
+        inspection: ArcGISInspection;
+        classification: ReturnType<typeof classifyCandidate>;
+        municipalityValidation: ReturnType<typeof validateMunicipality>;
+        expectedDistrictCount: ReturnType<typeof getExpectedDistrictCount>;
+    }
+
+    const pendingCandidates:
+        PendingCandidate[] = [];
+
+    // -------------------------------------------------------------------------
+    // Phase A: inspect, classify, and perform cheap metadata validation.
+    // -------------------------------------------------------------------------
 
     for (
         const candidate of layerCandidates
@@ -966,10 +985,6 @@ async function discoverMunicipality(
 
         try {
 
-            // -----------------------------------------------------------------
-            // Inspect
-            // -----------------------------------------------------------------
-
             const inspection:
                 ArcGISInspection =
                 await measureStage(
@@ -981,66 +996,16 @@ async function discoverMunicipality(
                         )
                 );
 
-            const resolvedItem =
-                candidate.itemId
-                    ? resolvedItemMetadata.get(
-                        candidate.itemId.toLowerCase()
-                    )
-                    : undefined;
-
-            if (resolvedItem) {
-                if (resolvedItem) {
-                    console.log(
-                        "ARC GIS PROVENANCE:",
-                        {
-                            city: candidate.city,
-                            state: candidate.state,
-                            itemId: resolvedItem.id,
-                            title: resolvedItem.title,
-                            organizationId:
-                                resolvedItem.organizationId,
-                            contentStatus:
-                                resolvedItem.contentStatus,
-                            accessInformation:
-                                resolvedItem.accessInformation
-                        }
-                    );
-                }
-                /*
-                * inspectArcGIS() obtains organization information from
-                * the service/layer metadata itself.
-                *
-                * Prefer that value when available, but fall back to the
-                * ArcGIS item metadata when the service does not expose it.
-                */
-                inspection.organizationId ??=
-                    resolvedItem.organizationId;
-
-                inspection.contentStatus =
-                    resolvedItem.contentStatus;
-
-                inspection.accessInformation =
-                    resolvedItem.accessInformation;
-            }
-
-
             if (options.verbose) {
-
                 printInspection(
                     inspection
                 );
             }
 
-
-            // -----------------------------------------------------------------
-            // Classify
-            // -----------------------------------------------------------------
-
             const classification =
                 classifyCandidate(
                     {
                         ...candidate,
-
                         searchQuery:
                             undefined
                     },
@@ -1063,9 +1028,8 @@ async function discoverMunicipality(
                         classification.rejectionReasons
                 }
             );
-            
-            if (options.verbose) {
 
+            if (options.verbose) {
                 printClassification(
                     classification
                 );
@@ -1103,15 +1067,10 @@ async function discoverMunicipality(
                     );
 
                     if (
-                        classification.rejectionReasons &&
                         classification.rejectionReasons.length > 0
                     ) {
                         console.log(
-                            `      ${
-                                classification.rejectionReasons.join(
-                                    "; "
-                                )
-                            }`
+                            `      ${classification.rejectionReasons.join("; ")}`
                         );
                     }
                 }
@@ -1119,73 +1078,11 @@ async function discoverMunicipality(
                 continue;
             }
 
-            // -----------------------------------------------------------------
-            // Classification rejection gate
-            // -----------------------------------------------------------------
-
-            /*
-             * Classification is intentionally the first inexpensive
-             * rejection gate after ArcGIS inspection.
-             *
-             * In particular, datasets such as:
-             *
-             *     Eviction Filings by Council Districts
-             *
-             * can contain a political-looking DISTRICT field while still
-             * being explicitly classified as a rejected/non-boundary
-             * dataset. Do not issue expensive district-value or feature-count
-             * queries for those candidates.
-             */
-
-            // -----------------------------------------------------------------------------
-            // Expected district count
-            // -----------------------------------------------------------------------------
-
             const expectedDistrictCount =
                 getExpectedDistrictCount(
                     candidate,
                     classification.districtType
                 );
-            
-            console.log(
-                "EXPECTED DISTRICT COUNT:",
-                {
-                    city: place.city,
-                    state: place.state,
-                    districtType: classification.districtType,
-                    expectedDistrictCount
-                }
-            );
-
-
-            // -----------------------------------------------------------------
-            // Municipality metadata validation
-            // -----------------------------------------------------------------
-            // console.log(
-            //     "MUNICIPALITY VALIDATION INPUT:",
-            //     {
-            //         candidateTitle:
-            //             candidate.title,
-
-            //         inspectionTitle:
-            //             inspection.title,
-
-            //         accessInformation:
-            //             inspection.accessInformation,
-
-            //         organization:
-            //             inspection.organization,
-
-            //         organizationId:
-            //             inspection.organizationId,
-
-            //         url:
-            //             inspection.url,
-
-            //         serviceUrl:
-            //             inspection.serviceUrl
-            //     }
-            // );
 
             const municipalityValidation =
                 validateMunicipality(
@@ -1197,30 +1094,16 @@ async function discoverMunicipality(
                     place
                 );
 
-
             if (options.verbose) {
-
                 printMunicipalityValidation(
                     municipalityValidation
                 );
             }
 
-
             /*
-            * Municipality metadata validation is supporting evidence, not a
-            * hard eligibility gate.
-            *
-            * ArcGIS Online-hosted municipal layers frequently have no municipality
-            * name in their item metadata or URL because they are hosted on shared
-            * Esri infrastructure such as services.arcgis.com.
-            *
-            * A candidate with weak/unknown municipality metadata should therefore
-            * continue to geographic validation. Geographic validation can determine
-            * whether the actual polygon geometries belong to the target municipality.
-            *
-            * Strong negative municipality evidence is still handled by
-            * validateMunicipality() and can be used later by ranking/rejection logic.
-            */
+             * Municipality metadata validation is supporting evidence, not a
+             * hard eligibility gate. Only strong negative evidence rejects.
+             */
             if (
                 municipalityValidation.score <
                 MUNICIPALITY_VALIDATION_THRESHOLD &&
@@ -1240,7 +1123,10 @@ async function discoverMunicipality(
                     validation: undefined,
                     municipalityValidation,
                     municipalityGeographyValidation:
-                        undefined
+                        undefined,
+                    rejectionStage: "municipality",
+                    rejectionReason:
+                        "strong negative municipality validation"
                 };
 
                 inspectedCandidates.push(
@@ -1254,331 +1140,17 @@ async function discoverMunicipality(
                 continue;
             }
 
-            // -----------------------------------------------------------------
-            // Query distinct district values
-            // -----------------------------------------------------------------
-
-            /*
-            * validateCandidate() uses distinct district values as part of
-            * political-boundary validation.
-            *
-            * Therefore this query must happen BEFORE validateCandidate(),
-            * but only after the inexpensive classification and municipality
-            * metadata gates have passed.
-            *
-            * This prevents thematic datasets such as:
-            *
-            *     Eviction Filings by Council Districts
-            *
-            * from triggering an expensive district-value query.
-            */
-
-            if (
-                inspection.isLayer &&
-                inspection.supportsQuery &&
-                classification.isPoliticalBoundary &&
-                inspection.districtField
-            ) {
-                inspection.distinctDistrictValues =
-                    await measureStage(
-                        timing,
-                        "Query candidate distinct district values",
-                        () =>
-                            extractDistinctDistrictValues(
-                                inspection.url,
-                                inspection.districtField!,
-                                fetch,
-                                expectedDistrictCount?.count
-                            )
-                    );
-            }
-
-            // -----------------------------------------------------------------
-            // Candidate validation
-            // -----------------------------------------------------------------
-
-            let validation:
-                ArcGISCandidateValidation |
-                undefined;
-
-            try {
-
-                validation =
-                    validateCandidate(
-                        candidate,
-                        inspection,
-                        classification,
-                        expectedDistrictCount
-                    );
-
-                // -----------------------------------------------------------------
-                // Candidate validation gate
-                // -----------------------------------------------------------------
-
-                if (
-                    !validation.isLikelyPoliticalBoundary
-                ) {
-                    const rejectedCandidate:
-                        InspectedCandidate = {
-                            candidate,
-                            inspection,
-                            classification,
-                            validation,
-                            municipalityValidation,
-                            municipalityGeographyValidation:
-                                undefined
-                        };
-
-                    inspectedCandidates.push(
-                        rejectedCandidate
-                    );
-
-                    rejectedCandidates.push(
-                        rejectedCandidate
-                    );
-
-                    if (options.verbose) {
-                        console.log(
-                            `      REJECTED: political-boundary validation`
-                        );
-
-                        if (
-                            validation.rejectionReasons &&
-                            validation.rejectionReasons.length > 0
-                        ) {
-                            console.log(
-                                `      ${
-                                    validation.rejectionReasons.join("; ")
-                                }`
-                            );
-                        }
-                    }
-
-                    continue;
-                }
-
-            } catch (error) {
-
-                if (options.verbose) {
-                    console.warn(
-                        `\n    Validation failed:`
-                    );
-
-                    console.warn(
-                        `      ${candidate.url}`
-                    );
-
-                    console.warn(error);
-                }
-
-                continue;
-            }
-
-            // -----------------------------------------------------------------
-            // Query feature count
-            // -----------------------------------------------------------------
-
-            /*
-            * Feature count is not required by validateCandidate(), so defer
-            * this query until after political-boundary validation succeeds.
-            */
-            if (
-                inspection.isLayer &&
-                inspection.supportsQuery
-            ) {
-                inspection.featureCount =
-                    await measureStage(
-                        timing,
-                        "Query candidate feature count",
-                        () =>
-                            getFeatureCount(
-                                candidate.url
-                            )
-                    );
-            }
-                        
-            // -----------------------------------------------------------------
-            // Municipality geographic validation
-            // -----------------------------------------------------------------
-
-            /*
-             * Geographic validation asks:
-             *
-             * "Do the geometries in this candidate layer actually
-             * overlap and substantially cover the Census municipality?"
-             *
-             * queryArcGISLayerGeometry() returns:
-             *
-             *     {
-             *         geometries: Polygon | MultiPolygon[]
-             *     }
-             *
-             * It does NOT return a `features` property.
-             */
-
-            let municipalityGeographyValidation:
-                Awaited<
-                    ReturnType<
-                        typeof validateMunicipalityGeography
-                    >
-                > |
-                undefined;
-
-
-            try {
-
-                const geometryResult =
-                    await measureStage(
-                        timing,
-                        "Query candidate geometry",
-                        () =>
-                            queryArcGISLayerGeometry(
-                                candidate.url
-                            )
-                    );
-
-
-                if (!geometryResult.success) {
-
-                    if (options.verbose) {
-
-                        console.warn(
-                            `      Geographic validation query failed:`
-                        );
-
-                        console.warn(
-                            `      ${
-                                geometryResult.error ??
-                                "Unknown ArcGIS geometry query error."
-                            }`
-                        );
-                    }
-
-                } else if (
-                    geometryResult.geometries.length === 0
-                ) {
-
-                    if (options.verbose) {
-
-                        console.warn(
-                            `      Geographic validation skipped: ` +
-                            `no valid polygon geometries returned.`
-                        );
-                    }
-
-                } else {
-
-                    municipalityGeographyValidation =
-                        await validateMunicipalityGeography(
-                            geometryResult.geometries,
-                            place
-                        );
-                    /*
-                    * Geographic validation is the authoritative municipality-membership
-                    * test when metadata cannot establish the municipality.
-                    *
-                    * This is particularly important for ArcGIS Online layers hosted on
-                    * shared Esri infrastructure, where the service URL may contain no
-                    * municipality name.
-                    */
-
-                    if (
-                        municipalityGeographyValidation.status ===
-                            "no-match"
-                    ) {
-                        if (options.verbose) {
-                            console.log(
-                                `      REJECTED: geographic municipality validation`
-                            );
-
-                            if (
-                                municipalityGeographyValidation.reasons.length > 0
-                            ) {
-                                console.log(
-                                    `      ${
-                                        municipalityGeographyValidation.reasons.join(
-                                            "; "
-                                        )
-                                    }`
-                                );
-                            }
-                        }
-
-                        const rejectedCandidate: InspectedCandidate = {
-                            candidate,
-                            inspection,
-                            classification,
-                            validation,
-                            municipalityValidation,
-                            municipalityGeographyValidation
-                        };
-
-                        inspectedCandidates.push(
-                            rejectedCandidate
-                        );
-
-                        rejectedCandidates.push(
-                            rejectedCandidate
-                        );
-
-                        continue;
-                    }
-
-                    if (options.verbose) {
-
-                        printMunicipalityGeographyValidation(
-                            municipalityGeographyValidation
-                        );
-                    }
-                }
-
-            } catch (error) {
-
-                /*
-                 * Geographic validation is strong supporting evidence,
-                 * but an ArcGIS query failure should not discard an
-                 * otherwise valid candidate.
-                 */
-
-                if (options.verbose) {
-
-                    console.warn(
-                        `      Geographic validation failed:`
-                    );
-
-                    console.warn(
-                        `      ${candidate.url}`
-                    );
-
-                    console.warn(
-                        error
-                    );
-                }
-            }
-
-            // -----------------------------------------------------------------
-            // Store inspected candidate
-            // -----------------------------------------------------------------
-
-            inspectedCandidates.push({
-
+            pendingCandidates.push({
                 candidate,
-
                 inspection,
-
                 classification,
-
-                validation,
-
                 municipalityValidation,
-
-                municipalityGeographyValidation
+                expectedDistrictCount
             });
 
         } catch (error) {
 
             if (options.verbose) {
-
                 console.warn(
                     `\n    Failed to inspect/classify/validate candidate:`
                 );
@@ -1594,9 +1166,372 @@ async function discoverMunicipality(
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Group pending candidates by logical ArcGIS layer identity.
+    // -------------------------------------------------------------------------
 
-    // =========================================================================
-    // 6. Build final DiscoveryResult
+    const queryGroups =
+        new Map<
+            string,
+            PendingCandidate[]
+        >();
+
+    for (
+        const pending of pendingCandidates
+    ) {
+        const key =
+            getLayerQueryIdentityKey(
+                pending.candidate,
+                pending.inspection
+            );
+
+        const group =
+            queryGroups.get(key);
+
+        if (group) {
+            group.push(pending);
+        } else {
+            queryGroups.set(
+                key,
+                [pending]
+            );
+        }
+    }
+
+    if (options.verbose) {
+        console.log(
+            `    Logical layer identities: ${queryGroups.size}`
+        );
+
+        console.log(
+            `    Inspected representations: ${pendingCandidates.length}`
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase B: run expensive queries once per logical layer.
+    // -------------------------------------------------------------------------
+
+    for (
+        const [identityKey, group]
+        of queryGroups
+    ) {
+        const representative =
+            chooseQueryRepresentative(
+                group
+            );
+
+        if (options.verbose) {
+            console.log(
+                `    Query identity: ${identityKey}`
+            );
+
+            console.log(
+                `      Representations: ${group.length}`
+            );
+
+            console.log(
+                `      Representative: ` +
+                `${representative.inspection.url}`
+            );
+        }
+
+        const inspection =
+            representative.inspection;
+        const classification =
+            representative.classification;
+        const expectedDistrictCount =
+            representative.expectedDistrictCount;
+
+        // -----------------------------------------------------------------
+        // Query distinct district values ONCE.
+        // -----------------------------------------------------------------
+
+        if (
+            inspection.isLayer &&
+            inspection.supportsQuery &&
+            classification.isPoliticalBoundary &&
+            inspection.districtField
+        ) {
+            inspection.distinctDistrictValues =
+                await measureStage(
+                    timing,
+                    "Query candidate distinct district values",
+                    () =>
+                        extractDistinctDistrictValues(
+                            inspection.url,
+                            inspection.districtField!,
+                            fetch,
+                            expectedDistrictCount?.count
+                        )
+                );
+        }
+
+        // -----------------------------------------------------------------
+        // Validate political-boundary identity ONCE.
+        // -----------------------------------------------------------------
+
+        let validation:
+            ArcGISCandidateValidation |
+            undefined;
+
+        try {
+            validation =
+                validateCandidate(
+                    representative.candidate,
+                    inspection,
+                    classification,
+                    expectedDistrictCount
+                );
+
+            if (
+                !validation.isLikelyPoliticalBoundary
+            ) {
+                for (const pending of group) {
+                    const rejectedCandidate:
+                        InspectedCandidate = {
+                            candidate:
+                                pending.candidate,
+                            inspection:
+                                pending.inspection,
+                            classification:
+                                pending.classification,
+                            validation,
+                            municipalityValidation:
+                                pending.municipalityValidation,
+                            municipalityGeographyValidation:
+                                undefined,
+                            rejectionStage:
+                                "political-validation",
+                            rejectionReason:
+                                validation.rejectionReasons?.join("; ") ??
+                                "political-boundary validation failed"
+                        };
+
+                    inspectedCandidates.push(
+                        rejectedCandidate
+                    );
+
+                    rejectedCandidates.push(
+                        rejectedCandidate
+                    );
+                }
+
+                if (options.verbose) {
+                    console.log(
+                        `      REJECTED: political-boundary validation`
+                    );
+
+                    if (
+                        validation.rejectionReasons &&
+                        validation.rejectionReasons.length > 0
+                    ) {
+                        console.log(
+                            `      ${validation.rejectionReasons.join("; ")}`
+                        );
+                    }
+                }
+
+                continue;
+            }
+        } catch (error) {
+            if (options.verbose) {
+                console.warn(
+                    `\n    Validation failed:`
+                );
+
+                console.warn(
+                    `      ${representative.candidate.url}`
+                );
+
+                console.warn(error);
+            }
+
+            continue;
+        }
+
+        // -----------------------------------------------------------------
+        // Query feature count ONCE.
+        // -----------------------------------------------------------------
+
+        if (
+            inspection.isLayer &&
+            inspection.supportsQuery
+        ) {
+            inspection.featureCount =
+                await measureStage(
+                    timing,
+                    "Query candidate feature count",
+                    () =>
+                        getFeatureCount(
+                            inspection.url
+                        )
+                );
+        }
+
+        // -----------------------------------------------------------------
+        // Query geometry ONCE.
+        // -----------------------------------------------------------------
+
+        let municipalityGeographyValidation:
+            Awaited<
+                ReturnType<
+                    typeof validateMunicipalityGeography
+                >
+            > |
+            undefined;
+
+        try {
+            const geometryResult =
+                await measureStage(
+                    timing,
+                    "Query candidate geometry",
+                    () =>
+                        queryArcGISLayerGeometry(
+                            inspection.url
+                        )
+                );
+
+            if (!geometryResult.success) {
+                if (options.verbose) {
+                    console.warn(
+                        `      Geographic validation query failed:`
+                    );
+
+                    console.warn(
+                        `      ${
+                            geometryResult.error ??
+                            "Unknown ArcGIS geometry query error."
+                        }`
+                    );
+                }
+            } else if (
+                geometryResult.geometries.length === 0
+            ) {
+                if (options.verbose) {
+                    console.warn(
+                        `      Geographic validation skipped: ` +
+                        `no valid polygon geometries returned.`
+                    );
+                }
+            } else {
+                municipalityGeographyValidation =
+                    await validateMunicipalityGeography(
+                        geometryResult.geometries,
+                        place
+                    );
+
+                if (
+                    municipalityGeographyValidation.status ===
+                    "no-match"
+                ) {
+                    if (options.verbose) {
+                        console.log(
+                            `      REJECTED: geographic municipality validation`
+                        );
+
+                        console.log(
+                            `      status: ${municipalityGeographyValidation.status}`
+                        );
+                    }
+
+                    for (const pending of group) {
+                        const rejectedCandidate:
+                            InspectedCandidate = {
+                                candidate:
+                                    pending.candidate,
+                                inspection:
+                                    pending.inspection,
+                                classification:
+                                    pending.classification,
+                                validation,
+                                municipalityValidation:
+                                    pending.municipalityValidation,
+                                municipalityGeographyValidation,
+                                rejectionStage:
+                                    "geography",
+                                rejectionReason:
+                                    "candidate does not match municipality geography"
+                            };
+
+                        inspectedCandidates.push(
+                            rejectedCandidate
+                        );
+
+                        rejectedCandidates.push(
+                            rejectedCandidate
+                        );
+                    }
+
+                    continue;
+                }
+
+                if (options.verbose) {
+                    printMunicipalityGeographyValidation(
+                        municipalityGeographyValidation
+                    );
+                }
+            }
+        } catch (error) {
+            /*
+             * Geographic validation is strong supporting evidence,
+             * but an ArcGIS query failure should not discard an
+             * otherwise valid candidate.
+             */
+            if (options.verbose) {
+                console.warn(
+                    `      Geographic validation failed:`
+                );
+
+                console.warn(
+                    `      ${inspection.url}`
+                );
+
+                console.warn(error);
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Reuse the expensive query results for every equivalent endpoint.
+        // -----------------------------------------------------------------
+
+        for (const pending of group) {
+            const candidateInspection =
+                pending === representative
+                    ? inspection
+                    : {
+                        ...pending.inspection,
+                        distinctDistrictValues:
+                            inspection.distinctDistrictValues,
+                        featureCount:
+                            inspection.featureCount
+                    };
+
+            inspectedCandidates.push({
+                candidate:
+                    pending.candidate,
+                inspection:
+                    candidateInspection,
+                classification:
+                    pending.classification,
+                validation:
+                    pending === representative
+                        ? validation
+                        : cloneValidationForInspection(
+                            validation,
+                            candidateInspection
+                        ),
+                municipalityValidation:
+                    pending.municipalityValidation,
+                municipalityGeographyValidation
+            });
+        }
+    }
+
+
+    
+    
+// 6. Build final DiscoveryResult
     // =========================================================================
 
     const result =
@@ -2519,6 +2454,181 @@ function deduplicateCandidates(
     return [
         ...unique.values()
     ];
+}
+
+
+
+// =============================================================================
+// Expensive-query identity deduplication
+// =============================================================================
+
+/**
+ * Return a stable identity for an ArcGIS logical layer.
+ *
+ * The preferred identity is:
+ *
+ *     ArcGIS item ID + layer ID
+ *
+ * because MapServer and FeatureServer URLs can represent the same
+ * underlying ArcGIS item/layer.
+ *
+ * serviceItemId is used for municipal MapServer endpoints when the
+ * service URL itself is authoritative but the candidate itemId is not.
+ */
+function getLayerQueryIdentityKey(
+    candidate: DiscoveryCandidate,
+    inspection: ArcGISInspection
+): string {
+    const itemId =
+        candidate.itemId ??
+        inspection.itemId ??
+        inspection.serviceItemId;
+
+    if (
+        itemId &&
+        inspection.layerId !== undefined
+    ) {
+        return (
+            `item:${itemId.toLowerCase()}:` +
+            `layer:${inspection.layerId}`
+        );
+    }
+
+    const serviceUrl =
+        inspection.serviceUrl ??
+        candidate.url;
+
+    const normalizedServiceUrl =
+        normalizeUrl(
+            serviceUrl
+        ).replace(
+            /\/(?:FeatureServer|MapServer)$/i,
+            ""
+        );
+
+    if (
+        inspection.layerId !== undefined
+    ) {
+        return (
+            `service:${normalizedServiceUrl.toLowerCase()}:` +
+            `layer:${inspection.layerId}`
+        );
+    }
+
+    return (
+        `url:${normalizeUrl(
+            candidate.url
+        ).toLowerCase()}`
+    );
+}
+
+/**
+ * Choose which equivalent endpoint should perform expensive queries.
+ *
+ * Prefer:
+ *
+ *     1. official municipal / .gov endpoints
+ *     2. FeatureServer endpoints
+ *     3. higher discovery relevance
+ *     4. deterministic URL order
+ *
+ * The other endpoint representations remain in the final result and
+ * inherit the expensive query results from this representative.
+ */
+function getQueryRepresentativeScore(
+    pending: {
+        candidate: DiscoveryCandidate;
+        inspection: ArcGISInspection;
+        classification: ReturnType<typeof classifyCandidate>;
+    }
+): number {
+    const url =
+        pending.inspection.url.toLowerCase();
+
+    let score =
+        pending.candidate.score;
+
+    if (
+        pending.classification.officialMunicipalSource
+    ) {
+        score += 1000;
+    }
+
+    if (
+        /(?:^|\.)gov\b/i.test(url)
+    ) {
+        score += 500;
+    }
+
+    if (
+        pending.inspection.serviceType ===
+        "FeatureServer"
+    ) {
+        score += 50;
+    }
+
+    return score;
+}
+
+function chooseQueryRepresentative<T extends {
+    candidate: DiscoveryCandidate;
+    inspection: ArcGISInspection;
+    classification: ReturnType<typeof classifyCandidate>;
+}>(
+    group: T[]
+): T {
+    const sorted =
+        [...group].sort(
+            (a, b) => {
+                const scoreDifference =
+                    getQueryRepresentativeScore(b) -
+                    getQueryRepresentativeScore(a);
+
+                if (scoreDifference !== 0) {
+                    return scoreDifference;
+                }
+
+                return a.inspection.url.localeCompare(
+                    b.inspection.url
+                );
+            }
+        );
+
+    const representative =
+        sorted[0];
+
+    if (!representative) {
+        throw new Error(
+            "Cannot choose a query representative from an empty layer group."
+        );
+    }
+
+    return representative;
+}
+
+/**
+ * Validation objects are structurally immutable for our purposes, so reuse
+ * the validation result while replacing the candidate-specific geometry and
+ * feature-count fields that validateCandidate() derives from inspection.
+ */
+function cloneValidationForInspection(
+    validation: ArcGISCandidateValidation | undefined,
+    inspection: ArcGISInspection
+): ArcGISCandidateValidation | undefined {
+    if (!validation) {
+        return undefined;
+    }
+
+    return {
+        ...validation,
+        featureCount:
+            inspection.featureCount,
+        geometryType:
+            inspection.geometryType,
+        distinctDistrictValues:
+            inspection.distinctDistrictValues ??
+            validation.distinctDistrictValues
+    };
 }
 
 
