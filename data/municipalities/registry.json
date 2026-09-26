@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-26T18:26:19.883Z",
+  "generatedAt": "2026-09-26T18:31:45.211Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -130,7 +130,7 @@
       },
       "generatedFile": "geometry/1714000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-26T18:26:19.883Z",
+        "generatedAt": "2026-09-26T18:31:45.211Z",
         "generatorVersion": "0.1.0",
         "alternatives": [],
         "requiresReview": true

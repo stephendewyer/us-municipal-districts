@@ -1043,10 +1043,21 @@ function printDiscoverySummary(
     results: DiscoveryResult[]
 ): void {
 
-    const successful =
+    const successfulMunicipalities =
         results.filter(
             result =>
                 result.canonical !== undefined
+        );
+
+    const totalCanonicalSources =
+        results.reduce(
+            (
+                total,
+                result
+            ) =>
+                total +
+                result.canonicalSources.length,
+            0
         );
 
     const failed =
@@ -1146,11 +1157,19 @@ function printDiscoverySummary(
     );
 
     console.log(
-        `  Canonical sources: ${successful.length}`
+        `  Canonical district sources: ${totalCanonicalSources}`
     );
 
     console.log(
-        `  No canonical source: ${noCanonical.length}`
+        `  Municipalities with canonical source: ${
+            successfulMunicipalities.length
+        }`
+    );
+
+    console.log(
+        `  Municipalities without canonical source: ${
+            noCanonical.length
+        }`
     );
 
     console.log(
