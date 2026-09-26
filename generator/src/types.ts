@@ -895,11 +895,6 @@ export interface DiscoveryResult {
      */
     canonicalSources: CanonicalSource[];
 
-    /**
-     * Optional municipality-wide canonical source.
-     *
-     * This is the strongest source across all equivalence groups.
-     */
     canonical?: CanonicalSource;
 
     registryEntry?: MunicipalDistrictRegistryEntry;

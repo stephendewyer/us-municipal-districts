@@ -15,7 +15,6 @@ import {
     detectEquivalentLayers
 } from "../../generator/src/equivalence.js";
 
-
 // =============================================================================
 // Test fixtures
 // =============================================================================
@@ -27,7 +26,6 @@ const TUCSON_PLACE: CensusPlace = {
     placeType: "incorporated-place"
 };
 
-
 function createClassification(
     options: {
         districtType?: CandidateClassification["districtType"];
@@ -35,11 +33,10 @@ function createClassification(
         isBoundaryLayer?: boolean;
         rejected?: boolean;
         requiresReview?: boolean;
+        sourceRole?: CandidateClassification["sourceRole"];
     } = {}
 ): CandidateClassification {
-
     return {
-
         isBoundaryLayer:
             options.isBoundaryLayer ??
             true,
@@ -67,9 +64,12 @@ function createClassification(
             options.districtType ??
             "ward",
 
-        temporalStatus: "undated",
+        temporalStatus:
+            "undated",
 
-        sourceRole: "unknown",
+        sourceRole:
+            options.sourceRole ??
+            "unknown",
 
         rejected:
             options.rejected ??
@@ -82,7 +82,6 @@ function createClassification(
             false,
 
         matches: {
-
             thematic: [],
 
             census: [],
@@ -104,18 +103,17 @@ function createClassification(
     };
 }
 
-
 function createValidation(
     options: {
         confidence?: number;
         districtField?: string;
         nameField?: string;
-        geometryType?: "esriGeometryPolygon" | "esriGeometryPoint";
+        geometryType?:
+            | "esriGeometryPolygon"
+            | "esriGeometryPoint";
     } = {}
 ): ArcGISCandidateValidation {
-
     return {
-
         isLikelyPoliticalBoundary:
             true,
 
@@ -151,7 +149,6 @@ function createValidation(
     };
 }
 
-
 function createCandidate(
     options: {
         place?: CensusPlace;
@@ -159,19 +156,25 @@ function createCandidate(
         title: string;
         serviceName?: string;
         layerName?: string;
-        serviceType?: "FeatureServer" | "MapServer";
+        serviceType?:
+            | "FeatureServer"
+            | "MapServer";
         districtField?: string;
         nameField?: string;
         fields?: string[];
-        districtType?: CandidateClassification["districtType"];
+        districtType?:
+            CandidateClassification["districtType"];
         isPoliticalBoundary?: boolean;
         isBoundaryLayer?: boolean;
         rejected?: boolean;
         confidence?: number;
-        geometryType?: "esriGeometryPolygon" | "esriGeometryPoint";
+        geometryType?:
+            | "esriGeometryPolygon"
+            | "esriGeometryPoint";
+        sourceRole?:
+            CandidateClassification["sourceRole"];
     }
 ): InspectedCandidate {
-
     const place =
         options.place ??
         TUCSON_PLACE;
@@ -204,12 +207,14 @@ function createCandidate(
 
             rejected:
                 options.rejected ??
-                false
+                false,
+
+            sourceRole:
+                options.sourceRole
         });
 
     const candidate:
         DiscoveryCandidate = {
-
         placeFips:
             place.placeFips,
 
@@ -241,7 +246,6 @@ function createCandidate(
 
     const inspection:
         ArcGISInspection = {
-
         url:
             options.url,
 
@@ -310,7 +314,6 @@ function createCandidate(
     };
 
     return {
-
         candidate,
 
         inspection,
@@ -332,7 +335,6 @@ function createCandidate(
     };
 }
 
-
 // =============================================================================
 // Equivalence tests
 // =============================================================================
@@ -340,10 +342,8 @@ function createCandidate(
 test(
     "equivalent: same ward boundary with different temporal versions",
     () => {
-
         const historical =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards_2019/FeatureServer/1",
 
@@ -359,7 +359,6 @@ test(
 
         const current =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards_2026/FeatureServer/1",
 
@@ -390,14 +389,11 @@ test(
     }
 );
 
-
 test(
     "equivalent: same dataset structure hosted at different ArcGIS URLs",
     () => {
-
         const first =
             createCandidate({
-
                 url:
                     "https://server-a.example.gov/rest/services/Wards/FeatureServer/1",
 
@@ -413,7 +409,6 @@ test(
 
         const second =
             createCandidate({
-
                 url:
                     "https://server-b.example.gov/rest/services/Wards/FeatureServer/7",
 
@@ -447,10 +442,8 @@ test(
 test(
     "equivalent: camelCase and separated title forms normalize to the same dataset family",
     () => {
-
         const camelCase =
             createCandidate({
-
                 url:
                     "https://server-a.example.gov/rest/services/ChicagoWards/FeatureServer/0",
 
@@ -466,7 +459,6 @@ test(
 
         const separated =
             createCandidate({
-
                 url:
                     "https://server-b.example.gov/rest/services/Chicago_Wards/FeatureServer/0",
 
@@ -497,14 +489,11 @@ test(
     }
 );
 
-
 test(
     "not equivalent: candidates from different municipalities",
     () => {
-
         const otherPlace:
             CensusPlace = {
-
             placeFips:
                 "0455000",
 
@@ -520,7 +509,6 @@ test(
 
         const tucson =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards/FeatureServer/1",
 
@@ -530,7 +518,6 @@ test(
 
         const phoenix =
             createCandidate({
-
                 place:
                     otherPlace,
 
@@ -568,14 +555,11 @@ test(
     }
 );
 
-
 test(
     "not equivalent: different political district types",
     () => {
-
         const ward =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards/FeatureServer/1",
 
@@ -588,7 +572,6 @@ test(
 
         const council =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/CouncilDistricts/FeatureServer/1",
 
@@ -626,14 +609,11 @@ test(
     }
 );
 
-
 test(
     "not equivalent: rejected candidate is excluded from equivalence grouping",
     () => {
-
         const valid =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards/FeatureServer/1",
 
@@ -643,7 +623,6 @@ test(
 
         const rejected =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards/FeatureServer/2",
 
@@ -677,14 +656,11 @@ test(
     }
 );
 
-
 test(
     "not equivalent: non-political boundary candidate is excluded",
     () => {
-
         const political =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards/FeatureServer/1",
 
@@ -694,7 +670,6 @@ test(
 
         const thematic =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/WardAnalysis/FeatureServer/1",
 
@@ -723,14 +698,81 @@ test(
     }
 );
 
+test(
+    "not equivalent: derived political dataset is excluded from equivalence grouping",
+    () => {
+        const boundary =
+            createCandidate({
+                url:
+                    "https://example.gov/rest/services/Wards/FeatureServer/1",
+
+                title:
+                    "Tucson Ward Boundaries",
+
+                serviceName:
+                    "CityWards",
+
+                layerName:
+                    "Tucson Ward Boundaries"
+            });
+
+        const derived =
+            createCandidate({
+                url:
+                    "https://example.gov/rest/services/WardAnalysis/FeatureServer/1",
+
+                title:
+                    "Ward Analysis",
+
+                serviceName:
+                    "WardAnalysis",
+
+                layerName:
+                    "Ward Analysis",
+
+                sourceRole:
+                    "derived"
+            });
+
+        const result =
+            compareCandidates(
+                boundary,
+                derived
+            );
+
+        assert.equal(
+            result.equivalent,
+            false
+        );
+
+        const groups =
+            detectEquivalentLayers([
+                boundary,
+                derived
+            ]);
+
+        assert.equal(
+            groups.length,
+            1
+        );
+
+        assert.equal(
+            groups[0]?.candidates.length,
+            1
+        );
+
+        assert.equal(
+            groups[0]?.candidates[0]?.candidate.url,
+            boundary.candidate.url
+        );
+    }
+);
 
 test(
     "not equivalent: different geometry types",
     () => {
-
         const polygon =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards/FeatureServer/1",
 
@@ -743,7 +785,6 @@ test(
 
         const point =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/WardCenters/FeatureServer/1",
 
@@ -772,14 +813,11 @@ test(
     }
 );
 
-
 test(
     "grouping: temporal versions are placed in one group",
     () => {
-
         const version2019 =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards_2019/FeatureServer/1",
 
@@ -795,7 +833,6 @@ test(
 
         const version2023 =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards_2023/FeatureServer/2",
 
@@ -811,7 +848,6 @@ test(
 
         const version2026 =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards_2026/FeatureServer/3",
 
@@ -844,14 +880,11 @@ test(
     }
 );
 
-
 test(
     "grouping: group IDs are deterministic regardless of candidate order",
     () => {
-
         const first =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards_2019/FeatureServer/1",
 
@@ -867,7 +900,6 @@ test(
 
         const second =
             createCandidate({
-
                 url:
                     "https://example.gov/rest/services/Wards_2026/FeatureServer/2",
 

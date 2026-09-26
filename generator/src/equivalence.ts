@@ -902,6 +902,7 @@ export function groupEquivalentCandidates(
     candidates: InspectedCandidate[],
     threshold = 0.60
 ): EquivalentLayerGroup[] {
+
     const eligible =
         candidates
             .filter(
@@ -909,6 +910,7 @@ export function groupEquivalentCandidates(
                     !candidate.classification.rejected &&
                     candidate.classification.isPoliticalBoundary &&
                     candidate.classification.isBoundaryLayer &&
+                    candidate.classification.sourceRole !== "derived" &&
                     isPolygon(candidate)
             );
 

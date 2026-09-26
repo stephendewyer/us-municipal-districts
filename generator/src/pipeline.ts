@@ -6,22 +6,18 @@ import type {
     InspectedCandidate
 } from "./types.js";
 
-
 import {
     detectEquivalentLayers
 } from "./equivalence.js";
-
 
 import {
     rankCandidates
 } from "./rank.js";
 
-
 import {
     selectCanonicalSources,
     selectMunicipalityCanonicalSource
 } from "./canonical.js";
-
 
 // =============================================================================
 // Options
@@ -170,6 +166,20 @@ export function buildDiscoveryResult(
     // =========================================================================
     // Detect equivalent layers
     // =========================================================================
+    //
+    // IMPORTANT:
+    //
+    // equivalence.ts must ensure that candidates with different
+    // districtType values cannot be placed into the same equivalence group.
+    //
+    // For example:
+    //
+    //     ward
+    //     council-district
+    //
+    // must always remain separate groups even if their geometries,
+    // fields, or metadata happen to look similar.
+    //
 
     const equivalentGroups =
         detectEquivalentLayers(
@@ -182,12 +192,39 @@ export function buildDiscoveryResult(
     // =========================================================================
     // Select canonical source for every equivalence group
     // =========================================================================
+    //
+    // This produces one canonical source per political district system.
+    //
+    // Example:
+    //
+    //     Group 1 → ward
+    //         → current ward boundary
+    //
+    //     Group 2 → council-district
+    //         → current council district boundary
+    //
+    // These are both legitimate canonical sources for the same municipality.
+    //
 
     let canonicalSources:
         CanonicalSource[] =
         selectCanonicalSources(
             equivalentGroups
         );
+
+    const canonical =
+        selectMunicipalityCanonicalSource(
+            equivalentGroups
+        );
+
+    const reviewedCanonical =
+        canonical &&
+        options.review
+            ? {
+                ...canonical,
+                requiresReview: true
+            }
+            : canonical;
 
 
     // =========================================================================
@@ -208,32 +245,6 @@ export function buildDiscoveryResult(
                 })
             );
     }
-
-
-    // =========================================================================
-    // Select municipality-wide canonical source
-    // =========================================================================
-
-    const canonical =
-        selectMunicipalityCanonicalSource(
-            equivalentGroups
-        );
-
-
-    // =========================================================================
-    // Apply review to municipality-wide canonical
-    // =========================================================================
-
-    const reviewedCanonical =
-        canonical &&
-        options.review
-            ? {
-                ...canonical,
-
-                requiresReview:
-                    true
-            }
-            : canonical;
 
 
     // =========================================================================
@@ -269,7 +280,9 @@ export function buildDiscoveryResult(
 
         canonicalSources,
 
-        canonical:
+        canonical: 
             reviewedCanonical
-    };
+
+    }
+
 }
