@@ -792,6 +792,8 @@ async function discoverMunicipality(
     // =========================================================================
     // 2. Resolve ArcGIS item metadata
     // =========================================================================
+    const resolvedItemMetadata =
+        new Map<string, ArcGISItemResolution>();
 
     const resolvedCandidates:
         DiscoveryCandidate[] = [];
@@ -834,6 +836,11 @@ async function discoverMunicipality(
                             candidate.itemId!
                         )
                 );
+
+            resolvedItemMetadata.set(
+                item.id.toLowerCase(),
+                item
+            );
 
 
             if (options.verbose) {
@@ -973,6 +980,32 @@ async function discoverMunicipality(
                             candidate.url
                         )
                 );
+
+            const resolvedItem =
+                candidate.itemId
+                    ? resolvedItemMetadata.get(
+                        candidate.itemId.toLowerCase()
+                    )
+                    : undefined;
+
+            if (resolvedItem) {
+
+                /*
+                * inspectArcGIS() obtains organization information from
+                * the service/layer metadata itself.
+                *
+                * Prefer that value when available, but fall back to the
+                * ArcGIS item metadata when the service does not expose it.
+                */
+                inspection.organizationId ??=
+                    resolvedItem.organizationId;
+
+                inspection.contentStatus =
+                    resolvedItem.contentStatus;
+
+                inspection.accessInformation =
+                    resolvedItem.accessInformation;
+            }
 
 
             if (options.verbose) {

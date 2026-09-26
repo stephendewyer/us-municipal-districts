@@ -262,6 +262,10 @@ export interface ArcGISItemResolution {
      * Useful during development/debugging.
      */
     raw?: unknown;
+
+    organizationId?: string;
+    contentStatus?: string;
+    accessInformation?: string;
 }
 
 
@@ -491,6 +495,10 @@ export interface ArcGISInspection {
     created?: string;
 
     modified?: string;
+
+    contentStatus?: string;
+    
+    accessInformation?: string;
 }
 
 export interface ExpectedDistrictCount {

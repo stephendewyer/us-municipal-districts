@@ -37,7 +37,6 @@ export async function resolveArcGISItem(
     const normalizedItemId =
         itemId.trim();
 
-
     if (
         normalizedItemId.length === 0
     ) {
@@ -47,12 +46,10 @@ export async function resolveArcGISItem(
         );
     }
 
-
     const url =
         `${ARCGIS_ITEM_URL}/` +
         `${encodeURIComponent(normalizedItemId)}` +
         `?f=json`;
-
 
     let response: Response;
 
@@ -102,7 +99,6 @@ export async function resolveArcGISItem(
             `(${response.status} ${response.statusText}).`
         );
     }
-
 
     /*
      * The response must at least be an object.
@@ -291,6 +287,21 @@ export async function resolveArcGISItem(
                 ? data.culture
                 : undefined,
 
+        organizationId:
+            typeof data.organizationId === "string"
+                ? data.organizationId
+                : undefined,
+
+        contentStatus:
+            typeof data.contentStatus === "string"
+                ? data.contentStatus
+                : undefined,
+
+        accessInformation:
+            typeof data.accessInformation === "string"
+                ? data.accessInformation
+                : undefined,
+
         raw:
             data
     };
@@ -460,6 +471,12 @@ interface ArcGISItemResponse {
     ownerFolder?: unknown;
 
     culture?: unknown;
+
+    organizationId?: unknown;
+
+    contentStatus?: unknown;
+
+    accessInformation?: unknown;
 }
 
 
@@ -519,6 +536,13 @@ function isArcGISItemResponse(
         return false;
     }
 
+    if (
+        value.organizationId !== undefined &&
+        typeof value.organizationId !== "string"
+    ) {
+
+        return false;
+    }
 
     if (
         value.description !== undefined &&
@@ -595,6 +619,22 @@ function isArcGISItemResponse(
     if (
         value.culture !== undefined &&
         typeof value.culture !== "string"
+    ) {
+
+        return false;
+    }
+
+    if (
+    value.contentStatus !== undefined &&
+        typeof value.contentStatus !== "string"
+    ) {
+
+        return false;
+    }
+
+    if (
+        value.accessInformation !== undefined &&
+        typeof value.accessInformation !== "string"
     ) {
 
         return false;
