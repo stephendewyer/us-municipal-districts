@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-26T20:32:58.496Z",
+  "generatedAt": "2026-09-26T21:20:35.291Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-25T22:51:00.291Z",
+        "generatedAt": "2026-09-26T21:20:35.291Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -58,10 +58,10 @@
       "boundaryType": "ward",
       "source": {
         "sourceType": "arcgis",
-        "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Section_8_Housing_per_Ward/FeatureServer/0",
-        "itemId": "61afee64dcaf4b199cc7322c15c1e24b",
-        "serviceType": "FeatureServer",
-        "title": "Section 8 Housing per Ward",
+        "url": "https://gisdata.pima.gov/arcgis1/rest/services/GISOpenData/Boundaries2/MapServer/3",
+        "itemId": "025e8235c2ab4b09ba4e202d28cc2fc1",
+        "serviceType": "MapServer",
+        "title": "Wards - City of Tucson",
         "official": true,
         "verified": true,
         "fieldMapping": {
@@ -71,25 +71,9 @@
       },
       "generatedFile": "geometry/0477000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-26T20:32:58.496Z",
+        "generatedAt": "2026-09-26T21:04:36.792Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
-          {
-            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Wards_SubsidizedHousing/FeatureServer/0",
-            "itemId": "8e3fbdbf55da4ac7a836324f161ca649",
-            "title": "Wards_SubsidizedHousing",
-            "serviceType": "FeatureServer",
-            "official": false,
-            "score": 213
-          },
-          {
-            "url": "https://gisdata.pima.gov/arcgis1/rest/services/GISOpenData/Boundaries2/MapServer/3",
-            "itemId": "025e8235c2ab4b09ba4e202d28cc2fc1",
-            "title": "Wards - City of Tucson",
-            "serviceType": "MapServer",
-            "official": false,
-            "score": 213
-          },
           {
             "url": "https://utility.arcgis.com/usrsvcs/servers/0657741d9e4a4289912330077707ad39/rest/services/PublicMaps/Boundaries/MapServer/15",
             "itemId": "0657741d9e4a4289912330077707ad39",

@@ -4,13 +4,11 @@ import type {
     MunicipalityValidation
 } from "./types.js";
 
-
 // =============================================================================
 // Configuration
 // =============================================================================
 
 export const MUNICIPALITY_VALIDATION_THRESHOLD = 10;
-
 
 // =============================================================================
 // Public API
@@ -35,26 +33,96 @@ export function validateMunicipality(
 ): MunicipalityValidation {
 
     let score = 0;
-
     const reasons: string[] = [];
-
-    const inspection =
-        candidate.inspection;
-
-    const city =
-        normalize(place.city);
+    const inspection = candidate.inspection;
+    const city = normalize(place.city);
 
     // =========================================================================
-    // Metadata text
+    // Dataset identity
     // =========================================================================
 
-    const metadataText =
+    /*
+     * identityText describes what the dataset actually IS.
+     *
+     * This intentionally excludes descriptions and publisher/provenance
+     * metadata. It is used for the strongest dataset-identity checks.
+     */
+    const identityText =
         normalize([
+            candidate.candidate.title,
+            inspection.title,
+            inspection.serviceName,
+            inspection.layerName
+        ]
+            .filter(Boolean)
+            .join(" "));
+
+    if (identityText) {
+        reasons.push(
+            `dataset identity: "${identityText}"`
+        );
+    }
+
+    // =========================================================================
+    // Dataset metadata
+    // =========================================================================
+
+    /*
+     * datasetMetadataText describes the dataset itself, including its
+     * description, but excludes accessInformation.
+     *
+     * This distinction is important.
+     *
+     * Example:
+     *
+     *     title:
+     *         "City of Tucson Ward Boundaries"
+     *
+     *     accessInformation:
+     *         "Pima County IT GIS"
+     *
+     * The publisher being Pima County does NOT mean the dataset is a
+     * county-level boundary.
+     *
+     * Conversely, if the dataset description itself says:
+     *
+     *     "Pima County Council District Boundaries"
+     *
+     * that IS meaningful negative evidence.
+     */
+    const datasetMetadataText =
+        normalize([
+            candidate.candidate.title,
             inspection.title,
             inspection.serviceName,
             inspection.layerName,
             inspection.description,
             inspection.serviceDescription
+        ]
+            .filter(Boolean)
+            .join(" "));
+
+    // =========================================================================
+    // Broad metadata
+    // =========================================================================
+
+    /*
+     * metadataText contains broader provenance information.
+     *
+     * It is useful for positive municipality evidence because an official
+     * publisher or organization can legitimately identify the municipality.
+     *
+     * It should NOT be used for county/state/federal negative evidence.
+     */
+    const metadataText =
+        normalize([
+            candidate.candidate.title,
+            inspection.title,
+            inspection.serviceName,
+            inspection.layerName,
+            inspection.description,
+            inspection.serviceDescription,
+            inspection.accessInformation
         ]
             .filter(Boolean)
             .join(" "));
@@ -101,20 +169,8 @@ export function validateMunicipality(
             ...(inspection.typeKeywords ?? [])
         ].join(" "));
 
-
     // =========================================================================
     // URL text
-    // =========================================================================
-    //
-    // The municipality name may appear in:
-    //
-    // - the inspected layer URL
-    // - the ArcGIS service URL
-    //
-    // This is particularly important for municipal ArcGIS Server
-    // installations such as:
-    //
-    // https://maps.phoenix.gov/pub/rest/services/...
     // =========================================================================
 
     const urlText =
@@ -125,44 +181,29 @@ export function validateMunicipality(
             .filter(Boolean)
             .join(" "));
 
-
     // =========================================================================
     // Municipality URL evidence
     // =========================================================================
 
     if (
         city &&
-        containsPhrase(urlText, city)
+        containsPhrase(
+            urlText,
+            city
+        )
     ) {
-
-        /*
-        * Give stronger evidence when the candidate comes from a
-        * municipality-specific .gov hostname such as:
-        *
-        *   maps.phoenix.gov
-        *
-        * Shared ArcGIS infrastructure such as:
-        *
-        *   services.arcgis.com
-        *
-        * receives weaker evidence.
-        */
-
         if (
             isMunicipalitySpecificDomain(
                 inspection.url,
                 place.city
             )
         ) {
-
             score += 30;
 
             reasons.push(
                 `+30: municipality name "${place.city}" appears in municipality-specific URL`
             );
-
         } else {
-
             score += 15;
 
             reasons.push(
@@ -171,23 +212,23 @@ export function validateMunicipality(
         }
     }
 
-
     // =========================================================================
     // Target municipality evidence
     // =========================================================================
 
     if (
         city &&
-        containsPhrase(metadataText, city)
+        containsPhrase(
+            metadataText,
+            city
+        )
     ) {
-
         score += 40;
 
         reasons.push(
             `+40: municipality name "${place.city}" appears in layer metadata`
         );
     }
-
 
     // =========================================================================
     // "City of X" evidence
@@ -198,9 +239,11 @@ export function validateMunicipality(
 
     if (
         city &&
-        containsPhrase(metadataText, cityOf)
+        containsPhrase(
+            metadataText,
+            cityOf
+        )
     ) {
-
         score += 20;
 
         reasons.push(
@@ -208,16 +251,17 @@ export function validateMunicipality(
         );
     }
 
-
     // =========================================================================
     // Municipality-specific field evidence
     // =========================================================================
 
     if (
         city &&
-        containsPhrase(fieldText, city)
+        containsPhrase(
+            fieldText,
+            city
+        )
     ) {
-
         score += 20;
 
         reasons.push(
@@ -225,23 +269,23 @@ export function validateMunicipality(
         );
     }
 
-
     // =========================================================================
     // Municipal owner / organization evidence
     // =========================================================================
 
     if (
         city &&
-        containsPhrase(ownerText, city)
+        containsPhrase(
+            ownerText,
+            city
+        )
     ) {
-
         score += 25;
 
         reasons.push(
-            `+25: ArcGIS owner/organization appears municipality-specific`
+            "+25: ArcGIS owner/organization appears municipality-specific"
         );
     }
-
 
     // =========================================================================
     // Municipal terminology
@@ -254,7 +298,6 @@ export function validateMunicipality(
         /\btown\b/.test(metadataText) ||
         /\bvillage\b/.test(metadataText)
     ) {
-
         score += 8;
 
         reasons.push(
@@ -262,77 +305,101 @@ export function validateMunicipality(
         );
     }
 
-
     // =========================================================================
     // County-level negative evidence
     // =========================================================================
 
+    /*
+     * IMPORTANT:
+     *
+     * Use datasetMetadataText rather than metadataText.
+     *
+     * accessInformation may contain a county publisher even when the
+     * dataset itself is a valid municipal boundary.
+     */
     if (
-        /\bcounty\b/.test(metadataText)
+        /\bcounty\b/.test(
+            datasetMetadataText
+        )
     ) {
-
         score -= 35;
 
         reasons.push(
-            "-35: county-level terminology appears in metadata"
+            "-35: county-level terminology appears in dataset metadata"
         );
     }
-
 
     // =========================================================================
     // State-level negative evidence
     // =========================================================================
 
     if (
-        /\bstate\b/.test(metadataText) ||
-        /\bstatewide\b/.test(metadataText)
+        /\bstate\b/.test(
+            datasetMetadataText
+        ) ||
+        /\bstatewide\b/.test(
+            datasetMetadataText
+        )
     ) {
-
         score -= 40;
 
         reasons.push(
-            "-40: state-level terminology appears in metadata"
+            "-40: state-level terminology appears in dataset metadata"
         );
     }
-
 
     // =========================================================================
     // Federal-level negative evidence
     // =========================================================================
 
     if (
-        /\bcongressional\b/.test(metadataText) ||
-        /\bcongress\b/.test(metadataText) ||
-        /\bfederal\b/.test(metadataText)
+        /\bcongressional\b/.test(
+            datasetMetadataText
+        ) ||
+        /\bcongress\b/.test(
+            datasetMetadataText
+        ) ||
+        /\bfederal\b/.test(
+            datasetMetadataText
+        )
     ) {
-
         score -= 50;
 
         reasons.push(
-            "-50: federal-level terminology appears in metadata"
+            "-50: federal-level terminology appears in dataset metadata"
         );
     }
-
 
     // =========================================================================
     // Other municipality evidence
     // =========================================================================
 
+    /*
+     * As with county/state/federal evidence, inspect dataset metadata rather
+     * than publisher/access information.
+     *
+     * This prevents something like:
+     *
+     *     title: "City of Tucson Ward Boundaries"
+     *     accessInformation: "Pima County IT GIS"
+     *
+     * from being interpreted as another municipality.
+     */
     const otherMunicipality =
         detectOtherMunicipality(
-            metadataText,
+            datasetMetadataText,
             place.city
         );
 
-    if (otherMunicipality) {
-
+    if (
+        otherMunicipality
+    ) {
         score -= 30;
 
         reasons.push(
-            `-30: metadata appears associated with another municipality "${otherMunicipality}"`
+            `-30: dataset metadata appears associated with another municipality "${otherMunicipality}"`
         );
     }
-
 
     // =========================================================================
     // Tags / type keywords
@@ -340,9 +407,11 @@ export function validateMunicipality(
 
     if (
         city &&
-        containsPhrase(tagText, city)
+        containsPhrase(
+            tagText,
+            city
+        )
     ) {
-
         score += 10;
 
         reasons.push(
@@ -350,13 +419,13 @@ export function validateMunicipality(
         );
     }
 
-
     // =========================================================================
-    // Final decision
+    // Result
     // =========================================================================
 
     const likelyMunicipalityMatch =
-        score >= MUNICIPALITY_VALIDATION_THRESHOLD;
+        score >=
+        MUNICIPALITY_VALIDATION_THRESHOLD;
 
     reasons.push(
         `municipality validation score: ${score}`
@@ -375,30 +444,42 @@ export function validateMunicipality(
     };
 }
 
-
 // =============================================================================
 // Text helpers
 // =============================================================================
 
 function normalize(
-    value: string
+    value: string | undefined
 ): string {
-
-    return value
+    return (value ?? "")
+        .replace(
+            /([a-z])([A-Z])/g,
+            "$1 $2"
+        )
+        .replace(
+            /([a-zA-Z])(\d+)/g,
+            "$1 $2"
+        )
+        .replace(
+            /[_-]+/g,
+            " "
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
         .toLowerCase()
-        .replace(/[_-]+/g, " ")
-        .replace(/[^a-z0-9\s]/g, " ")
-        .replace(/\s+/g, " ")
         .trim();
 }
-
 
 function containsPhrase(
     text: string,
     phrase: string
 ): boolean {
-
-    if (!phrase) {
+    if (
+        !text ||
+        !phrase
+    ) {
         return false;
     }
 
@@ -409,114 +490,113 @@ function containsPhrase(
         return false;
     }
 
-    return (
-        ` ${text} `
-    ).includes(
-        ` ${normalizedPhrase} `
-    );
-}
+    const escaped =
+        normalizedPhrase.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+        );
 
+    return new RegExp(
+        `\\b${escaped}\\b`,
+        "i"
+    ).test(text);
+}
 
 // =============================================================================
 // Municipality-specific URL detection
 // =============================================================================
 
-/**
- * Determine whether a URL appears to belong to an official
- * municipality-specific government domain.
- *
- * Examples:
- *
- *   https://maps.phoenix.gov/...
- *   https://gis.somecity.gov/...
- *
- * are considered municipality-specific.
- *
- * Shared ArcGIS infrastructure such as:
- *
- *   https://services.arcgis.com/...
- *
- * is intentionally excluded from the stronger score.
- */
 function isMunicipalitySpecificDomain(
     url: string | undefined,
     city: string
 ): boolean {
-
-    if (!url) {
+    if (
+        !url ||
+        !city
+    ) {
         return false;
     }
 
-    try {
+    const normalizedUrl =
+        normalize(url);
 
-        const parsed =
-            new URL(url);
+    const normalizedCity =
+        normalize(city);
 
-        const hostname =
-            parsed.hostname.toLowerCase();
-
-        const normalizedCity =
-            normalize(city)
-                .replace(/\s+/g, "");
-
-        if (
-            !hostname ||
-            !normalizedCity
-        ) {
-            return false;
-        }
-
-        // Shared Esri / ArcGIS infrastructure should not
-        // receive the strongest municipality-specific score.
-        if (
-            hostname === "arcgis.com" ||
-            hostname.endsWith(".arcgis.com") ||
-            hostname === "esri.com" ||
-            hostname.endsWith(".esri.com")
-        ) {
-            return false;
-        }
-
-        const hostnameWithoutWww =
-            hostname.startsWith("www.")
-                ? hostname.slice(4)
-                : hostname;
-
-        const cityToken =
-            normalizedCity
-                .replace(/[^a-z0-9]/g, "");
-
-        /*
-         * Check whether the municipality name appears somewhere
-         * in the hostname.
-         *
-         * Examples:
-         *
-         *   maps.phoenix.gov
-         *   phoenix.gov
-         *   maps.tucsonaz.gov
-         */
-        const containsCity =
-            hostnameWithoutWww
-                .replace(/[^a-z0-9]/g, "")
-                .includes(cityToken);
-
-        if (!containsCity) {
-            return false;
-        }
-
-        const isGovernmentDomain =
-            hostname.endsWith(".gov") ||
-            hostname.includes(".gov.");
-
-        return isGovernmentDomain;
-
-    } catch {
-
+    if (
+        !normalizedUrl ||
+        !normalizedCity
+    ) {
         return false;
     }
+
+    /*
+     * A municipality-specific government domain is strong evidence.
+     *
+     * Examples:
+     *
+     *     tucsonaz.gov
+     *     gis.tucsonaz.gov
+     *     maps.phoenix.gov
+     *
+     * We deliberately avoid treating arbitrary ArcGIS Online domains
+     * as municipality-specific solely because the URL contains the
+     * municipality name elsewhere.
+     */
+    const cityTokens =
+        normalizedCity
+            .split(" ")
+            .filter(Boolean);
+
+    const citySlug =
+        cityTokens.join("");
+
+    const cityHyphenated =
+        cityTokens.join("-");
+
+    const cityUnderscored =
+        cityTokens.join("_");
+
+    const candidates = [
+        citySlug,
+        cityHyphenated,
+        cityUnderscored
+    ]
+        .filter(Boolean);
+
+    for (
+        const candidate of candidates
+    ) {
+        if (
+            normalizedUrl.includes(
+                `${candidate}.gov`
+            ) ||
+            normalizedUrl.includes(
+                `.${candidate}.gov`
+            )
+        ) {
+            return true;
+        }
+    }
+
+    /*
+     * Explicit Tucson/Phoenix-style government GIS handling.
+     *
+     * This remains intentionally conservative.
+     */
+    if (
+        /tucsonaz\.gov/i.test(
+            normalizedUrl
+        ) ||
+        /phoenix\.gov/i.test(
+            normalizedUrl
+        )
+    ) {
+        return true;
+    }
+
+    return false;
 }
-
 
 // =============================================================================
 // Other municipality detection
@@ -530,45 +610,35 @@ function detectOtherMunicipality(
     const normalizedTarget =
         normalize(targetCity);
 
-    /*
-     * Look for common municipal naming patterns.
-     *
-     * This is intentionally conservative. We do not attempt
-     * to build a nationwide municipality dictionary here.
-     *
-     * The goal is to detect obvious cases such as:
-     *
-     *   City of Phoenix
-     *   City of Mesa
-     *   Town of Oro Valley
-     *
-     * when processing Tucson.
-     */
-
     const patterns = [
-        /\bcity of ([a-z][a-z\s]+?)(?:\s+(?:wards?|districts?|boundaries?|gis|map))?(?:\s|$)/,
-        /\btown of ([a-z][a-z\s]+?)(?:\s+(?:wards?|districts?|boundaries?|gis|map))?(?:\s|$)/,
-        /\bvillage of ([a-z][a-z\s]+?)(?:\s+(?:wards?|districts?|boundaries?|gis|map))?(?:\s|$)/
+        /\bcity of ([a-z][a-z\s]*?)(?=\s+(?:ward|wards|district|districts|boundary|boundaries|map|gis)\b|$)/,
+        /\btown of ([a-z][a-z\s]*?)(?=\s+(?:ward|wards|district|districts|boundary|boundaries|map|gis)\b|$)/,
+        /\bvillage of ([a-z][a-z\s]*?)(?=\s+(?:ward|wards|district|districts|boundary|boundaries|map|gis)\b|$)/
     ];
 
-    for (const pattern of patterns) {
-
+    for (
+        const pattern of patterns
+    ) {
         const match =
             text.match(pattern);
 
-        if (!match?.[1]) {
+        if (
+            !match?.[1]
+        ) {
             continue;
         }
 
         const municipality =
-            normalize(match[1]);
+            normalize(
+                match[1]
+            );
 
         if (
             municipality &&
-            municipality !== normalizedTarget &&
+            municipality !==
+                normalizedTarget &&
             municipality.length > 2
         ) {
-
             return municipality;
         }
     }

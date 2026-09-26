@@ -1161,6 +1161,31 @@ async function discoverMunicipality(
             // -----------------------------------------------------------------
             // Municipality metadata validation
             // -----------------------------------------------------------------
+            // console.log(
+            //     "MUNICIPALITY VALIDATION INPUT:",
+            //     {
+            //         candidateTitle:
+            //             candidate.title,
+
+            //         inspectionTitle:
+            //             inspection.title,
+
+            //         accessInformation:
+            //             inspection.accessInformation,
+
+            //         organization:
+            //             inspection.organization,
+
+            //         organizationId:
+            //             inspection.organizationId,
+
+            //         url:
+            //             inspection.url,
+
+            //         serviceUrl:
+            //             inspection.serviceUrl
+            //     }
+            // );
 
             const municipalityValidation =
                 validateMunicipality(

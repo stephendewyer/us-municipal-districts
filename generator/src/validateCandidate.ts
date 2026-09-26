@@ -950,10 +950,14 @@ function determineAcceptance(
     // WARD or DISTRICT. Thematic evidence therefore has priority over
     // structural field evidence.
     //
+    // A tie is also insufficient. A true boundary layer should have
+    // boundary semantics that clearly dominate any thematic semantics.
+    //
 
     if (
-        semanticEvidence.thematicScore >
-        semanticEvidence.boundaryScore
+        semanticEvidence.thematicScore > 0 &&
+        semanticEvidence.thematicScore >=
+            semanticEvidence.boundaryScore
     ) {
         return false;
     }
@@ -1325,7 +1329,7 @@ export function validateCandidate(
                 semanticEvidence.boundaryScore
         ) {
             rejectionReasons.push(
-                "thematic dataset grouped by political district"
+                "thematic dataset semantics are as strong as or stronger than boundary semantics"
             );
         }
 
