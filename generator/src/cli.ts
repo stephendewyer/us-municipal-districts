@@ -52,6 +52,646 @@ interface CliOptions {
 }
 
 // =============================================================================
+// Runtime shape guards
+// =============================================================================
+
+function isRecord(
+    value: unknown
+): value is Record<string, unknown> {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value)
+    );
+}
+
+function isString(
+    value: unknown
+): value is string {
+    return typeof value === "string";
+}
+
+function isStringArray(
+    value: unknown
+): value is string[] {
+    return (
+        Array.isArray(value) &&
+        value.every(
+            item =>
+                typeof item === "string"
+        )
+    );
+}
+
+/**
+ * Validate the classification structure actually consumed by
+ * the CLI rejection/diagnostic reporting code.
+ *
+ * This is intentionally narrower than a full runtime validation
+ * of CandidateClassification. Its purpose is to prevent malformed
+ * discovery data from crashing the CLI while reporting results.
+ */
+function isClassificationShape(
+    value: unknown
+): value is {
+    isCensusDataset?: boolean;
+    isParcelDataset?: boolean;
+    isHousingDataset?: boolean;
+    isPoliticalBoundary?: boolean;
+    rejectionReasons?: string[];
+    matches: {
+        political?: string[];
+        thematic?: string[];
+    };
+} {
+    if (!isRecord(value)) {
+        return false;
+    }
+
+    if (
+        "isCensusDataset" in value &&
+        value.isCensusDataset !== undefined &&
+        typeof value.isCensusDataset !== "boolean"
+    ) {
+        return false;
+    }
+
+    if (
+        "isParcelDataset" in value &&
+        value.isParcelDataset !== undefined &&
+        typeof value.isParcelDataset !== "boolean"
+    ) {
+        return false;
+    }
+
+    if (
+        "isHousingDataset" in value &&
+        value.isHousingDataset !== undefined &&
+        typeof value.isHousingDataset !== "boolean"
+    ) {
+        return false;
+    }
+
+    if (
+        "isPoliticalBoundary" in value &&
+        value.isPoliticalBoundary !== undefined &&
+        typeof value.isPoliticalBoundary !== "boolean"
+    ) {
+        return false;
+    }
+
+    if (
+        "rejectionReasons" in value &&
+        value.rejectionReasons !== undefined &&
+        !isStringArray(
+            value.rejectionReasons
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        !("matches" in value) ||
+        !isRecord(value.matches)
+    ) {
+        return false;
+    }
+
+    if (
+        "political" in value.matches &&
+        value.matches.political !== undefined &&
+        !isStringArray(
+            value.matches.political
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        "thematic" in value.matches &&
+        value.matches.thematic !== undefined &&
+        !isStringArray(
+            value.matches.thematic
+        )
+    ) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Validate only the runtime shape required by the rejection reporter.
+ *
+ * This intentionally does not attempt to reproduce every TypeScript
+ * interface at runtime. It validates the nested objects and scalar
+ * properties that the CLI actually reads.
+ */
+function isCandidateShape(
+    value: unknown
+): value is DiscoveryResult["rejectedCandidates"][number] {
+
+    if (!isRecord(value)) {
+        return false;
+    }
+
+    const candidate =
+        value.candidate;
+
+    const inspection =
+        value.inspection;
+
+    const classification =
+        value.classification;
+
+    if (
+        !isRecord(candidate) ||
+        !isRecord(inspection) ||
+        !isClassificationShape(
+            classification
+        )
+    ) {
+        return false;
+    }
+
+    /*
+     * Candidate identity fields are optional, but when present
+     * they must have the expected primitive type.
+     */
+    if (
+        "url" in candidate &&
+        candidate.url !== undefined &&
+        !isString(candidate.url)
+    ) {
+        return false;
+    }
+
+    if (
+        "title" in candidate &&
+        candidate.title !== undefined &&
+        !isString(candidate.title)
+    ) {
+        return false;
+    }
+
+    /*
+     * Inspection identity fields are also optional.
+     */
+    if (
+        "url" in inspection &&
+        inspection.url !== undefined &&
+        !isString(inspection.url)
+    ) {
+        return false;
+    }
+
+    if (
+        "title" in inspection &&
+        inspection.title !== undefined &&
+        !isString(inspection.title)
+    ) {
+        return false;
+    }
+
+    if (
+        "layerName" in inspection &&
+        inspection.layerName !== undefined &&
+        !isString(inspection.layerName)
+    ) {
+        return false;
+    }
+
+    if (
+        "serviceName" in inspection &&
+        inspection.serviceName !== undefined &&
+        !isString(inspection.serviceName)
+    ) {
+        return false;
+    }
+
+    /*
+     * Optional nested structures must be objects when present.
+     */
+    if (
+        "validation" in value &&
+        value.validation !== undefined &&
+        !isRecord(value.validation)
+    ) {
+        return false;
+    }
+
+    if (
+        "municipalityGeographyValidation" in value &&
+        value.municipalityGeographyValidation !== undefined &&
+        !isRecord(
+            value.municipalityGeographyValidation
+        )
+    ) {
+        return false;
+    }
+
+    return true;
+}
+
+// =============================================================================
+// Safe candidate display helpers
+// =============================================================================
+
+function getCandidateTitle(
+    candidate: unknown
+): string {
+
+    if (
+        !isCandidateShape(candidate)
+    ) {
+        return "[malformed candidate]";
+    }
+
+    const inspection =
+        candidate.inspection;
+
+    const discoveredCandidate =
+        candidate.candidate;
+
+    const title =
+        inspection.title ??
+        inspection.layerName ??
+        inspection.serviceName ??
+        discoveredCandidate.title;
+
+    return isString(title) &&
+        title.trim().length > 0
+        ? title
+        : "[untitled candidate]";
+}
+
+function getCandidateUrl(
+    candidate: unknown
+): string {
+
+    if (
+        !isCandidateShape(candidate)
+    ) {
+        return "[malformed candidate]";
+    }
+
+    const inspection =
+        candidate.inspection;
+
+    const discoveredCandidate =
+        candidate.candidate;
+
+    const url =
+        inspection.url ??
+        discoveredCandidate.url;
+
+    return isString(url) &&
+        url.trim().length > 0
+        ? url
+        : "[unknown URL]";
+}
+
+// =============================================================================
+// Rejection data guards
+// =============================================================================
+
+function hasValidationRejectionReasons(
+    candidate: unknown
+): candidate is
+    DiscoveryResult["rejectedCandidates"][number] & {
+        validation: NonNullable<
+            DiscoveryResult["rejectedCandidates"][number]["validation"]
+        >;
+    } {
+
+    if (
+        !isCandidateShape(candidate)
+    ) {
+        return false;
+    }
+
+    const validation =
+        candidate.validation;
+
+    if (
+        validation === undefined
+    ) {
+        return false;
+    }
+
+    return (
+        isStringArray(
+            validation.rejectionReasons
+        ) &&
+        validation.rejectionReasons.length > 0
+    );
+}
+
+function hasGeographyRejectionReasons(
+    candidate: unknown
+): candidate is
+    DiscoveryResult["rejectedCandidates"][number] & {
+        municipalityGeographyValidation:
+            NonNullable<
+                DiscoveryResult["rejectedCandidates"][number][
+                    "municipalityGeographyValidation"
+                ]
+            >;
+    } {
+
+    if (
+        !isCandidateShape(candidate)
+    ) {
+        return false;
+    }
+
+    const geography =
+        candidate.municipalityGeographyValidation;
+
+    if (
+        geography === undefined
+    ) {
+        return false;
+    }
+
+    return (
+        geography.status === "no-match" &&
+        isStringArray(
+            geography.reasons
+        ) &&
+        geography.reasons.length > 0
+    );
+}
+
+function hasClassificationRejectionReasons(
+    candidate: unknown
+): candidate is
+    DiscoveryResult["rejectedCandidates"][number] & {
+        classification:
+            DiscoveryResult["rejectedCandidates"][number]["classification"] & {
+                rejectionReasons: string[];
+            };
+    } {
+
+    if (
+        !isCandidateShape(candidate)
+    ) {
+        return false;
+    }
+
+    const classification =
+        candidate.classification;
+
+    if (
+        !isClassificationShape(
+            classification
+        )
+    ) {
+        return false;
+    }
+
+    return (
+        isStringArray(
+            classification.rejectionReasons
+        ) &&
+        classification.rejectionReasons.length > 0
+    );
+}
+
+// =============================================================================
+// Rejection reasons
+// =============================================================================
+
+function getRejectionReasons(
+    candidate: unknown
+): string[] {
+
+    if (
+        !isCandidateShape(candidate)
+    ) {
+        return [
+            "malformed candidate shape"
+        ];
+    }
+
+    // -------------------------------------------------------------------------
+    // Validation rejection
+    // -------------------------------------------------------------------------
+
+    if (
+        hasValidationRejectionReasons(
+            candidate
+        )
+    ) {
+        const rejectionReasons =
+            candidate.validation.rejectionReasons;
+
+        if (
+            isStringArray(
+                rejectionReasons
+            )
+        ) {
+            return [
+                ...rejectionReasons
+            ];
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Municipality geography rejection
+    // -------------------------------------------------------------------------
+
+    if (
+        hasGeographyRejectionReasons(
+            candidate
+        )
+    ) {
+        const geography =
+            candidate.municipalityGeographyValidation;
+
+        const rejectionReasons =
+            geography.reasons;
+
+        if (
+            isStringArray(
+                rejectionReasons
+            )
+        ) {
+            return [
+                ...rejectionReasons
+            ];
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Classification rejection
+    // -------------------------------------------------------------------------
+
+    if (
+        hasClassificationRejectionReasons(
+            candidate
+        )
+    ) {
+        const rejectionReasons =
+            candidate
+                .classification
+                .rejectionReasons;
+
+        if (
+            isStringArray(
+                rejectionReasons
+            )
+        ) {
+            return [
+                ...rejectionReasons
+            ];
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Fallback diagnostics
+    // -------------------------------------------------------------------------
+
+    const inspection =
+        candidate.inspection;
+
+    const classification =
+        candidate.classification;
+
+    if (
+        !isClassificationShape(
+            classification
+        )
+    ) {
+        return [
+            "malformed classification shape"
+        ];
+    }
+
+    const reasons: string[] = [];
+
+    const geometryType =
+        inspection.geometryType;
+
+    const isPolygon =
+        geometryType ===
+            "esriGeometryPolygon" ||
+        geometryType ===
+            "polygon";
+
+    if (
+        !isPolygon
+    ) {
+        reasons.push(
+            "not polygon geometry"
+        );
+    }
+
+    if (
+        classification.isCensusDataset
+    ) {
+        reasons.push(
+            "census dataset"
+        );
+    }
+
+    if (
+        classification.isParcelDataset
+    ) {
+        reasons.push(
+            "parcel/property dataset"
+        );
+    }
+
+    if (
+        classification.isHousingDataset &&
+        !classification.isPoliticalBoundary
+    ) {
+        reasons.push(
+            "housing dataset"
+        );
+    }
+
+    const districtFields =
+        Array.isArray(
+            inspection.districtFields
+        )
+            ? inspection.districtFields.filter(
+                isString
+            )
+            : [];
+
+    const hasDistrictField =
+        districtFields.length > 0;
+
+    const politicalDistrictField =
+        districtFields.some(
+            field => {
+
+                const normalized =
+                    field
+                        .toLowerCase()
+                        .replace(
+                            /[_-]+/g,
+                            " "
+                        );
+
+                return (
+                    /\bward\b/.test(normalized) ||
+                    /\bdistrict\b/.test(normalized) ||
+                    /\bcouncil\b/.test(normalized) ||
+                    /\balderman/.test(normalized)
+                );
+            }
+        );
+
+    if (
+        hasDistrictField &&
+        !politicalDistrictField &&
+        !classification.isPoliticalBoundary
+    ) {
+        reasons.push(
+            "district field does not appear political"
+        );
+    }
+
+    if (
+        !classification.isPoliticalBoundary
+    ) {
+        reasons.push(
+            "did not meet political-boundary threshold"
+        );
+    }
+
+    const thematicMatches =
+        isStringArray(
+            classification.matches.thematic
+        )
+            ? classification.matches.thematic
+            : [];
+
+    if (
+        thematicMatches.length > 0
+    ) {
+        reasons.push(
+            `thematic evidence: ${
+                thematicMatches.join(", ")
+            }`
+        );
+    }
+
+    if (
+        reasons.length === 0
+    ) {
+        reasons.push(
+            "candidate rejected without an explicit rejection reason"
+        );
+    }
+
+    return reasons;
+}
+
+// =============================================================================
 // Main
 // =============================================================================
 
@@ -59,6 +699,7 @@ const command =
     process.argv[2] as Command;
 
 async function main(): Promise<void> {
+
     const options =
         parseOptions(
             process.argv.slice(3)
@@ -80,6 +721,7 @@ async function main(): Promise<void> {
         // ---------------------------------------------------------------------
 
         case "discover": {
+
             const {
                 results,
                 timings
@@ -113,6 +755,7 @@ async function main(): Promise<void> {
         // ---------------------------------------------------------------------
 
         case "generate": {
+
             await generateRegistryGeometry(
                 options
             );
@@ -126,14 +769,6 @@ async function main(): Promise<void> {
 
         case "build": {
 
-            /*
-             * "build" is retained as a compatibility alias for "generate".
-             *
-             * Historically this command built an empty registry. The actual
-             * registry is now produced by "discover", so generation should
-             * consume that registry and generate the registered geometry.
-             */
-
             await generateRegistryGeometry(
                 options
             );
@@ -146,13 +781,6 @@ async function main(): Promise<void> {
         // ---------------------------------------------------------------------
 
         case "geometry": {
-
-            /*
-             * Retained as an explicit geometry-only command.
-             *
-             * "generate" is the preferred command for the package data
-             * generation workflow.
-             */
 
             await generateRegistryGeometry(
                 options
@@ -185,7 +813,9 @@ async function main(): Promise<void> {
         // ---------------------------------------------------------------------
 
         default: {
+
             printUsage();
+
             process.exitCode = 1;
         }
     }
@@ -212,6 +842,7 @@ async function generateRegistryGeometry(
     if (
         options.city !== undefined
     ) {
+
         const city =
             normalizeName(
                 options.city
@@ -229,6 +860,7 @@ async function generateRegistryGeometry(
     if (
         options.state !== undefined
     ) {
+
         const state =
             options.state.toUpperCase();
 
@@ -243,6 +875,7 @@ async function generateRegistryGeometry(
     if (
         options.placeFips !== undefined
     ) {
+
         entries =
             entries.filter(
                 entry =>
@@ -258,6 +891,7 @@ async function generateRegistryGeometry(
     if (
         entries.length === 0
     ) {
+
         console.log(
             "\nNo registry entries matched the supplied options."
         );
@@ -272,22 +906,6 @@ async function generateRegistryGeometry(
                 : "ies"
         }...`
     );
-
-    // =========================================================================
-    // Output root
-    // =========================================================================
-
-    /*
-     * generatedFile paths in registry.json are relative to data/.
-     *
-     * Example:
-     *
-     *   geometry/0477000/ward.geojson
-     *
-     * becomes:
-     *
-     *   data/geometry/0477000/ward.geojson
-     */
 
     const outputRoot =
         path.join(
@@ -308,6 +926,7 @@ async function generateRegistryGeometry(
     for (
         const entry of entries
     ) {
+
         console.log(
             `\n  ${entry.city}, ${entry.state} — ${entry.boundaryType}`
         );
@@ -335,16 +954,19 @@ async function generateRegistryGeometry(
             failed++;
 
             console.error(
-                `    ✗ Geometry generation failed`
+                "    ✗ Geometry generation failed"
             );
 
             if (
                 error instanceof Error
             ) {
+
                 console.error(
                     `      ${error.message}`
                 );
+
             } else {
+
                 console.error(
                     `      ${String(error)}`
                 );
@@ -538,6 +1160,7 @@ function printDiscoverySummary(
     if (
         failed.length > 0
     ) {
+
         console.log(
             "\nFailed municipalities:"
         );
@@ -545,11 +1168,15 @@ function printDiscoverySummary(
         for (
             const result of failed
         ) {
+
             console.log(
                 `  ${result.place.city}, ${result.place.state}`
             );
 
-            if (result.error) {
+            if (
+                result.error
+            ) {
+
                 console.log(
                     `    ${result.error}`
                 );
@@ -560,6 +1187,7 @@ function printDiscoverySummary(
     if (
         noCanonical.length > 0
     ) {
+
         console.log(
             "\nMunicipalities without canonical sources:"
         );
@@ -567,6 +1195,7 @@ function printDiscoverySummary(
         for (
             const result of noCanonical
         ) {
+
             console.log(
                 `  ${result.place.city}, ${result.place.state}`
             );
@@ -602,9 +1231,11 @@ function printDiscoveryTiming(
     for (
         const timing of timings
     ) {
+
         for (
             const stage of timing.stages
         ) {
+
             const existing =
                 totals.get(
                     stage.name
@@ -613,6 +1244,7 @@ function printDiscoveryTiming(
             if (
                 existing
             ) {
+
                 existing.runtimeMs +=
                     stage.runtimeMs;
 
@@ -652,6 +1284,7 @@ function printDiscoveryTiming(
     if (
         stages.length === 0
     ) {
+
         console.log(
             "  No timing data recorded."
         );
@@ -662,6 +1295,7 @@ function printDiscoveryTiming(
     for (
         const [name, timing] of stages
     ) {
+
         const average =
             timing.count > 0
                 ? timing.runtimeMs /
@@ -776,6 +1410,7 @@ function printValidCandidates(
                 validation &&
                 validation.distinctDistrictValues.length > 0
             ) {
+
                 console.log(
                     `      District values: ${
                         validation.distinctDistrictValues.join(
@@ -785,18 +1420,32 @@ function printValidCandidates(
                 );
             }
 
+            const politicalMatches =
+                isStringArray(
+                    classification.matches.political
+                )
+                    ? classification.matches.political
+                    : [];
+
             console.log(
                 `      Political matches: ${
-                    classification.matches.political.length > 0
-                        ? classification.matches.political.join(", ")
+                    politicalMatches.length > 0
+                        ? politicalMatches.join(", ")
                         : "(none)"
                 }`
             );
 
+            const thematicMatches =
+                isStringArray(
+                    classification.matches.thematic
+                )
+                    ? classification.matches.thematic
+                    : [];
+
             console.log(
                 `      Thematic matches: ${
-                    classification.matches.thematic.length > 0
-                        ? classification.matches.thematic.join(", ")
+                    thematicMatches.length > 0
+                        ? thematicMatches.join(", ")
                         : "(none)"
                 }`
             );
@@ -810,6 +1459,7 @@ function printValidCandidates(
             if (
                 valid.municipalityValidation
             ) {
+
                 console.log(
                     `      Municipality validation: ${
                         valid.municipalityValidation.score
@@ -820,6 +1470,7 @@ function printValidCandidates(
             if (
                 valid.municipalityGeographyValidation
             ) {
+
                 console.log(
                     `      Geography validation: ${
                         valid.municipalityGeographyValidation.status
@@ -866,11 +1517,40 @@ function printRejectionReport(
 
             totalRejected++;
 
+            /*
+             * A malformed runtime candidate must never
+             * crash the rejection report.
+             */
+            if (
+                !isCandidateShape(
+                    rejected
+                )
+            ) {
+
+                console.log(
+                    "\n    ✗ [malformed candidate]"
+                );
+
+                console.log(
+                    "      URL: [unavailable]"
+                );
+
+                console.log(
+                    "      Reasons: malformed candidate shape"
+                );
+
+                continue;
+            }
+
             const title =
-                rejected.inspection.title ??
-                rejected.inspection.layerName ??
-                rejected.inspection.serviceName ??
-                "(untitled)";
+                getCandidateTitle(
+                    rejected
+                );
+
+            const url =
+                getCandidateUrl(
+                    rejected
+                );
 
             const reasons =
                 getRejectionReasons(
@@ -882,49 +1562,111 @@ function printRejectionReport(
             );
 
             console.log(
-                `      ${rejected.inspection.url}`
+                `      ${url}`
             );
 
             console.log(
                 `      Reasons: ${reasons.join("; ")}`
             );
 
+            const classification =
+                rejected.classification;
+
+            /*
+             * isCandidateShape() already validates this, but
+             * retain the explicit guard here so this reporting
+             * function never relies on an unsafe nested shape.
+             */
             if (
-                rejected.classification.matches.political.length > 0
+                !isClassificationShape(
+                    classification
+                )
             ) {
+                continue;
+            }
+
+            const politicalMatches =
+                isStringArray(
+                    classification.matches.political
+                )
+                    ? classification.matches.political
+                    : [];
+
+            if (
+                politicalMatches.length > 0
+            ) {
+
                 console.log(
                     `      Political matches: ${
-                        rejected.classification.matches.political.join(", ")
+                        politicalMatches.join(", ")
                     }`
                 );
             }
 
+            const thematicMatches =
+                isStringArray(
+                    classification.matches.thematic
+                )
+                    ? classification.matches.thematic
+                    : [];
+
             if (
-                rejected.classification.matches.thematic.length > 0
+                thematicMatches.length > 0
             ) {
+
                 console.log(
                     `      Thematic matches: ${
-                        rejected.classification.matches.thematic.join(", ")
+                        thematicMatches.join(", ")
                     }`
                 );
             }
 
+            const districtFields =
+                Array.isArray(
+                    rejected
+                        .inspection
+                        .districtFields
+                )
+                    ? rejected
+                        .inspection
+                        .districtFields
+                        .filter(
+                            isString
+                        )
+                    : [];
+
             if (
-                rejected.inspection.districtFields.length > 0
+                districtFields.length > 0
             ) {
+
                 console.log(
                     `      District fields: ${
-                        rejected.inspection.districtFields.join(", ")
+                        districtFields.join(", ")
                     }`
                 );
             }
 
+            const nameFields =
+                Array.isArray(
+                    rejected
+                        .inspection
+                        .nameFields
+                )
+                    ? rejected
+                        .inspection
+                        .nameFields
+                        .filter(
+                            isString
+                        )
+                    : [];
+
             if (
-                rejected.inspection.nameFields.length > 0
+                nameFields.length > 0
             ) {
+
                 console.log(
                     `      Name fields: ${
-                        rejected.inspection.nameFields.join(", ")
+                        nameFields.join(", ")
                     }`
                 );
             }
@@ -934,125 +1676,6 @@ function printRejectionReport(
     console.log(
         `\n  Total rejected candidates: ${totalRejected}`
     );
-}
-
-// =============================================================================
-// Rejection reasons
-// =============================================================================
-
-function getRejectionReasons(
-    candidate:
-        DiscoveryResult["rejectedCandidates"][number]
-): string[] {
-
-    const reasons: string[] = [];
-
-    const classification =
-        candidate.classification;
-
-    const inspection =
-        candidate.inspection;
-
-    const isPolygon =
-        inspection.geometryType ===
-            "esriGeometryPolygon" ||
-        inspection.geometryType ===
-            "polygon";
-
-    if (
-        !isPolygon
-    ) {
-        reasons.push(
-            "not polygon geometry"
-        );
-    }
-
-    if (
-        classification.isCensusDataset
-    ) {
-        reasons.push(
-            "census dataset"
-        );
-    }
-
-    if (
-        classification.isParcelDataset
-    ) {
-        reasons.push(
-            "parcel/property dataset"
-        );
-    }
-
-    if (
-        classification.isHousingDataset &&
-        !classification.isPoliticalBoundary
-    ) {
-        reasons.push(
-            "housing dataset"
-        );
-    }
-
-    const hasDistrictField =
-        inspection.districtFields.length > 0;
-
-    const politicalDistrictField =
-        inspection.districtFields.some(
-            field => {
-
-                const normalized =
-                    field
-                        .toLowerCase()
-                        .replace(
-                            /[\_-]+/g,
-                            " "
-                        );
-
-                return (
-                    /\bward\b/.test(normalized) ||
-                    /\bdistrict\b/.test(normalized) ||
-                    /\bcouncil\b/.test(normalized) ||
-                    /\balderman/.test(normalized)
-                );
-            }
-        );
-
-    if (
-        hasDistrictField &&
-        !politicalDistrictField &&
-        !classification.isPoliticalBoundary
-    ) {
-        reasons.push(
-            "district field does not appear political"
-        );
-    }
-
-    if (
-        !classification.isPoliticalBoundary
-    ) {
-        reasons.push(
-            "did not meet political-boundary threshold"
-        );
-    }
-
-    if (
-        classification.matches.thematic.length > 0
-    ) {
-        reasons.push(
-            `thematic evidence: ${
-                classification.matches.thematic.join(", ")
-            }`
-        );
-    }
-
-    if (
-        reasons.length === 0
-    ) {
-        reasons.push(
-            "classification.rejected = true"
-        );
-    }
-
-    return reasons;
 }
 
 // =============================================================================
@@ -1214,7 +1837,6 @@ Usage:
   npm run validate -- --registry data/municipalities/registry.json
 
 
-
 Commands:
 
   places
@@ -1244,7 +1866,6 @@ Commands:
       registry file.
 
 
-
 Discover options:
 
   --city <city>
@@ -1261,7 +1882,6 @@ Discover options:
 
   --verbose
       Print detailed discovery information.
-
 
 
 Validate options:

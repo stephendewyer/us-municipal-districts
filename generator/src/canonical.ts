@@ -949,21 +949,72 @@ export function selectCanonicalSource(
 export function selectCanonicalSources(
     groups: EquivalentLayerGroup[]
 ): CanonicalSource[] {
-    const sources:
-        CanonicalSource[] = [];
+    const sources: CanonicalSource[] = [];
 
-    for (
-        const group of groups
-    ) {
+    for (const group of groups) {
+        console.log(
+            "\nCANONICAL GROUP:",
+            {
+                id: group.id,
+                confidence: group.confidence,
+                reasons: group.reasons,
+                candidates: group.candidates.map(
+                    candidate => ({
+                        title:
+                            candidate.inspection.title,
+
+                        url:
+                            candidate.inspection.url,
+
+                        sourceRole:
+                            candidate.classification
+                                .sourceRole,
+
+                        districtType:
+                            candidate.classification
+                                .districtType,
+
+                        confidence:
+                            candidate.validation
+                                ?.confidence,
+
+                        districtField:
+                            candidate.validation
+                                ?.districtField,
+
+                        expectedDistrictCount:
+                            candidate.validation
+                                ?.expectedDistrictCount,
+
+                        completeDistrictCoverage:
+                            candidate.validation
+                                ?.completeDistrictCoverage,
+
+                        geography:
+                            candidate
+                                .municipalityGeographyValidation
+                                ?.status
+                    })
+                )
+            }
+        );
+
         const canonical =
-            selectCanonicalSource(
-                group
-            );
+            selectCanonicalSource(group);
+
+        console.log(
+            "CANONICAL RESULT:",
+            canonical
+                ? {
+                    title: canonical.title,
+                    url: canonical.url,
+                    score: canonical.score
+                }
+                : undefined
+        );
 
         if (canonical) {
-            sources.push(
-                canonical
-            );
+            sources.push(canonical);
         }
     }
 

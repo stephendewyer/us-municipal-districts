@@ -1042,13 +1042,22 @@ function determineAcceptance(
     // validate the candidate even when an authoritative expected
     // district count is unavailable.
     //
+    const expectedCountKnown =
+        best.expectedDistrictCount !== undefined;
 
+    const completeCoverage =
+        best.completeDistrictCoverage === true;
+
+    const coverageSufficient =
+        !expectedCountKnown ||
+        completeCoverage;
     if (
         isPolygon &&
         classification.isPoliticalBoundary &&
         semanticEvidence.boundaryScore >
             semanticEvidence.thematicScore &&
-        confidence >= 70
+        confidence >= 70 &&
+        coverageSufficient
     ) {
         return true;
     }
