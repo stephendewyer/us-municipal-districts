@@ -288,8 +288,8 @@ export async function resolveArcGISItem(
                 : undefined,
 
         organizationId:
-            typeof data.organizationId === "string"
-                ? data.organizationId
+            typeof data.orgId === "string"
+                ? data.orgId
                 : undefined,
 
         contentStatus:
@@ -537,12 +537,12 @@ function isArcGISItemResponse(
     }
 
     if (
-        value.organizationId !== undefined &&
-        typeof value.organizationId !== "string"
+        value.orgId !== undefined &&
+        typeof value.orgId !== "string"
     ) {
-
         return false;
     }
+
 
     if (
         value.description !== undefined &&

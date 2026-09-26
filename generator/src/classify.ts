@@ -8,6 +8,10 @@ import type {
     TemporalStatus
 } from "./types.js";
 
+import {
+    MUNICIPAL_ARCGIS_AUTHORITIES
+} from "./municipalArcGISAuthorities.js";
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -638,6 +642,36 @@ function escapeRegex(
     );
 }
 
+function matchesKnownMunicipalAuthority(
+    city: string | undefined,
+    state: string | undefined,
+    organizationId: string | undefined
+): boolean {
+    if (
+        !city ||
+        !state ||
+        !organizationId
+    ) {
+        return false;
+    }
+
+    const normalizedCity =
+        normalize(city);
+
+    const normalizedState =
+        normalize(state);
+
+    return MUNICIPAL_ARCGIS_AUTHORITIES.some(
+        authority =>
+            normalize(authority.city) ===
+                normalizedCity &&
+            normalize(authority.state) ===
+                normalizedState &&
+            authority.organizationId ===
+                organizationId
+    );
+}
+
 function isOfficialMunicipalSource(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection
@@ -683,6 +717,11 @@ function isOfficialMunicipalSource(
             candidate.city
         );
 
+    const state = 
+        normalize(
+            candidate.state
+        );
+
     const text = [
         url,
         candidateUrl,
@@ -700,6 +739,16 @@ function isOfficialMunicipalSource(
      */
     if (
         candidate.source === "municipal"
+    ) {
+        return true;
+    }
+    
+    if (
+        matchesKnownMunicipalAuthority(
+            city,
+            state,
+            inspection.organizationId
+        )
     ) {
         return true;
     }

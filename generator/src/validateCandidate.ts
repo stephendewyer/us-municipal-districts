@@ -904,8 +904,9 @@ function calculateConfidence(
     ) {
         confidence += 10;
     } else if (
-        semanticEvidence.thematicScore >
-        semanticEvidence.boundaryScore
+        semanticEvidence.thematicScore >=
+        semanticEvidence.boundaryScore &&
+        semanticEvidence.thematicScore > 0
     ) {
         confidence -= 15;
     }
@@ -1319,8 +1320,9 @@ export function validateCandidate(
 
     if (!accepted) {
         if (
-            semanticEvidence.thematicScore >
-            semanticEvidence.boundaryScore
+            semanticEvidence.thematicScore > 0 &&
+            semanticEvidence.thematicScore >=
+                semanticEvidence.boundaryScore
         ) {
             rejectionReasons.push(
                 "thematic dataset grouped by political district"

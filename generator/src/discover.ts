@@ -989,7 +989,23 @@ async function discoverMunicipality(
                     : undefined;
 
             if (resolvedItem) {
-
+                if (resolvedItem) {
+                    console.log(
+                        "ARC GIS PROVENANCE:",
+                        {
+                            city: candidate.city,
+                            state: candidate.state,
+                            itemId: resolvedItem.id,
+                            title: resolvedItem.title,
+                            organizationId:
+                                resolvedItem.organizationId,
+                            contentStatus:
+                                resolvedItem.contentStatus,
+                            accessInformation:
+                                resolvedItem.accessInformation
+                        }
+                    );
+                }
                 /*
                 * inspectArcGIS() obtains organization information from
                 * the service/layer metadata itself.
