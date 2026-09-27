@@ -1207,6 +1207,37 @@ async function discoverMunicipality(
             `    Inspected representations: ${pendingCandidates.length}`
         );
     }
+    console.log(
+        "QUERY GROUP SUMMARY:",
+        [...queryGroups.entries()].map(
+            ([identity, group]) => ({
+                identity,
+                count: group.length,
+                candidates: group.map(
+                    pending => ({
+                        title:
+                            pending.inspection.title,
+
+                        url:
+                            pending.inspection.url,
+
+                        itemId:
+                            pending.candidate.itemId ??
+                            pending.inspection.itemId,
+
+                        serviceItemId:
+                            pending.inspection.serviceItemId,
+
+                        serviceUrl:
+                            pending.inspection.serviceUrl,
+
+                        layerId:
+                            pending.inspection.layerId
+                    })
+                )
+            })
+        )
+    );
 
     // -------------------------------------------------------------------------
     // Phase B: run expensive queries once per logical layer.
@@ -2248,6 +2279,13 @@ async function expandArcGISLayers(
             DiscoveryCandidate[] = [];
 
 
+        const serviceItemId =
+            typeof metadata.serviceItemId === "string"
+                ? metadata.serviceItemId
+                : typeof metadata.itemId === "string"
+                    ? metadata.itemId
+                    : undefined;
+
         for (
             const layer
             of layers
@@ -2279,8 +2317,11 @@ async function expandArcGISLayers(
 
 
             expanded.push({
-
                 ...candidate,
+
+                itemId:
+                    candidate.itemId ??
+                    serviceItemId,
 
                 url:
                     `${url}/${id}`,
@@ -2288,12 +2329,15 @@ async function expandArcGISLayers(
                 title,
 
                 reasons: [
-
                     ...candidate.reasons,
-
                     `expanded from service: ${url}`,
+                    `ArcGIS layer: ${id}`,
 
-                    `ArcGIS layer: ${id}`
+                    ...(serviceItemId
+                        ? [
+                            `ArcGIS service item: ${serviceItemId}`
+                        ]
+                        : [])
                 ]
             });
         }
@@ -2475,52 +2519,116 @@ function deduplicateCandidates(
  * serviceItemId is used for municipal MapServer endpoints when the
  * service URL itself is authoritative but the candidate itemId is not.
  */
+
+function normalizeIdentityPart(
+    value: string | undefined
+): string {
+    return (value ?? "")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .toLowerCase()
+        .trim();
+}
+
 function getLayerQueryIdentityKey(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection
 ): string {
+    const normalizedUrl =
+        normalizeUrl(candidate.url).toLowerCase();
+
+    /*
+     * Use the actual ArcGIS service name as the cross-representation
+     * identity when FeatureServer and MapServer URLs represent the
+     * same logical service.
+     *
+     * Examples:
+     *
+     *   .../Council_Districts/FeatureServer/0
+     *   .../Council_Districts/MapServer/0
+     *
+     * both produce:
+     *
+     *   council districts
+     */
+    const serviceMatch =
+        normalizedUrl.match(
+            /\/([^/]+)\/(?:featureserver|mapserver)\/?(\d+)?$/i
+        );
+
+    const serviceName =
+        serviceMatch?.[1]
+            ? normalizeIdentityPart(
+                  decodeURIComponent(
+                      serviceMatch[1]
+                  )
+              )
+            : undefined;
+
+    const layerId =
+        inspection.layerId;
+
+    /*
+     * Include municipality identity so identically named services
+     * in different cities cannot be merged.
+     */
+    const municipality =
+        [
+            candidate.placeFips,
+            normalizeIdentityPart(
+                candidate.city
+            ),
+            normalizeIdentityPart(
+                candidate.state
+            )
+        ]
+            .filter(Boolean)
+            .join(":");
+
+    if (
+        serviceName &&
+        layerId !== undefined
+    ) {
+        return [
+            "service-name",
+            municipality,
+            serviceName,
+            `layer:${layerId}`
+        ].join(":");
+    }
+
+    /*
+     * Fall back to the ArcGIS item identity when a service-name
+     * identity cannot be extracted.
+     */
     const itemId =
-        candidate.itemId ??
+        inspection.serviceItemId ??
         inspection.itemId ??
-        inspection.serviceItemId;
+        candidate.itemId;
 
     if (
         itemId &&
-        inspection.layerId !== undefined
+        layerId !== undefined
     ) {
-        return (
-            `item:${itemId.toLowerCase()}:` +
-            `layer:${inspection.layerId}`
-        );
+        return [
+            "service-item",
+            municipality,
+            itemId.toLowerCase(),
+            `layer:${layerId}`
+        ].join(":");
     }
 
-    const serviceUrl =
-        inspection.serviceUrl ??
-        candidate.url;
-
-    const normalizedServiceUrl =
-        normalizeUrl(
-            serviceUrl
-        ).replace(
-            /\/(?:FeatureServer|MapServer)$/i,
-            ""
-        );
-
-    if (
-        inspection.layerId !== undefined
-    ) {
-        return (
-            `service:${normalizedServiceUrl.toLowerCase()}:` +
-            `layer:${inspection.layerId}`
-        );
-    }
-
-    return (
-        `url:${normalizeUrl(
-            candidate.url
-        ).toLowerCase()}`
-    );
+    /*
+     * Final fallback: normalized candidate URL.
+     */
+    return [
+        "url",
+        municipality,
+        normalizedUrl
+    ].join(":");
 }
+
 
 /**
  * Choose which equivalent endpoint should perform expensive queries.
