@@ -1,16 +1,16 @@
 # U.S. Municipal Districts
 
-A TypeScript/Node.js package for discovering, validating, normalizing, and generating geographic data for **municipal political districts across the United States**.
+A TypeScript/Node.js package for **discovering, validating, normalizing, and generating geographic data for municipal political districts across the United States**.
 
-The project is designed to make it possible to answer questions such as:
+The project is designed to answer questions such as:
 
 * Which municipal ward contains this address?
 * Which city council district contains these coordinates?
 * What are the boundaries of a municipality's aldermanic districts?
-* Which official geographic dataset should be used for a city's municipal districts?
-* Where can the normalized GeoJSON boundary data for those districts be found?
+* Which official geographic dataset represents a city's municipal districts?
+* Where can normalized GeoJSON boundary data for those districts be found?
 
-The project focuses on municipal political divisions such as:
+The project focuses on municipal political divisions including:
 
 * Wards
 * City council districts
@@ -18,11 +18,13 @@ The project focuses on municipal political divisions such as:
 * Aldermanic districts
 * Other municipal political districts
 
-It is intended to provide a reusable geographic-data foundation for applications that need to resolve municipal political representation from an address or geographic coordinate.
+The goal is to provide a reusable geographic-data foundation for applications that need to resolve municipal political representation from an address or geographic coordinate.
+
+---
 
 ## Status
 
-This project is under active development.
+This project is **under active development**.
 
 The current implementation includes:
 
@@ -33,16 +35,18 @@ The current implementation includes:
 * Multi-tier candidate searching
 * ArcGIS layer inspection
 * Political-boundary classification
-* Thematic-dataset rejection
+* Thematic and derived-dataset rejection
 * District-field detection
 * District-value extraction
 * Expected district-count validation
 * Municipality metadata validation
 * Municipality geography validation
 * Polygon geometry validation
+* 0–100 validation confidence scoring
 * Candidate ranking
 * Equivalent-layer detection
 * Canonical-source selection
+* Temporal-status detection
 * ArcGIS geometry conversion to GeoJSON
 * Census place geometry generation
 * Generated municipal geometry and registry data
@@ -50,28 +54,42 @@ The current implementation includes:
 
 The discovery pipeline has been exercised against municipalities including **Tucson, Phoenix, Chicago, Milwaukee, Austin, and Philadelphia**, with particular validation work around Tucson ward boundaries and Phoenix city council districts.
 
-## Why this project?
+The package API and generated data format are still evolving and should not yet be considered stable.
+
+---
+
+# Why this project?
 
 Municipal political boundaries are surprisingly difficult to obtain programmatically at national scale.
 
-Unlike Census congressional and state legislative districts, municipal districts are commonly published independently by individual cities. Municipal governments use different GIS platforms, naming conventions, service structures, field names, and publication practices.
+Unlike congressional and state legislative districts, municipal districts are commonly published independently by individual cities. Municipal governments use different:
+
+* GIS platforms
+* naming conventions
+* service structures
+* field names
+* publication practices
+* geographic data formats
+* ArcGIS organizations and servers
 
 A municipality may publish:
 
-* a dedicated political-boundary FeatureServer,
-* a MapServer containing multiple layers,
-* a map with several related layers,
-* historical and current boundary datasets,
-* a political boundary alongside unrelated thematic datasets,
-* or a derived dataset that happens to contain a district identifier.
+* a dedicated political-boundary FeatureServer
+* a MapServer containing multiple layers
+* multiple representations of the same boundary system
+* current and historical boundary datasets
+* political boundaries alongside unrelated thematic datasets
+* derived datasets that contain district identifiers without representing district boundaries
 
-A simple keyword search therefore isn't sufficient.
+A simple keyword search is therefore not sufficient.
 
-This project treats municipal district discovery as a **data validation and source-selection problem**, not simply a search problem.
+This project treats municipal district discovery as a **data validation and source-selection problem**, rather than simply a search problem.
 
-## Architecture
+---
 
-The discovery pipeline currently follows this general process:
+# Architecture
+
+The discovery pipeline follows this general process:
 
 ```text
 Census Places
@@ -113,15 +131,19 @@ Registry
 Final Validation
 ```
 
-### 1. Census Places
+The important architectural principle is that **discovery, validation, ranking, and canonical selection are separate stages**.
 
-The Census place data provides the initial nationwide municipality inventory and place identifiers.
+A search result is not considered authoritative simply because its name looks correct.
 
-Each municipality can be associated with a Census place GEOID/FIPS identifier that becomes the stable geographic key used throughout the pipeline.
+---
 
-### 2. Municipality Discovery
+## 1. Census Places
 
-The project identifies municipalities from Census geographic data and associates them with:
+Census place data provides the initial nationwide municipality inventory and stable geographic identifiers.
+
+Each municipality is associated with a Census place GEOID/FIPS identifier that becomes the stable geographic key used throughout the pipeline.
+
+Municipality records include information such as:
 
 * city name
 * state
@@ -129,15 +151,48 @@ The project identifies municipalities from Census geographic data and associates
 * place FIPS/GEOID
 * municipality geometry
 
-### 3. ArcGIS Candidate Discovery
+---
+
+## 2. Municipality Discovery
+
+The project identifies municipalities from Census geographic data and uses the resulting place information as the foundation for district discovery.
+
+The place identifier is particularly important because municipal names are not globally unique.
+
+For example:
+
+```text
+Phoenix, AZ
+```
+
+is represented by its Census place identifier rather than relying on the city name alone.
+
+---
+
+## 3. ArcGIS Candidate Discovery
 
 The project searches ArcGIS sources for potential municipal district datasets.
 
-Search results are not automatically accepted.
+Search results are **not automatically accepted**.
 
-Discovery uses multiple search strategies and can also discover municipal ArcGIS Server roots. Server discovery is particularly useful for municipalities that publish large numbers of services where a general ArcGIS Online search can produce noisy results.
+Discovery uses multiple search strategies and can also discover municipal ArcGIS Server roots.
 
-### 4. Layer Inspection
+Server discovery is particularly useful for municipalities that publish large numbers of services where general ArcGIS Online search can produce noisy results.
+
+The discovery process can encounter multiple representations of the same underlying boundary system, such as:
+
+```text
+FeatureServer/0
+MapServer/0
+FeatureServer/1
+MapServer/1
+```
+
+These candidates are retained during discovery so that they can be compared and evaluated later.
+
+---
+
+## 4. Layer Inspection
 
 Potential ArcGIS services are inspected to determine their actual structure.
 
@@ -157,11 +212,16 @@ Inspection can identify:
 * pagination support
 * query support
 * ownership and organization metadata
-* tags and type keywords
+* tags
+* type keywords
+* ArcGIS item identifiers
+* service item identifiers
 
-This prevents a search result from being treated as a valid political-boundary source merely because its title contains a relevant keyword.
+Inspection prevents a search result from being treated as a political-boundary source merely because its title contains a relevant keyword.
 
-### 5. Classification
+---
+
+# 5. Classification
 
 Candidates are classified according to what the dataset actually represents.
 
@@ -195,27 +255,41 @@ airports
 parcels
 ```
 
-This distinction is important because a thematic dataset can contain a field such as `WARD` or `DISTRICT` without actually representing political boundaries.
+The critical distinction is between **dataset identity** and **attributes contained in the dataset**.
 
-For example:
+A field named:
 
 ```text
-Eviction Filings by Council Districts
+WARD
 ```
 
-may contain all eight Phoenix council-district values, but it is still an eviction dataset rather than the authoritative council-boundary geometry.
+does not automatically mean that the layer represents ward boundaries.
 
-Similarly:
+For example:
 
 ```text
 Golf Courses
 ```
 
-should not become a ward-boundary dataset merely because it happens to contain a `WARD` attribute.
+may contain a `WARD` field because each golf course is associated with a ward.
 
-### 6. Attribute Validation
+That does not make the golf-course layer a ward-boundary dataset.
 
-A candidate that appears to represent municipal districts is validated using the actual attributes in the layer.
+Similarly:
+
+```text
+Eviction Filings by Council Districts
+```
+
+may contain all eight Phoenix council-district values, but it is still an eviction dataset rather than a council-boundary dataset.
+
+Derived datasets are therefore treated separately from boundary-native datasets.
+
+---
+
+# 6. Attribute Validation
+
+Candidates that appear to represent municipal districts are validated using the actual attributes in the layer.
 
 Validation can determine:
 
@@ -225,29 +299,71 @@ Validation can determine:
 * whether the layer contains the expected number of districts
 * whether expected district values are missing
 * whether the layer appears complete
+* whether district values contain unexpected mixed types
 
-Where an independently known district count is available, it is used as an external validation signal rather than deriving the expected count from the candidate itself.
+Where an independently known district count is available, it is used as an external validation signal.
 
-For example, Phoenix has eight city council districts. A candidate containing eight distinct district values can therefore be checked against an independently known expected count.
+The candidate does **not** define its own expected district count.
 
-This helps distinguish a complete boundary dataset from a partial or derived dataset.
+For example, Phoenix has eight city council districts. A candidate containing:
 
-### 7. Geographic Validation
+```text
+1
+2
+3
+4
+5
+6
+7
+8
+```
+
+can therefore be checked against an independent expected count of eight.
+
+This helps distinguish a complete political-boundary dataset from a partial or derived dataset.
+
+### Validation confidence
+
+Political-boundary validation uses a **0–100 confidence scale**.
+
+The current ranking policy is:
+
+| Validation confidence | Treatment                         |
+| --------------------: | --------------------------------- |
+|                `< 60` | Hard rejection                    |
+|               `60–69` | Accepted without confidence bonus |
+|               `70–79` | Ranking bonus                     |
+|               `80–89` | Larger ranking bonus              |
+|              `90–100` | Highest confidence bonus          |
+
+Validation confidence is distinct from source authority and temporal status.
+
+---
+
+# 7. Geographic Validation
 
 Attribute validation alone is not enough.
 
 A candidate must also make geographic sense for the municipality.
 
-The project can compare candidate geometry against municipality geography to identify whether the candidate:
+The project can compare candidate geometry against municipality geography to determine whether the candidate:
 
-* overlaps the municipality appropriately,
-* represents polygonal boundaries,
-* appears to cover the expected municipal area,
-* or is likely associated with a different jurisdiction.
+* overlaps the municipality appropriately
+* represents polygonal boundaries
+* appears to cover the expected municipal area
+* is likely associated with a different jurisdiction
 
-### 8. Candidate Ranking
+Geographic validation is used as a ranking signal rather than being the sole eligibility criterion.
 
-Candidates that survive validation are ranked according to characteristics such as:
+A strong municipality geography match substantially increases a candidate's ranking.
+
+---
+
+# 8. Candidate Ranking
+
+Candidates that survive validation are ranked using multiple independent signals.
+
+Ranking can incorporate:
 
 * official municipal provenance
 * political identity
@@ -255,25 +371,90 @@ Candidates that survive validation are ranked according to characteristics such 
 * geometry quality
 * district-field quality
 * validation confidence
-* municipality relationship
+* expected district-count agreement
+* municipality geography relationship
 * source provenance
-* thematic/derived characteristics
+* temporal status
+* review requirements
 
-Ranking is deliberately performed after discovery and validation rather than relying solely on search-engine relevance.
+Ranking is deliberately performed **after discovery and validation** rather than relying solely on search relevance.
 
-### 9. Equivalent Layer Detection
+This allows a noisy ArcGIS search result to be inspected and rejected rather than automatically becoming the selected source.
+
+---
+
+# 9. Query Deduplication
+
+ArcGIS municipalities frequently expose the same logical layer through multiple service representations.
+
+For example:
+
+```text
+https://maps.phoenix.gov/.../Council_Districts/MapServer/0
+
+https://services.arcgis.com/.../Council_Districts/FeatureServer/0
+```
+
+These may represent the same underlying boundary system even though their URLs, hosts, and ArcGIS item metadata differ.
+
+The discovery pipeline therefore groups equivalent query targets before performing expensive operations such as:
+
+* querying distinct district values
+* querying feature counts
+* downloading geometry
+
+This prevents equivalent FeatureServer and MapServer representations from causing redundant external requests.
+
+The query identity uses municipality identity, service identity, and layer identity rather than relying exclusively on ArcGIS item IDs.
+
+---
+
+# 10. Equivalent Layer Detection
 
 Municipalities often publish multiple layers representing essentially the same boundary system.
 
-For example, Phoenix may expose multiple layers corresponding to the same eight council districts.
+For example, Phoenix exposes multiple representations of its council districts.
 
-The project groups equivalent candidates so that several representations of the same boundary system do not become several competing canonical datasets.
+The project groups equivalent candidates so that multiple representations of the same boundary system do not become competing canonical datasets.
 
-### 10. Canonical Source Selection
+Equivalence analysis considers characteristics such as:
 
-Each municipality/district type can ultimately receive a canonical source.
+* dataset identity
+* service identity
+* layer identity
+* temporal dataset family
+* field structure
+* district-field structure
+* name-field structure
+* geometry characteristics
 
-The canonical source records information such as:
+This stage is separate from query deduplication.
+
+**Query deduplication** prevents redundant expensive queries.
+
+**Equivalence detection** determines which successfully validated candidates represent the same logical dataset.
+
+---
+
+# 11. Canonical Source Selection
+
+After equivalent candidates have been grouped, the project selects a canonical source for each municipality and district type.
+
+Canonical selection considers factors such as:
+
+* source role
+* official municipal provenance
+* validation confidence
+* temporal status
+* geography validation
+* service type
+* district-field quality
+* review status
+* equivalence relationships
+
+The canonical source retains information about alternative representations rather than discarding them.
+
+Canonical metadata can include:
 
 * source URL
 * ArcGIS item ID
@@ -284,16 +465,19 @@ The canonical source records information such as:
 * district type
 * service type
 * official municipal-source status
+* source role
+* temporal status
 * district field
 * name field
 * geometry type
+* validation confidence
 * selection reasons
 * alternative sources
 * review status
 
-The goal is to select the best validated source while retaining information about alternatives.
+---
 
-## Example: Phoenix
+# Example: Phoenix
 
 Phoenix provides a useful example of why the validation pipeline is necessary.
 
@@ -303,19 +487,20 @@ The municipal source:
 Council Districts and Members
 ```
 
-was identified as a political boundary dataset with:
+is identified as a political boundary dataset with:
 
 ```text
 District field: DISTRICT
 Distinct districts: 1–8
-Feature count: 8
 Expected district count: 8
 Complete district coverage: true
 Geometry: Polygon
 Official municipal source: true
 ```
 
-The discovery pipeline therefore recognizes it as a valid council-district boundary source.
+The project also discovers a FeatureServer representation of the same council-district layer.
+
+The two representations can be recognized as equivalent, while the municipal MapServer representation can be selected as the canonical source.
 
 A separate dataset:
 
@@ -323,25 +508,68 @@ A separate dataset:
 Eviction Filings by Council Districts
 ```
 
-also contains all eight council-district values.
+also contains the eight council-district values.
 
-However, it is classified as a thematic/derived dataset rather than the primary political-boundary source. The presence of district values alone is therefore insufficient to make a dataset canonical.
+However, it is classified as a derived/thematic dataset rather than a political-boundary dataset.
 
-## Example: Tucson
+This demonstrates why **district values alone are insufficient** to establish that a dataset represents political boundaries.
 
-Tucson provides another important test case because the city publishes municipal ward boundary data through ArcGIS.
+Another discovered dataset:
 
-The project recognizes Tucson's ward boundary datasets and can distinguish them from unrelated ArcGIS services.
+```text
+CityCouncilDistricts
+```
 
-Historical datasets are also treated separately from current/undated sources. For example, a dataset named:
+contains:
+
+```text
+1–8
+ACACIA
+BARREL
+CACTUS
+CHOLLA
+...
+```
+
+Because its district field contains mixed numeric and named values and does not match the expected eight-district structure, it is rejected.
+
+---
+
+# Example: Tucson
+
+Tucson provides another important validation case.
+
+The city publishes municipal ward boundary data through ArcGIS, including multiple representations and historical datasets.
+
+The project can distinguish:
+
+```text
+City of Tucson Ward Boundaries
+```
+
+from unrelated thematic datasets that happen to contain ward attributes.
+
+Historical datasets are also tracked separately from current or undated sources.
+
+For example:
 
 ```text
 Tucson Wards 2022
 ```
 
-can be identified as a ward dataset with an explicit historical year rather than silently assuming that every undated or older source represents the current boundaries.
+can be identified as:
 
-## Temporal status
+```text
+sourceRole: authoritative
+temporalStatus: historical
+districtType: ward
+```
+
+rather than silently assuming that every ward dataset represents the current boundaries.
+
+---
+
+# Temporal Status
 
 Political boundary identity and temporal status are intentionally separate concepts.
 
@@ -359,17 +587,23 @@ authoritative + current
 
 Temporal status currently includes:
 
-* `current`
-* `historical`
-* `undated`
+```text
+current
+historical
+undated
+```
 
 An explicit year in the dataset identity is used as evidence when determining temporal status.
 
-The project deliberately does not assume that an undated dataset is current.
+The project deliberately does **not** assume that an undated dataset is current.
 
-## Source roles
+This distinction is important because source authority and boundary currency are different questions.
 
-Source role describes what role a dataset plays in the discovery process.
+---
+
+# Source Roles
+
+Source role describes the role a dataset plays in the discovery process.
 
 Current roles include:
 
@@ -389,11 +623,13 @@ sourceRole: authoritative
 temporalStatus: historical
 ```
 
-is valid.
+is a valid classification.
 
-This separation allows the project to preserve both source authority and temporal information.
+This allows the project to preserve both source authority and temporal information.
 
-## GeoJSON generation
+---
+
+# GeoJSON Generation
 
 Once a canonical source has been selected, ArcGIS geometry can be queried and normalized into GeoJSON.
 
@@ -401,7 +637,7 @@ The geometry pipeline handles ArcGIS polygon structures including:
 
 * Polygon
 * MultiPolygon
-* interior rings/holes
+* interior rings / holes
 * multiple exterior rings
 * spatial-reference normalization
 
@@ -413,9 +649,28 @@ The resulting geometry can be stored as standard GeoJSON suitable for:
 * point-in-polygon operations
 * downstream geographic applications
 
-## Registry
+---
 
-Generated municipal boundary datasets are associated with a registry entry containing information such as:
+# Census Place Geometry
+
+The project also generates municipality geometry from Census geographic data.
+
+This provides a consistent geographic reference for:
+
+* municipality validation
+* candidate geography validation
+* spatial relationships
+* downstream geographic operations
+
+Generated municipality geometry is stored alongside municipal district geometry.
+
+---
+
+# Registry
+
+Generated municipal boundary datasets are associated with registry information connecting municipality metadata, district types, geometry files, and attribute fields.
+
+A registry entry can look like:
 
 ```json
 {
@@ -427,9 +682,25 @@ Generated municipal boundary datasets are associated with a registry entry conta
 }
 ```
 
-The registry provides a stable connection between municipality metadata, district types, generated geometry, and attribute fields.
+The registry provides a stable connection between:
 
-## Installation
+```text
+Municipality
+    ↓
+District type
+    ↓
+Canonical source
+    ↓
+Generated GeoJSON
+    ↓
+District/name attributes
+```
+
+The generated registry format is still evolving as the project moves toward a stable package API.
+
+---
+
+# Installation
 
 ```bash
 npm install @stephendewyer/us-municipal-districts
@@ -437,35 +708,45 @@ npm install @stephendewyer/us-municipal-districts
 
 The project is currently under active development and the public package/API surface may change before the first stable release.
 
-## Development requirements
+---
+
+# Development Requirements
 
 * Node.js 20+
 * npm
 * TypeScript
 
-The project uses TypeScript and Node.js, with geographic processing based on GeoJSON, Turf.js, Census geographic data, and ArcGIS REST services.
+The project uses TypeScript and Node.js, with geographic processing based on:
 
-## Development commands
+* GeoJSON
+* Turf.js
+* U.S. Census geographic data
+* ArcGIS REST services
+* ArcGIS Online
 
-### Build
+---
+
+# Development Commands
+
+## Build
 
 ```bash
 npm run build
 ```
 
-### Type checking
+## Type checking
 
 ```bash
 npm run typecheck
 ```
 
-### Run the test suite
+## Run the test suite
 
 ```bash
 npm test
 ```
 
-### Run the complete check
+## Run the complete check
 
 ```bash
 npm run check
@@ -473,13 +754,13 @@ npm run check
 
 The complete check runs the build, test type checking, and automated tests.
 
-### Generate Census place data
+## Generate Census place data
 
 ```bash
 npm run places
 ```
 
-### Discover municipal district sources
+## Discover municipal district sources
 
 The CLI accepts a municipality and state abbreviation.
 
@@ -497,31 +778,31 @@ npm run discover -- --city Phoenix --state AZ
 
 The state should currently be supplied as a two-letter abbreviation.
 
-### Inspect an ArcGIS source
+## Inspect an ArcGIS source
 
 ```bash
 npm run inspect
 ```
 
-### Generate geometry
+## Generate geometry
 
 ```bash
 npm run geometry
 ```
 
-### Generate datasets
+## Generate datasets
 
 ```bash
 npm run generate
 ```
 
-### Validate generated data
+## Validate generated data
 
 ```bash
 npm run validate
 ```
 
-### Integration tests
+## Integration tests
 
 Integration tests are separated from the normal unit-test suite because they can perform live discovery against external services.
 
@@ -536,6 +817,7 @@ A targeted municipality can be selected with:
 ```powershell
 $env:DISCOVERY_CITY="Phoenix"
 $env:DISCOVERY_STATE="AZ"
+
 npm run test:integration
 ```
 
@@ -543,18 +825,21 @@ Nationwide discovery integration testing can be enabled with:
 
 ```powershell
 $env:RUN_NATIONWIDE_DISCOVERY="1"
+
 npm run test:integration
 ```
 
 Live discovery tests are intentionally opt-in so that the normal test suite remains deterministic and fast.
 
-## Testing strategy
+---
+
+# Testing Strategy
 
 The project uses several layers of testing.
 
-### Unit tests
+## Unit Tests
 
-Unit tests cover individual pieces of the pipeline, including:
+Unit tests cover individual components of the pipeline, including:
 
 * discovery
 * ArcGIS inspection
@@ -568,28 +853,46 @@ Unit tests cover individual pieces of the pipeline, including:
 * equivalence grouping
 * registry generation
 
-### Pipeline tests
+## Pipeline Tests
 
-Pipeline tests exercise the interaction between discovery, inspection, classification, validation, ranking, and canonical selection.
+Pipeline tests exercise the interaction between:
+
+```text
+Discovery
+    ↓
+Inspection
+    ↓
+Classification
+    ↓
+Validation
+    ↓
+Ranking
+    ↓
+Equivalence
+    ↓
+Canonical selection
+```
 
 These tests are especially important for preventing false positives where a thematic dataset resembles a political-boundary dataset.
 
-### Integration tests
+## Integration Tests
 
 Integration tests exercise the live discovery pipeline against real municipal GIS sources.
 
-Examples include:
+Example municipalities include:
 
-* Tucson wards
-* Phoenix council districts
-* Chicago wards
-* Milwaukee aldermanic districts
-* Austin council districts
-* Philadelphia wards
+* Tucson
+* Phoenix
+* Chicago
+* Milwaukee
+* Austin
+* Philadelphia
 
 Because external GIS services can change or become unavailable, live integration tests are opt-in rather than part of the default unit-test run.
 
-## Data provenance
+---
+
+# Data Provenance
 
 The project prioritizes official municipal GIS sources whenever possible.
 
@@ -605,13 +908,15 @@ Source provenance is preserved through the discovery and canonical-selection pip
 
 This is important because the project is intended to provide not only geometry, but also a traceable explanation of where that geometry came from.
 
-## Design principles
+---
 
-### Prefer authoritative boundary datasets
+# Design Principles
+
+## Prefer Authoritative Boundary Datasets
 
 A dataset explicitly representing municipal political boundaries should generally be preferred over a derived dataset containing political attributes.
 
-### Validate independently
+## Validate Independently
 
 The project avoids allowing a candidate dataset to define its own validity.
 
@@ -619,7 +924,7 @@ For example, the number of districts observed in a candidate should not automati
 
 Where possible, expected district counts come from an independent municipal or authoritative source.
 
-### Separate identity from attributes
+## Separate Identity from Attributes
 
 A field such as:
 
@@ -631,29 +936,66 @@ does not automatically mean that the layer is a ward-boundary dataset.
 
 The identity of the dataset is considered separately from its attributes.
 
-### Preserve historical information
+## Separate Source Role from Temporal Status
+
+Historical status is not treated as a source role.
+
+A source can simultaneously be:
+
+```text
+authoritative
+```
+
+and:
+
+```text
+historical
+```
+
+This prevents temporal information from being confused with source provenance.
+
+## Preserve Historical Information
 
 Older political-boundary datasets are not silently treated as current.
 
 Historical and current source information should remain distinguishable throughout the pipeline.
 
-### Prefer deterministic validation over search relevance
+## Deduplicate Expensive Queries
+
+Multiple ArcGIS representations of the same service should not trigger unnecessary repeated requests for:
+
+* district values
+* feature counts
+* geometry
+
+Query-level deduplication occurs before these expensive operations.
+
+## Preserve Equivalent Sources
+
+Equivalent FeatureServer and MapServer representations should be recognized as alternative representations of the same logical boundary system rather than treated as unrelated datasets.
+
+## Prefer Deterministic Validation Over Search Relevance
 
 Search engines and ArcGIS search results are useful for discovering candidates, but they are not sufficient for determining whether a dataset is correct.
 
-The project therefore uses a sequence of:
+The project therefore uses:
 
 ```text
 Discovery
 → Inspection
 → Classification
 → Validation
+→ Geographic Validation
 → Ranking
+→ Equivalence
+→ Canonical Selection
 ```
 
 rather than accepting the first plausible search result.
 
-## Project structure
+---
+
+# Project Structure
 
 A simplified view of the repository:
 
@@ -668,13 +1010,14 @@ generator/
 │   ├── expectedDistrictCount.ts
 │   ├── rank.ts
 │   ├── canonical.ts
+│   ├── equivalence.ts
 │   ├── geometry/
 │   └── ...
 │
 tests/
 ├── generator/
 └── integration/
-
+│
 data/
 ├── municipalities/
 │   └── geometry/
@@ -683,30 +1026,50 @@ data/
 
 The exact internal structure is expected to evolve as the project moves toward a stable package API.
 
-## Current goals
+---
+
+# Current Goals
 
 The primary development goals are:
 
 1. Improve nationwide municipal district discovery.
-2. Reduce false positives from thematic ArcGIS datasets.
-3. Improve discovery performance without sacrificing candidate quality.
-4. Increase coverage across different municipal GIS architectures.
+2. Reduce false positives from thematic and derived ArcGIS datasets.
+3. Reduce redundant external GIS queries.
+4. Improve coverage across different municipal GIS architectures.
 5. Improve validation of district completeness.
 6. Distinguish current and historical boundary sources.
 7. Improve canonical-source selection.
 8. Generate consistent GeoJSON geometry.
 9. Build a stable nationwide municipal-district registry.
 10. Provide a reliable geographic lookup API for downstream applications.
+11. Expand municipality coverage and test fixtures.
+12. Improve performance while preserving source-quality validation.
 
-## Relationship to other civic-data projects
+---
 
-There are several valuable open-source projects addressing related geographic and civic-data problems, including Open Civic Data, OpenStates, and the United States Districts project. These projects demonstrate the value of standardized geographic and government data, but this project focuses specifically on the difficult problem of **discovering and normalizing municipal political-district boundaries across U.S. municipalities**.
+# Relationship to Other Civic-Data Projects
 
-## License
+There are several valuable open-source projects addressing related geographic and civic-data problems, including Open Civic Data, OpenStates, and the United States Districts project.
 
-This project is currently under active development. See the repository's `LICENSE` file for the applicable license.
+These projects demonstrate the value of standardized geographic and government data.
 
-## Contributing
+U.S. Municipal Districts focuses specifically on the difficult problem of:
+
+> **discovering, validating, and normalizing municipal political-district boundaries across U.S. municipalities.**
+
+The emphasis is on the **source-discovery and geographic-data normalization problem** that occurs before an application can reliably perform municipal district lookups.
+
+---
+
+# License
+
+This project is currently under active development.
+
+See the repository's `LICENSE` file for the applicable license.
+
+---
+
+# Contributing
 
 Contributions, bug reports, additional municipal GIS sources, and improvements to validation logic are welcome.
 
@@ -719,10 +1082,24 @@ Particularly useful contributions include:
 * geometry edge cases
 * validation improvements
 * performance improvements
+* equivalence-detection improvements
 * documentation improvements
 
-## Disclaimer
+---
+
+# Disclaimer
 
 Municipal political boundaries can change as a result of elections, redistricting, annexation, municipal legislation, or changes to published GIS data.
 
-This project therefore treats source provenance, temporal status, validation, and review status as first-class data rather than assuming that a discovered GIS layer is permanently authoritative.
+This project therefore treats:
+
+* source provenance
+* temporal status
+* validation confidence
+* geographic validation
+* equivalence
+* review status
+
+as first-class data rather than assuming that a discovered GIS layer is permanently authoritative.
+
+```
