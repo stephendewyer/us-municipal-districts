@@ -1494,7 +1494,7 @@ export function classifyCandidate(
      */
     const isThematicDataset =
         matches.thematic.length > 0 &&
-        !isMunicipalPoliticalBoundary;
+        !isPoliticalBoundary;
 
     // =========================================================================
     // Source role
