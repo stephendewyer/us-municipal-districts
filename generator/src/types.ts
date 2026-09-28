@@ -661,6 +661,8 @@ export interface CandidateClassification {
      */
     isPoliticalBoundary: boolean;
 
+    isMunicipalPoliticalBoundary: boolean;
+
     /**
      * Whether the dataset appears to be thematic.
      */

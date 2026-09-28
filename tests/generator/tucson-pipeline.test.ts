@@ -56,6 +56,7 @@ function makeClassification(
     return {
         isBoundaryLayer: true,
         isPoliticalBoundary: true,
+        isMunicipalPoliticalBoundary: true,
         isThematicDataset: false,
         isCensusDataset: false,
         isParcelDataset: false,

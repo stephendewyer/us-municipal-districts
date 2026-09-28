@@ -86,6 +86,33 @@ function matchesAny(
 // Political identity
 // =============================================================================
 
+const NON_MUNICIPAL_POLITICAL_PATTERNS: Pattern[] = [
+    {
+        label: "legislative district",
+        regex: /\blegislative\s+districts?\b/i
+    },
+    {
+        label: "congressional district",
+        regex: /\bcongressional\s+districts?\b/i
+    },
+    {
+        label: "state senate district",
+        regex: /\bstate\s+senate\s+districts?\b/i
+    },
+    {
+        label: "state house district",
+        regex: /\bstate\s+house\s+districts?\b/i
+    },
+    {
+        label: "state assembly district",
+        regex: /\bstate\s+assembly\s+districts?\b/i
+    },
+    {
+        label: "assembly district",
+        regex: /\bassembly\s+districts?\b/i
+    }
+];
+
 const WARD_PATTERNS: Pattern[] = [
     {
         label: "ward",
@@ -1164,6 +1191,12 @@ export function classifyCandidate(
             POLITICAL_PATTERNS
         );
 
+    const nonMunicipalPoliticalMatches =
+        findMatches(
+            politicalIdentityText,
+            NON_MUNICIPAL_POLITICAL_PATTERNS
+        );
+
     const explicitPoliticalIdentity =
         politicalIdentityMatches.length > 0;
 
@@ -1181,6 +1214,13 @@ export function classifyCandidate(
 
     const explicitNonPoliticalIdentity =
         nonPoliticalMatches.length > 0;
+
+    const explicitNonMunicipalPoliticalIdentity =
+        nonMunicipalPoliticalMatches.length > 0;
+    
+    const isMunicipalPoliticalBoundary =
+        explicitPoliticalIdentity &&
+        !explicitNonMunicipalPoliticalIdentity;
 
     // =========================================================================
     // Official source
@@ -1445,7 +1485,7 @@ export function classifyCandidate(
         politicalIdentityWithGenericField;
 
     const isBoundaryLayer =
-        isPoliticalBoundary;
+        isMunicipalPoliticalBoundary;
 
     /*
      * Derived political datasets are thematic by nature.
@@ -1454,7 +1494,7 @@ export function classifyCandidate(
      */
     const isThematicDataset =
         matches.thematic.length > 0 &&
-        !isPoliticalBoundary;
+        !isMunicipalPoliticalBoundary;
 
     // =========================================================================
     // Source role
@@ -1578,6 +1618,15 @@ export function classifyCandidate(
         );
     }
 
+    if (
+        explicitNonMunicipalPoliticalIdentity &&
+        !isMunicipalPoliticalBoundary
+    ) {
+        rejectionReasons.push(
+            `non-municipal political boundary: ${nonMunicipalPoliticalMatches.join(", ")}`
+        );
+    }
+
     // =========================================================================
     // Review status
     // =========================================================================
@@ -1645,6 +1694,8 @@ export function classifyCandidate(
         isBoundaryLayer,
 
         isPoliticalBoundary,
+
+        isMunicipalPoliticalBoundary,
 
         isThematicDataset,
 

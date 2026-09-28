@@ -219,12 +219,12 @@ export function scoreCandidate(
         };
     }
 
-    if (!classification.isPoliticalBoundary) {
+    if (!classification.isMunicipalPoliticalBoundary) {
         return {
             candidate,
             score: Number.NEGATIVE_INFINITY,
             reasons: [
-                "candidate is not classified as a political boundary"
+                "candidate is not classified as a municipal political boundary"
             ]
         };
     }

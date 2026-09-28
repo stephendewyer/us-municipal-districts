@@ -121,6 +121,9 @@ function createClassification(
 
         isPoliticalBoundary:
             true,
+            
+        isMunicipalPoliticalBoundary: 
+            true,
 
         isThematicDataset:
             false,

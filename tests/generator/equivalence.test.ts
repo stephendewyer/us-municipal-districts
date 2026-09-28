@@ -45,6 +45,10 @@ function createClassification(
             options.isPoliticalBoundary ??
             true,
 
+        isMunicipalPoliticalBoundary: 
+            options.isPoliticalBoundary ??
+            true,
+
         isThematicDataset:
             false,
 

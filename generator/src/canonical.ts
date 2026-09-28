@@ -439,7 +439,7 @@ function isCanonicalCandidate(
     }
 
     if (
-        !classification.isPoliticalBoundary
+        !classification.isMunicipalPoliticalBoundary
     ) {
         return false;
     }
