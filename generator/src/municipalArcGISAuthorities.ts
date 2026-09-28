@@ -4,6 +4,7 @@ export interface MunicipalArcGISAuthority {
     state: string;
     organizationId?: string;
     organizationName?: string;
+    hosts?: string[];
 }
 
 export const MUNICIPAL_ARCGIS_AUTHORITIES:
@@ -17,7 +18,10 @@ export const MUNICIPAL_ARCGIS_AUTHORITIES:
         {
             city: "phoenix",
             state: "az",
-            organizationId: "REPLACE_WITH_PHOENIX_ORG_ID",
+            hosts: [
+                "maps.phoenix.gov",
+                "mapportal.phoenix.gov"
+            ],
             organizationName: "City of Phoenix"
         },
         {

@@ -813,11 +813,36 @@ function isOfficialMunicipalSource(
             inspection.serviceDescription
         );
 
+    const url =
+        normalize(
+            inspection.url
+        );
+
+    const serviceUrl =
+        normalize(
+            inspection.serviceUrl
+        );
+
+    const candidateUrl =
+        normalize(
+            candidate.url
+        );
+
     const provenanceText = [
         owner,
         organization,
         description,
         serviceDescription
+    ]
+        .filter(Boolean)
+        .join(" ");
+
+    const sourceText = [
+        url,
+        serviceUrl,
+        candidateUrl,
+        owner,
+        organization
     ]
         .filter(Boolean)
         .join(" ");
@@ -848,7 +873,29 @@ function isOfficialMunicipalSource(
     }
 
     // -------------------------------------------------------------------------
-    // 3. Explicit publisher / owner / maintainer evidence
+    // 3. Known municipal ArcGIS Enterprise host
+    // -------------------------------------------------------------------------
+
+    const authority =
+        MUNICIPAL_ARCGIS_AUTHORITIES.find(
+            item =>
+                item.city === city &&
+                item.state === state
+        );
+
+    if (
+        authority?.hosts?.some(
+            host =>
+                sourceText.includes(
+                    host.toLowerCase()
+                )
+        )
+    ) {
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. Explicit publisher / owner / maintainer evidence
     // -------------------------------------------------------------------------
 
     if (
@@ -905,7 +952,7 @@ function isOfficialMunicipalSource(
     }
 
     // -------------------------------------------------------------------------
-    // 4. Explicit municipal GIS/data portal identity
+    // 5. Explicit municipal GIS/data portal identity
     // -------------------------------------------------------------------------
 
     if (
