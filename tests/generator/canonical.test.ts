@@ -115,7 +115,7 @@ function createClassification(
 
         isMunicipalPoliticalBoundary: 
             true,
-            
+
         publisherLevel: 
             "municipal",
 
@@ -713,7 +713,6 @@ test(
 test(
     "selectCanonicalSource prefers a current candidate over a historical candidate",
     () => {
-
         const historical =
             createCandidate(
                 undefined,
@@ -730,7 +729,6 @@ test(
                 "current"
             );
 
-
         const result =
             selectCanonicalSource(
                 createGroup([
@@ -739,10 +737,7 @@ test(
                 ])
             );
 
-
-        assert.ok(
-            result
-        );
+        assert.ok(result);
 
         assert.equal(
             result.url,
@@ -755,8 +750,7 @@ test(
         );
 
         assert.ok(
-            result.score >
-            0
+            result.score > 0
         );
 
         assert.ok(
@@ -769,11 +763,9 @@ test(
     }
 );
 
-
 test(
     "selectCanonicalSource demotes a historical candidate in canonical selection",
     () => {
-
         const historical =
             createCandidate(
                 undefined,
@@ -782,7 +774,6 @@ test(
                 "historical"
             );
 
-
         const result =
             selectCanonicalSource(
                 createGroup([
@@ -790,14 +781,20 @@ test(
                 ])
             );
 
-
-        assert.ok(
-            result
-        );
+        assert.ok(result);
 
         assert.equal(
             result.url,
             historical.inspection.url
+        );
+
+        assert.equal(
+            result.title,
+            "Tucson Ward Boundaries (2015)"
+        );
+
+        assert.ok(
+            result.score > Number.NEGATIVE_INFINITY
         );
 
         assert.ok(
@@ -810,11 +807,9 @@ test(
     }
 );
 
-
 test(
-    "selectCanonicalSource prefers an undated candidate over a historical candidate",
+    "selectCanonicalSource prefers a historical candidate over an undated candidate",
     () => {
-
         const historical =
             createCandidate(
                 undefined,
@@ -831,7 +826,6 @@ test(
                 "undated"
             );
 
-
         const result =
             selectCanonicalSource(
                 createGroup([
@@ -840,24 +834,29 @@ test(
                 ])
             );
 
-
-        assert.ok(
-            result
-        );
+        assert.ok(result);
 
         assert.equal(
             result.url,
-            undated.inspection.url
+            historical.inspection.url
         );
 
         assert.equal(
             result.title,
-            "Tucson Ward Boundaries"
+            "Tucson Ward Boundaries (2015)"
         );
 
         assert.ok(
             result.score >
-            Number.NEGATIVE_INFINITY
+                Number.NEGATIVE_INFINITY
+        );
+
+        assert.ok(
+            result.selectionReasons.some(
+                reason =>
+                    reason ===
+                    "-60 temporal status: historical"
+            )
         );
     }
 );

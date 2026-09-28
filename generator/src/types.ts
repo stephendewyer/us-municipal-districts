@@ -292,6 +292,46 @@ export interface DiscoveryCandidate {
     organizationId?: string;
 
     /**
+     * ArcGIS Online item owner username.
+     */
+    owner?: string;
+
+    /**
+     * ArcGIS Online item description.
+     */
+    description?: string;
+
+    /**
+     * ArcGIS Online item snippet.
+     */
+    snippet?: string;
+
+    /**
+     * ArcGIS Online item tags.
+     */
+    tags?: string[];
+
+    /**
+     * ArcGIS Online item type keywords.
+     */
+    typeKeywords?: string[];
+
+    /**
+     * ArcGIS Online item access level.
+     */
+    access?: string;
+
+    /**
+     * ArcGIS Online item content status.
+     */
+    contentStatus?: string;
+
+    /**
+     * ArcGIS Online item access information / attribution.
+     */
+    accessInformation?: string;
+
+    /**
      * Census place GEOID.
      */
     placeFips: string;

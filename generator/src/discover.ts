@@ -2183,7 +2183,6 @@ function createResolvedCandidate(
 
 
     return {
-
         ...candidate,
 
         itemId:
@@ -2191,6 +2190,30 @@ function createResolvedCandidate(
 
         organizationId:
             item.organizationId,
+
+        owner:
+            item.owner,
+
+        description:
+            item.description,
+
+        snippet:
+            item.snippet,
+
+        tags:
+            item.tags,
+
+        typeKeywords:
+            item.typeKeywords,
+
+        access:
+            item.access,
+
+        contentStatus:
+            item.contentStatus,
+
+        accessInformation:
+            item.accessInformation,
 
         url:
             item.url,
@@ -2200,11 +2223,8 @@ function createResolvedCandidate(
             candidate.title,
 
         reasons: [
-
             ...candidate.reasons,
-
             `resolved ArcGIS item: ${item.id}`,
-
             `item type: ${item.type}`
         ]
     };

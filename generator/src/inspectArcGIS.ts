@@ -363,11 +363,27 @@ export async function inspectArcGIS(
         {
             title: inspection.title,
             url: inspection.url,
-            owner: inspection.owner,
-            organizationId: inspection.organizationId,
-            organization: inspection.organization,
-            accessInformation: inspection.accessInformation,
-            description: inspection.description
+
+            itemId:
+                inspection.itemId,
+
+            serviceItemId:
+                inspection.serviceItemId,
+
+            owner:
+                inspection.owner,
+
+            organizationId:
+                inspection.organizationId,
+
+            organization:
+                inspection.organization,
+
+            accessInformation:
+                inspection.accessInformation,
+
+            description:
+                inspection.description
         }
     );
 
