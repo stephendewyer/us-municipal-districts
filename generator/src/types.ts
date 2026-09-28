@@ -287,6 +287,11 @@ export interface DiscoveryCandidate {
     itemId?: string;
 
     /**
+     * ArcGIS Online organization ID.
+     */
+    organizationId?: string;
+
+    /**
      * Census place GEOID.
      */
     placeFips: string;
@@ -726,7 +731,7 @@ export interface CandidateClassification {
     matches: ClassificationMatches;
 
     publisherLevel: PublisherLevel;
-    
+
 }
 
 
@@ -841,6 +846,8 @@ export interface CanonicalSource {
      */
     itemId?: string;
 
+    organizationId?: string;
+
     title: string;
 
     city: string;
@@ -879,6 +886,8 @@ export interface CanonicalAlternative {
      * ArcGIS item ID, when known.
      */
     itemId?: string;
+
+    organizationId?: string;
 
     title?: string;
 

@@ -1093,7 +1093,7 @@ async function discoverMunicipality(
                     },
                     place
                 );
-                
+
             console.log(
                 "\nMUNICIPALITY VALIDATION DEBUG:",
                 {
@@ -2188,6 +2188,9 @@ function createResolvedCandidate(
 
         itemId:
             item.id,
+
+        organizationId:
+            item.organizationId,
 
         url:
             item.url,

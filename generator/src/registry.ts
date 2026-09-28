@@ -425,6 +425,13 @@ function createRegistryEntry(
                 }
                 : {}),
 
+            ...(canonical.organizationId
+                ? {
+                    organizationId:
+                        canonical.organizationId
+                }
+                : {}),
+
             serviceType:
                 canonical.serviceType,
 
@@ -449,7 +456,7 @@ function createRegistryEntry(
                     ? {
                         name:
                             canonical.nameField
-                    }
+                        }
                     : {})
             }
         },
@@ -473,6 +480,13 @@ function createRegistryEntry(
                             ? {
                                 itemId:
                                     alternative.itemId
+                                }
+                            : {}),
+
+                        ...(alternative.organizationId
+                            ? {
+                                organizationId:
+                                    alternative.organizationId
                                 }
                             : {}),
 

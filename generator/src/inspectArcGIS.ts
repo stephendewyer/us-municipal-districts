@@ -358,6 +358,19 @@ export async function inspectArcGIS(
         performance.now() -
         postProcessingStart;
 
+    console.log(
+        "PROVENANCE DEBUG:",
+        {
+            title: inspection.title,
+            url: inspection.url,
+            owner: inspection.owner,
+            organizationId: inspection.organizationId,
+            organization: inspection.organization,
+            accessInformation: inspection.accessInformation,
+            description: inspection.description
+        }
+    );
+
     // =========================================================================
     // Timing
     // =========================================================================

@@ -345,6 +345,11 @@ export interface MunicipalDistrictAlternative {
     itemId?: string;
 
     /**
+     * ArcGIS organization ID.
+     */
+    organizationId?: string;
+
+    /**
      * Human-readable source title.
      */
     title?: string;
@@ -398,6 +403,11 @@ export interface MunicipalDistrictSource {
      * ArcGIS Portal item ID.
      */
     itemId?: string;
+
+    /**
+     * ArcGIS organization ID.
+     */
+    organizationId?: string;
 
     /**
      * ArcGIS service type.

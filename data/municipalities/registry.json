@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-28T19:43:00.871Z",
+  "generatedAt": "2026-09-28T20:48:24.228Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -119,6 +119,7 @@
         "sourceType": "arcgis",
         "url": "https://services.arcgis.com/rD2ylXRs80UroD90/arcgis/rest/services/Ward_Boundaries/FeatureServer/0",
         "itemId": "39cc9015bf744957954145e788afc723",
+        "organizationId": "rD2ylXRs80UroD90",
         "serviceType": "FeatureServer",
         "title": "Ward Boundaries",
         "official": false,
@@ -130,7 +131,7 @@
       },
       "generatedFile": "geometry/1714000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-26T18:31:45.211Z",
+        "generatedAt": "2026-09-28T20:48:24.228Z",
         "generatorVersion": "0.1.0",
         "alternatives": [],
         "requiresReview": true

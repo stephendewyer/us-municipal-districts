@@ -786,6 +786,10 @@ export function selectCanonicalSource(
                         alternative
                             .candidate.itemId,
 
+                    organizationId:
+                        alternative
+                            .candidate.organizationId,
+
                     title:
                         alternative
                             .inspection.title ??
@@ -894,6 +898,9 @@ export function selectCanonicalSource(
 
         itemId:
             candidate.candidate.itemId,
+        
+        organizationId:
+            candidate.candidate.organizationId,
 
         title:
             inspection.title ??
