@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-27T23:57:07.357Z",
+  "generatedAt": "2026-09-28T01:00:47.164Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,14 +21,14 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-27T23:57:07.357Z",
+        "generatedAt": "2026-09-28T00:40:04.164Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
             "url": "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/1",
             "title": "Council Districts and Members Hash",
             "serviceType": "MapServer",
-            "official": false,
+            "official": true,
             "score": 213
           },
           {
@@ -48,7 +48,7 @@
             "score": 168
           }
         ],
-        "requiresReview": true
+        "requiresReview": false
       }
     },
     {
@@ -71,7 +71,7 @@
       },
       "generatedFile": "geometry/0477000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-26T21:04:36.792Z",
+        "generatedAt": "2026-09-28T01:00:47.164Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -80,7 +80,15 @@
             "title": "WARD_COT",
             "serviceType": "MapServer",
             "official": false,
-            "score": 213
+            "score": 168
+          },
+          {
+            "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer/156",
+            "itemId": "cbb29b7016c04c43b3b51ba60db17643",
+            "title": "TucsonWards2022",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 115
           },
           {
             "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/COTWards_HFL/FeatureServer/6",
@@ -88,7 +96,15 @@
             "title": "WARD_COT",
             "serviceType": "FeatureServer",
             "official": false,
-            "score": 153
+            "score": 108
+          },
+          {
+            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Boundaries_2000/FeatureServer/9",
+            "itemId": "6d32fef8867b4cf3beb47659db4b797a",
+            "title": "Wards_2000",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 108
           }
         ],
         "requiresReview": true

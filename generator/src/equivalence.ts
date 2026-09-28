@@ -79,8 +79,18 @@ function normalize(
         .trim();
 }
 
+function escapeRegex(
+    value: string
+): string {
+    return value.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+    );
+}
+
 function normalizeTemporalName(
-    value?: string
+    value?: string,
+    candidate?: InspectedCandidate
 ): string | undefined {
     const normalized =
         normalize(value);
@@ -89,12 +99,46 @@ function normalizeTemporalName(
         return undefined;
     }
 
-    return normalized
+    let result =
+        normalized
+            .replace(
+                /[\(\[\{]?\b(?:19|20)\d{2}\b[\)\]\}]?/g,
+                ""
+            );
+
+    // Remove municipality identity because municipalityKey()
+    // already provides the hard municipality constraint.
+    if (candidate) {
+        const city =
+            normalize(
+                candidate.candidate.city
+            );
+
+        if (city) {
+            result =
+                result.replace(
+                    new RegExp(
+                        `\\b${escapeRegex(city)}\\b`,
+                        "gi"
+                    ),
+                    ""
+                );
+            }
+        }
+
+    return result
         .replace(
-            /[\(\[\{]?\b(?:19|20)\d{2}\b[\)\]\}]?/g,
+            /\b(city|town|village|municipality)\s+of\b/g,
             ""
         )
-        .replace(/\s+/g, " ")
+        .replace(
+            /\b(city|town|village)\b/g,
+            ""
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
         .trim() || undefined;
 }
 
@@ -320,14 +364,18 @@ function nameFieldIdentity(
 function temporalFamily(
     candidate: InspectedCandidate
 ): string {
+    const familyName =
+        normalizeTemporalName(
+            candidate.inspection.title ??
+            candidate.candidate.title ??
+            candidate.inspection.layerName,
+            candidate
+        ) ?? "";
+
     return [
         municipalityKey(candidate),
         districtTypeKey(candidate),
-        datasetIdentity(candidate),
-        serviceIdentity(candidate),
-        layerIdentity(candidate),
-        getDistrictFields(candidate).join(","),
-        getNameFields(candidate).join(",")
+        familyName
     ].join("|");
 }
 
@@ -621,14 +669,16 @@ export function compareCandidates(
         normalizeTemporalName(
             a.inspection.title ??
             a.candidate.title ??
-            a.inspection.layerName
+            a.inspection.layerName,
+            a
         );
 
     const temporalTitleB =
         normalizeTemporalName(
             b.inspection.title ??
             b.candidate.title ??
-            b.inspection.layerName
+            b.inspection.layerName,
+            b
         );
 
     const temporalTitles =
@@ -898,48 +948,36 @@ interface CandidateGroup {
  *
  * This function is retained as a public compatibility API for dedupe.ts.
  */
+
 export function groupEquivalentCandidates(
     candidates: InspectedCandidate[],
     threshold = 0.60
 ): EquivalentLayerGroup[] {
+    const eligible = candidates.filter(
+        candidate =>
+            !candidate.classification.rejected &&
+            candidate.classification.isPoliticalBoundary &&
+            candidate.classification.isBoundaryLayer &&
+            candidate.classification.sourceRole !== "derived" &&
+            isPolygon(candidate)
+    );
 
-    const eligible =
-        candidates
-            .filter(
-                candidate =>
-                    !candidate.classification.rejected &&
-                    candidate.classification.isPoliticalBoundary &&
-                    candidate.classification.isBoundaryLayer &&
-                    candidate.classification.sourceRole !== "derived" &&
-                    isPolygon(candidate)
-            );
-
-    if (
-        eligible.length === 0
-    ) {
+    if (eligible.length === 0) {
         return [];
     }
 
-    /*
-     * Sort before grouping so the result does not depend on input order.
-     */
-    const sorted =
-        [...eligible].sort(
-            (a, b) =>
-                candidateSortKey(a)
-                    .localeCompare(
-                        candidateSortKey(b)
-                    )
-        );
+    const sorted = [...eligible].sort(
+        (a, b) =>
+            candidateSortKey(a).localeCompare(
+                candidateSortKey(b)
+            )
+    );
 
-    const parent =
-        sorted.map(
-            (_, index) => index
-        );
+    const parent = sorted.map(
+        (_, index) => index
+    );
 
-    function find(
-        index: number
-    ): number {
+    function find(index: number): number {
         let root = index;
 
         while (
@@ -951,12 +989,8 @@ export function groupEquivalentCandidates(
         while (
             parent[index] !== index
         ) {
-            const next =
-                parent[index];
-
-            parent[index] =
-                root;
-
+            const next = parent[index];
+            parent[index] = root;
             index = next;
         }
 
@@ -966,28 +1000,25 @@ export function groupEquivalentCandidates(
     function union(
         left: number,
         right: number
-    ): void {
-        const leftRoot =
-            find(left);
-
-        const rightRoot =
-            find(right);
+    ): boolean {
+        const leftRoot = find(left);
+        const rightRoot = find(right);
 
         if (
             leftRoot === rightRoot
         ) {
-            return;
+            return false;
         }
 
         if (
             leftRoot < rightRoot
         ) {
-            parent[rightRoot] =
-                leftRoot;
+            parent[rightRoot] = leftRoot;
         } else {
-            parent[leftRoot] =
-                rightRoot;
+            parent[leftRoot] = rightRoot;
         }
+
+        return true;
     }
 
     const pairComparisons =
@@ -995,6 +1026,22 @@ export function groupEquivalentCandidates(
             string,
             CandidateComparison
         >();
+
+    /*
+     * These are the equivalence edges that actually connected
+     * candidates into a union-find component.
+     *
+     * Because only successful union() operations are recorded,
+     * these edges form a spanning forest. The confidence of a
+     * group is therefore based only on evidence that was actually
+     * required to connect its candidates.
+     */
+    const acceptedEdges:
+        Array<{
+            left: number;
+            right: number;
+            comparison: CandidateComparison;
+        }> = [];
 
     for (
         let i = 0;
@@ -1019,9 +1066,14 @@ export function groupEquivalentCandidates(
             );
 
             if (
-                comparison.equivalent
+                comparison.equivalent &&
+                union(i, j)
             ) {
-                union(i, j);
+                acceptedEdges.push({
+                    left: i,
+                    right: j,
+                    comparison
+                });
             }
         }
     }
@@ -1043,7 +1095,9 @@ export function groupEquivalentCandidates(
         const group =
             groups.get(root);
 
-        if (group) {
+        if (
+            group
+        ) {
             group.candidates.push(
                 sorted[index]
             );
@@ -1061,7 +1115,8 @@ export function groupEquivalentCandidates(
         }
     }
 
-    const result: EquivalentLayerGroup[] =
+    const result:
+        EquivalentLayerGroup[] =
         [...groups.values()]
             .map(
                 group => {
@@ -1071,62 +1126,79 @@ export function groupEquivalentCandidates(
                     let minimumConfidence =
                         1;
 
-                    for (
-                        let i = 0;
-                        i < group.candidates.length;
-                        i++
+                    /*
+                     * Map the candidates in this component back to
+                     * their sorted indices.
+                     */
+                    const memberIndices =
+                        new Set(
+                            group.candidates.map(
+                                candidate =>
+                                    sorted.indexOf(
+                                        candidate
+                                    )
+                            )
+                        );
+
+                    /*
+                     * Group confidence is the weakest confidence
+                     * among the edges that actually connected this
+                     * component.
+                     *
+                     * We deliberately do NOT inspect every possible
+                     * candidate pair here. Two candidates can have
+                     * low pairwise similarity while still belonging
+                     * to the same equivalence group through a valid
+                     * chain of stronger equivalence relationships.
+                     */
+                    const groupEdges =
+                        acceptedEdges.filter(
+                            edge =>
+                                memberIndices.has(
+                                    edge.left
+                                ) &&
+                                memberIndices.has(
+                                    edge.right
+                                )
+                        );
+
+                    if (
+                        groupEdges.length > 0
                     ) {
                         for (
-                            let j = i + 1;
-                            j < group.candidates.length;
-                            j++
+                            const edge of
+                            groupEdges
                         ) {
-                            const aIndex =
-                                sorted.indexOf(
-                                    group.candidates[i]
+                            minimumConfidence =
+                                Math.min(
+                                    minimumConfidence,
+                                    edge
+                                        .comparison
+                                        .confidence
                                 );
 
-                            const bIndex =
-                                sorted.indexOf(
-                                    group.candidates[j]
-                                );
-
-                            const key =
-                                aIndex < bIndex
-                                    ? `${aIndex}|${bIndex}`
-                                    : `${bIndex}|${aIndex}`;
-
-                            const comparison =
-                                pairComparisons.get(
-                                    key
-                                );
-
-                            if (
-                                comparison
+                            for (
+                                const reason of
+                                edge
+                                    .comparison
+                                    .reasons
                             ) {
-                                minimumConfidence =
-                                    Math.min(
-                                        minimumConfidence,
-                                        comparison.confidence
-                                    );
-
-                                for (
-                                    const reason of
-                                    comparison.reasons
-                                ) {
-                                    reasons.add(
-                                        reason
-                                    );
-                                }
+                                reasons.add(
+                                    reason
+                                );
                             }
                         }
                     }
 
+                    /*
+                     * A singleton does not require any equivalence
+                     * evidence because it is already its own group.
+                     */
                     if (
-                        group.candidates.length === 1
+                        group.candidates.length ===
+                        1
                     ) {
-                        minimumConfidence =
-                            1;
+                        minimumConfidence = 1;
 
                         reasons.add(
                             "single eligible candidate"
@@ -1153,9 +1225,12 @@ export function groupEquivalentCandidates(
 
     return result.sort(
         (a, b) =>
-            a.id.localeCompare(b.id)
+            a.id.localeCompare(
+                b.id
+            )
     );
 }
+
 
 /**
  * Primary equivalence-grouping API.
