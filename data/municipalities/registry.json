@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-28T01:32:50.937Z",
+  "generatedAt": "2026-09-28T17:35:14.278Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-28T00:40:04.164Z",
+        "generatedAt": "2026-09-28T12:40:06.904Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -71,7 +71,7 @@
       },
       "generatedFile": "geometry/0477000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-28T01:32:50.937Z",
+        "generatedAt": "2026-09-28T17:35:14.278Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -79,29 +79,29 @@
             "itemId": "0657741d9e4a4289912330077707ad39",
             "title": "WARD_COT",
             "serviceType": "MapServer",
-            "official": false,
-            "score": 168
+            "official": true,
+            "score": 213
           },
           {
             "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer/156",
             "itemId": "cbb29b7016c04c43b3b51ba60db17643",
             "title": "TucsonWards2022",
             "serviceType": "FeatureServer",
-            "official": false,
-            "score": 115
-          },
-          {
-            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/COTWards_HFL/FeatureServer/6",
-            "itemId": "1abe5b7d93f749a1a3481b8899090082",
-            "title": "WARD_COT",
-            "serviceType": "FeatureServer",
-            "official": false,
-            "score": 108
+            "official": true,
+            "score": 160
           },
           {
             "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Boundaries_2000/FeatureServer/9",
             "itemId": "6d32fef8867b4cf3beb47659db4b797a",
             "title": "Wards_2000",
+            "serviceType": "FeatureServer",
+            "official": true,
+            "score": 153
+          },
+          {
+            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/COTWards_HFL/FeatureServer/6",
+            "itemId": "1abe5b7d93f749a1a3481b8899090082",
+            "title": "WARD_COT",
             "serviceType": "FeatureServer",
             "official": false,
             "score": 108

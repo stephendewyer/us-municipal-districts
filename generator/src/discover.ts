@@ -1093,6 +1093,29 @@ async function discoverMunicipality(
                     },
                     place
                 );
+                
+            console.log(
+                "\nMUNICIPALITY VALIDATION DEBUG:",
+                {
+                    title:
+                        inspection.title ??
+                        inspection.layerName ??
+                        candidate.title,
+
+                    url:
+                        inspection.url,
+
+                    score:
+                        municipalityValidation.score,
+
+                    likelyMunicipalityMatch:
+                        municipalityValidation
+                            .likelyMunicipalityMatch,
+
+                    reasons:
+                        municipalityValidation.reasons
+                }
+            );
 
             if (options.verbose) {
                 printMunicipalityValidation(

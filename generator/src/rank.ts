@@ -303,7 +303,7 @@ export function scoreCandidate(
         score += 25;
 
         reasons.push(
-            "+25 validated political boundary"
+            "+25 candidate validation available"
         );
 
         /*

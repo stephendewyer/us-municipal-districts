@@ -204,10 +204,10 @@ export function validateMunicipality(
                 `+30: municipality name "${place.city}" appears in municipality-specific URL`
             );
         } else {
-            score += 15;
+            score += 5;
 
             reasons.push(
-                `+15: municipality name "${place.city}" appears in candidate URL`
+                `+5: municipality name "${place.city}" appears in candidate URL`
             );
         }
     }

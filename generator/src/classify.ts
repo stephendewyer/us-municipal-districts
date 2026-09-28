@@ -4,6 +4,7 @@ import type {
     DistrictType,
     DiscoveryCandidate,
     ArcGISInspection,
+    PublisherLevel,
     SourceRole,
     TemporalStatus
 } from "./types.js";
@@ -585,9 +586,6 @@ function detectDistrictType(
     text: string
 ): DistrictType | undefined {
 
-    /*
-     * Ward terminology takes precedence.
-     */
     if (
         matchesAny(
             text,
@@ -597,13 +595,6 @@ function detectDistrictType(
         return "ward";
     }
 
-    /*
-     * City council terminology currently maps to the existing
-     * council-district type.
-     *
-     * This preserves the project's existing DistrictType semantics
-     * and keeps existing classification tests compatible.
-     */
     if (
         matchesAny(
             text,
@@ -613,9 +604,6 @@ function detectDistrictType(
         return "council-district";
     }
 
-    /*
-     * Generic council-district terminology.
-     */
     if (
         matchesAny(
             text,
@@ -655,9 +643,93 @@ function detectDistrictType(
     return undefined;
 }
 
+// =============================================================================
+// Publisher level
+// =============================================================================
+
+function detectPublisherLevel(
+    candidate: DiscoveryCandidate,
+    inspection: ArcGISInspection
+): PublisherLevel {
+
+    const owner =
+        normalize(
+            inspection.owner
+        );
+
+    const organization =
+        normalize(
+            inspection.organization
+        );
+
+    const organizationText =
+        `${owner} ${organization}`;
+
+    const url =
+        normalize(
+            inspection.url
+        );
+
+    const serviceUrl =
+        normalize(
+            inspection.serviceUrl
+        );
+
+    const text = [
+        organizationText,
+        url,
+        serviceUrl,
+        normalize(candidate.url)
+    ]
+        .filter(Boolean)
+        .join(" ");
+
+    if (
+        candidate.source ===
+        "municipal"
+    ) {
+        return "municipal";
+    }
+
+    if (
+        /\b(city|town|village|municipality)\b/i.test(
+            organizationText
+        )
+    ) {
+        return "municipal";
+    }
+
+    if (
+        /\bcounty\b/i.test(
+            text
+        )
+    ) {
+        return "county";
+    }
+
+    if (
+        /\b(state|department\s+of)\b/i.test(
+            text
+        )
+    ) {
+        return "state";
+    }
+
+    if (
+        /\bfederal\b/i.test(
+            text
+        ) ||
+        /\b[a-z0-9.-]+\.gov\b/i.test(text) &&
+        /\b(census|federal)\b/i.test(text)
+    ) {
+        return "federal";
+    }
+
+    return "unknown";
+}
 
 // =============================================================================
-// Official municipal source
+// Municipal authority
 // =============================================================================
 
 function escapeRegex(
@@ -674,6 +746,7 @@ function matchesKnownMunicipalAuthority(
     state: string | undefined,
     organizationId: string | undefined
 ): boolean {
+
     if (
         !city ||
         !state ||
@@ -690,33 +763,34 @@ function matchesKnownMunicipalAuthority(
 
     return MUNICIPAL_ARCGIS_AUTHORITIES.some(
         authority =>
-            normalize(authority.city) ===
-                normalizedCity &&
-            normalize(authority.state) ===
-                normalizedState &&
+            normalize(
+                authority.city
+            ) === normalizedCity &&
+            normalize(
+                authority.state
+            ) === normalizedState &&
             authority.organizationId ===
                 organizationId
     );
 }
+
+// =============================================================================
+// Official municipal source
+// =============================================================================
 
 function isOfficialMunicipalSource(
     candidate: DiscoveryCandidate,
     inspection: ArcGISInspection
 ): boolean {
 
-    const url =
+    const city =
         normalize(
-            inspection.url
+            candidate.city
         );
 
-    const candidateUrl =
+    const state =
         normalize(
-            candidate.url
-        );
-
-    const serviceUrl =
-        normalize(
-            inspection.serviceUrl
+            candidate.state
         );
 
     const owner =
@@ -729,47 +803,40 @@ function isOfficialMunicipalSource(
             inspection.organization
         );
 
-    const title =
+    const description =
         normalize(
-            inspection.title
+            inspection.description
         );
 
-    const serviceName =
+    const serviceDescription =
         normalize(
-            inspection.serviceName
+            inspection.serviceDescription
         );
 
-    const city =
-        normalize(
-            candidate.city
-        );
-
-    const state = 
-        normalize(
-            candidate.state
-        );
-
-    const text = [
-        url,
-        candidateUrl,
-        serviceUrl,
+    const provenanceText = [
         owner,
         organization,
-        title,
-        serviceName
+        description,
+        serviceDescription
     ]
         .filter(Boolean)
         .join(" ");
 
-    /*
-     * Explicit discovery provenance.
-     */
+    // -------------------------------------------------------------------------
+    // 1. Explicit discovery provenance
+    // -------------------------------------------------------------------------
+
     if (
-        candidate.source === "municipal"
+        candidate.source ===
+        "municipal"
     ) {
         return true;
     }
-    
+
+    // -------------------------------------------------------------------------
+    // 2. Known municipal ArcGIS organization
+    // -------------------------------------------------------------------------
+
     if (
         matchesKnownMunicipalAuthority(
             city,
@@ -780,64 +847,95 @@ function isOfficialMunicipalSource(
         return true;
     }
 
-    /*
-     * Government domain.
-     *
-     * This establishes government provenance, not necessarily
-     * that the source is the municipality's own GIS.
-     *
-     * Municipality/geography validation remains responsible
-     * for determining whether the geometry actually belongs
-     * to the requested municipality.
-     */
+    // -------------------------------------------------------------------------
+    // 3. Explicit publisher / owner / maintainer evidence
+    // -------------------------------------------------------------------------
+
     if (
-        /\b[a-z0-9.-]+\.gov\b/i.test(text)
+        city
     ) {
-        return true;
+        const municipality =
+            `(?:city|town|village|municipality)\\s+of\\s+${escapeRegex(city)}`;
+
+        const publisherPatterns = [
+            new RegExp(
+                `\\bpublished\\s+by\\s+(?:the\\s+)?${municipality}\\b`,
+                "i"
+            ),
+            new RegExp(
+                `\\bprovided\\s+by\\s+(?:the\\s+)?${municipality}\\b`,
+                "i"
+            ),
+            new RegExp(
+                `\\bmaintained\\s+by\\s+(?:the\\s+)?${municipality}\\b`,
+                "i"
+            ),
+            new RegExp(
+                `\\bowned\\s+by\\s+(?:the\\s+)?${municipality}\\b`,
+                "i"
+            ),
+            new RegExp(
+                `\\bcreated\\s+by\\s+(?:the\\s+)?${municipality}\\b`,
+                "i"
+            ),
+            new RegExp(
+                `\\bmanaged\\s+by\\s+(?:the\\s+)?${municipality}\\b`,
+                "i"
+            ),
+            new RegExp(
+                `\\bfrom\\s+(?:the\\s+)?${municipality}\\s+open\\s+data\\b`,
+                "i"
+            ),
+            new RegExp(
+                `\\b${municipality}\\s+open\\s+data\\s+portal\\b`,
+                "i"
+            )
+        ];
+
+        if (
+            publisherPatterns.some(
+                pattern =>
+                    pattern.test(
+                        provenanceText
+                    )
+            )
+        ) {
+            return true;
+        }
     }
 
-    /*
-     * Explicit municipal organization identity.
-     */
-    if (city) {
+    // -------------------------------------------------------------------------
+    // 4. Explicit municipal GIS/data portal identity
+    // -------------------------------------------------------------------------
 
-        const municipalityIdentity =
+    if (
+        city
+    ) {
+        const municipalPortal =
             new RegExp(
-                `\\b(city|town|village|municipality)\\s+of\\s+${escapeRegex(city)}\\b`,
+                `\\b${escapeRegex(city)}\\s+(?:open\\s+data|gis|gis\\s+data)\\s+portal\\b`,
                 "i"
             );
 
         if (
-            municipalityIdentity.test(owner) ||
-            municipalityIdentity.test(organization)
+            municipalPortal.test(
+                provenanceText
+            )
         ) {
             return true;
         }
     }
 
     /*
-     * Municipal identity in source metadata.
+     * Deliberately do NOT treat:
+     *
+     *     .gov
+     *     "City of Tucson" in a description
+     *     "municipal"
+     *     "government"
+     *
+     * as sufficient evidence.
      */
-    if (
-        /\b(city|town|village|municipal)\b/i.test(
-            `${owner} ${organization}`
-        )
-    ) {
-        return true;
-    }
-
-    /*
-     * Tucson/Pima government-source handling.
-     */
-    if (
-        /tucsonaz\.gov/i.test(text) ||
-        /gis\.tucsonaz\.gov/i.test(text) ||
-        /mapdata\.tucsonaz\.gov/i.test(text) ||
-        /gisdata\.pima\.gov/i.test(text) ||
-        /pima\s+county/i.test(text)
-    ) {
-        return true;
-    }
 
     return false;
 }
@@ -862,9 +960,6 @@ function detectTemporalStatus(
             Number(match[0])
     );
 
-    /*
-     * Any explicit prior year means historical.
-     */
     if (
         years.some(
             year =>
@@ -874,9 +969,6 @@ function detectTemporalStatus(
         return "historical";
     }
 
-    /*
-     * An explicit current-year reference means current.
-     */
     if (
         years.some(
             year =>
@@ -886,9 +978,6 @@ function detectTemporalStatus(
         return "current";
     }
 
-    /*
-     * Do not assume an undated source is current.
-     */
     return "undated";
 }
 
@@ -905,17 +994,6 @@ function detectSourceRole(
     derivedPoliticalDataset: boolean
 ): SourceRole {
 
-    /*
-     * A dataset can be a derived political dataset without
-     * being a boundary layer.
-     *
-     * Example:
-     *
-     *     Eviction Filings by Council Districts
-     *
-     * This should be identifiable as derived rather than
-     * simply "unknown".
-     */
     if (
         derivedPoliticalDataset
     ) {
@@ -954,19 +1032,12 @@ function detectSourceRole(
             DERIVED_PATTERNS
         );
 
-    /*
-     * A valid political boundary can still be a derived source.
-     */
     if (
         derivedMatches.length > 0
     ) {
         return "derived";
     }
 
-    /*
-     * Official source + explicit political identity
-     * is the strongest authority classification.
-     */
     if (
         officialMunicipalSource &&
         explicitPoliticalIdentity
@@ -1058,11 +1129,6 @@ export function classifyCandidate(
     // Dataset identity
     // =========================================================================
 
-    /*
-     * Identity describes what the dataset itself is.
-     *
-     * Search-query terms and URLs are deliberately excluded.
-     */
     const identityText = [
         title,
         candidateTitle,
@@ -1072,17 +1138,9 @@ export function classifyCandidate(
         .filter(Boolean)
         .join(" ");
 
-    /*
-     * Political identity is established from the dataset's
-     * own identity, not from the search query that discovered it.
-     */
     const politicalIdentityText =
         identityText;
 
-    /*
-     * Dataset metadata can provide additional thematic,
-     * census, parcel, and housing evidence.
-     */
     const datasetText = [
         description,
         serviceDescription,
@@ -1091,9 +1149,6 @@ export function classifyCandidate(
         .filter(Boolean)
         .join(" ");
 
-    /*
-     * Discovery evidence is weaker.
-     */
     const discoveryText = [
         searchQuery,
         url
@@ -1118,7 +1173,7 @@ export function classifyCandidate(
 
     // =========================================================================
     // Matches
-    // ========================================================================= 
+    // =========================================================================
 
     const matches: ClassificationMatches = {
         thematic:
@@ -1127,22 +1182,6 @@ export function classifyCandidate(
                 THEMATIC_PATTERNS
             ),
 
-        /*
-        * Census classification describes what the dataset represents,
-        * not whether the dataset happens to contain census-related
-        * attributes.
-        *
-        * A political boundary may legitimately contain fields such as:
-        *
-        *     TRACT
-        *     BLOCK
-        *     ZCTA
-        *     PRECINCT
-        *
-        * Those fields do not make the geometry a census dataset.
-        *
-        * Therefore census detection is based on dataset identity only.
-        */
         census:
             findMatches(
                 identityText,
@@ -1176,15 +1215,6 @@ export function classifyCandidate(
     // Identity classification
     // =========================================================================
 
-    /*
-     * IMPORTANT:
-     *
-     * Explicit political identity is based ONLY on identityText.
-     *
-     * This prevents a thematic dataset with a WARD/DISTRICT field
-     * from becoming political merely because one of its attributes
-     * happens to contain political terminology.
-     */
     const politicalIdentityMatches =
         findMatches(
             politicalIdentityText,
@@ -1200,12 +1230,6 @@ export function classifyCandidate(
     const explicitPoliticalIdentity =
         politicalIdentityMatches.length > 0;
 
-    /*
-     * Non-political identity is also based only on the dataset identity.
-     *
-     * A real political boundary may mention school districts,
-     * water districts, etc. in its description or metadata.
-     */
     const nonPoliticalMatches =
         findMatches(
             identityText,
@@ -1217,13 +1241,13 @@ export function classifyCandidate(
 
     const explicitNonMunicipalPoliticalIdentity =
         nonMunicipalPoliticalMatches.length > 0;
-    
+
     const isMunicipalPoliticalBoundary =
         explicitPoliticalIdentity &&
         !explicitNonMunicipalPoliticalIdentity;
 
     // =========================================================================
-    // Official source
+    // Publisher / provenance
     // =========================================================================
 
     const officialMunicipalSource =
@@ -1239,6 +1263,12 @@ export function classifyCandidate(
             "official municipal source"
         );
     }
+
+    const publisherLevel =
+        detectPublisherLevel(
+            candidate,
+            inspection
+        );
 
     // =========================================================================
     // Geometry
@@ -1307,17 +1337,6 @@ export function classifyCandidate(
     // Thematic-vs-political distinction
     // =========================================================================
 
-    /*
-     * A thematic dataset can contain a political field without
-     * being a political boundary.
-     *
-     * Example:
-     *
-     *     Golf Courses
-     *     WARD
-     *
-     * is not a ward boundary.
-     */
     const thematicAttributeLayer =
         matches.thematic.length > 0 &&
         !explicitPoliticalIdentity &&
@@ -1327,22 +1346,6 @@ export function classifyCandidate(
     // Derived political dataset detection
     // =========================================================================
 
-    /*
-     * This is the critical Phoenix fix.
-     *
-     * A dataset such as:
-     *
-     *     Eviction Filings by Council Districts
-     *
-     * contains a legitimate political identity, but the political
-     * districts are being used as an analytical/grouping dimension.
-     *
-     * It is NOT a boundary source.
-     *
-     * We deliberately detect this primarily from the dataset identity,
-     * rather than arbitrary metadata, so descriptions of real boundary
-     * layers do not accidentally cause rejection.
-     */
     const identityDerivedMatches =
         findMatches(
             identityText,
@@ -1372,10 +1375,6 @@ export function classifyCandidate(
     // District type
     // =========================================================================
 
-    /*
-     * District type comes from political identity, not merely
-     * from a field named WARD or DISTRICT.
-     */
     const districtType =
         detectDistrictType(
             politicalIdentityText
@@ -1394,30 +1393,12 @@ export function classifyCandidate(
     // Acceptance rules
     // =========================================================================
 
-    /*
-     * Rule 1:
-     *
-     * Polygon + explicit political identity.
-     *
-     * Derived analytical datasets are excluded.
-     */
     const explicitIdentityPath =
         isPolygon &&
         explicitPoliticalIdentity &&
         !explicitNonPoliticalIdentity &&
         !derivedPoliticalDataset;
 
-    /*
-     * Rule 2:
-     *
-     * Polygon + WARD field.
-     *
-     * This supports sources whose title does not explicitly say
-     * "ward" but whose validated field identifies the boundary.
-     *
-     * Thematic attribute layers and derived political datasets
-     * are excluded.
-     */
     const wardFieldPath =
         isPolygon &&
         hasWardField &&
@@ -1425,14 +1406,6 @@ export function classifyCandidate(
         !thematicAttributeLayer &&
         !derivedPoliticalDataset;
 
-    /*
-     * Rule 3:
-     *
-     * Polygon + political field.
-     *
-     * Thematic attribute layers and derived political datasets
-     * are excluded.
-     */
     const politicalFieldPath =
         isPolygon &&
         hasPoliticalField &&
@@ -1440,14 +1413,6 @@ export function classifyCandidate(
         !thematicAttributeLayer &&
         !derivedPoliticalDataset;
 
-    /*
-     * Rule 4:
-     *
-     * Official government/municipal source + polygon + district field.
-     *
-     * Official status is supportive evidence, not a requirement
-     * for political-boundary classification.
-     */
     const officialDistrictPath =
         isPolygon &&
         officialMunicipalSource &&
@@ -1461,11 +1426,6 @@ export function classifyCandidate(
             explicitPoliticalIdentity
         );
 
-    /*
-     * Rule 5:
-     *
-     * Explicit political identity + generic DISTRICT field.
-     */
     const politicalIdentityWithGenericField =
         isPolygon &&
         explicitPoliticalIdentity &&
@@ -1473,10 +1433,6 @@ export function classifyCandidate(
         !explicitNonPoliticalIdentity &&
         !derivedPoliticalDataset;
 
-    /*
-     * A candidate is a political boundary if it passes
-     * at least one of the explicit paths.
-     */
     const isPoliticalBoundary =
         explicitIdentityPath ||
         wardFieldPath ||
@@ -1487,11 +1443,6 @@ export function classifyCandidate(
     const isBoundaryLayer =
         isMunicipalPoliticalBoundary;
 
-    /*
-     * Derived political datasets are thematic by nature.
-     *
-     * Ordinary thematic layers are also marked thematic.
-     */
     const isThematicDataset =
         matches.thematic.length > 0 &&
         !isPoliticalBoundary;
@@ -1631,12 +1582,6 @@ export function classifyCandidate(
     // Review status
     // =========================================================================
 
-    /*
-     * Review is relevant only for candidates that actually passed
-     * political-boundary classification.
-     *
-     * Official municipal provenance is NOT required.
-     */
     const requiresReview =
         isPoliticalBoundary &&
         (
@@ -1644,47 +1589,6 @@ export function classifyCandidate(
             !explicitPoliticalIdentity ||
             !districtType
         );
-
-    // =========================================================================
-    // Debugging
-    // =========================================================================
-
-    console.log(
-        "\nCLASSIFIER DEBUG:",
-        {
-            title,
-            serviceName,
-            layerName,
-
-            identityText,
-
-            explicitPoliticalIdentity,
-            explicitNonPoliticalIdentity,
-
-            hasPoliticalField,
-            hasWardField,
-            genericDistrictField,
-
-            thematicAttributeLayer,
-            derivedPoliticalDataset,
-
-            politicalIdentityMatches,
-            identityDerivedMatches,
-
-            thematicMatches:
-                matches.thematic,
-
-            districtType,
-            temporalStatus,
-            officialMunicipalSource,
-
-            isPolygon,
-            isPoliticalBoundary,
-            isThematicDataset,
-
-            sourceRole
-        }
-    );
 
     // =========================================================================
     // Return
@@ -1709,6 +1613,8 @@ export function classifyCandidate(
             matches.housing.length > 0,
 
         officialMunicipalSource,
+
+        publisherLevel,
 
         districtType,
 

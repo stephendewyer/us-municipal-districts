@@ -49,6 +49,11 @@ function createClassification(
             options.isPoliticalBoundary ??
             true,
 
+        publisherLevel:
+            options.isPoliticalBoundary
+                ? "municipal"
+                : "unknown",
+
         isThematicDataset:
             false,
 

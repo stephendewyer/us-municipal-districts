@@ -71,6 +71,7 @@ function createCandidate(
             isBoundaryLayer: true,
             isPoliticalBoundary: true,
             isMunicipalPoliticalBoundary: true,
+            publisherLevel: "municipal",
             isThematicDataset: false,
             isCensusDataset: false,
             isParcelDataset: false,

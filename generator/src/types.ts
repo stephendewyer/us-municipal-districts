@@ -647,6 +647,13 @@ export interface ClassificationMatches {
     official: string[];
 }
 
+export type PublisherLevel =
+    | "municipal"
+    | "county"
+    | "state"
+    | "federal"
+    | "third-party"
+    | "unknown";
 
 export interface CandidateClassification {
 
@@ -717,6 +724,9 @@ export interface CandidateClassification {
      * Keyword evidence used during classification.
      */
     matches: ClassificationMatches;
+
+    publisherLevel: PublisherLevel;
+    
 }
 
 

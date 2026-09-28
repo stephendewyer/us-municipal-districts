@@ -115,6 +115,9 @@ function createClassification(
 
         isMunicipalPoliticalBoundary: 
             true,
+            
+        publisherLevel: 
+            "municipal",
 
         isThematicDataset:
             false,
