@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-28T20:48:24.228Z",
+  "generatedAt": "2026-09-28T21:51:55.510Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -117,11 +117,11 @@
       "boundaryType": "ward",
       "source": {
         "sourceType": "arcgis",
-        "url": "https://services.arcgis.com/rD2ylXRs80UroD90/arcgis/rest/services/Ward_Boundaries/FeatureServer/0",
-        "itemId": "39cc9015bf744957954145e788afc723",
-        "organizationId": "rD2ylXRs80UroD90",
+        "url": "https://services.arcgis.com/F7DSX1DSNSiWmOqh/arcgis/rest/services/ChicagoWards/FeatureServer/18",
+        "itemId": "ad95d589171246e8ae92f30c8d25d6ef",
+        "organizationId": "F7DSX1DSNSiWmOqh",
         "serviceType": "FeatureServer",
-        "title": "Ward Boundaries",
+        "title": "ChicagoWards",
         "official": false,
         "verified": true,
         "fieldMapping": {
@@ -131,9 +131,19 @@
       },
       "generatedFile": "geometry/1714000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-28T20:48:24.228Z",
+        "generatedAt": "2026-09-28T21:51:55.510Z",
         "generatorVersion": "0.1.0",
-        "alternatives": [],
+        "alternatives": [
+          {
+            "url": "https://services.arcgis.com/rD2ylXRs80UroD90/arcgis/rest/services/Ward_Boundaries/FeatureServer/0",
+            "itemId": "39cc9015bf744957954145e788afc723",
+            "organizationId": "rD2ylXRs80UroD90",
+            "title": "Ward Boundaries",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 168
+          }
+        ],
         "requiresReview": true
       }
     }

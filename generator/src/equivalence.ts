@@ -162,6 +162,25 @@ function normalizeList(
     ).sort();
 }
 
+function getDistinctDistrictValues(
+    candidate: InspectedCandidate
+): string[] {
+    const inspectionValues =
+        normalizeList(
+            candidate.inspection.distinctDistrictValues
+        );
+
+    if (
+        inspectionValues.length > 0
+    ) {
+        return inspectionValues;
+    }
+
+    return normalizeList(
+        candidate.validation?.distinctDistrictValues
+    );
+}
+
 function jaccardSimilarity(
     left: string[],
     right: string[]
@@ -197,6 +216,16 @@ function jaccardSimilarity(
     return union === 0
         ? 0
         : intersection / union;
+}
+
+function districtValueSimilarity(
+    a: InspectedCandidate,
+    b: InspectedCandidate
+): number {
+    return jaccardSimilarity(
+        getDistinctDistrictValues(a),
+        getDistinctDistrictValues(b)
+    );
 }
 
 function stringSimilarity(
@@ -526,6 +555,19 @@ export function compareCandidates(
     }
 
     if (
+        a.classification.sourceRole === "derived" ||
+        b.classification.sourceRole === "derived"
+    ) {
+        return {
+            equivalent: false,
+            confidence: 0,
+            reasons: [
+                "derived dataset excluded from equivalence"
+            ]
+        };
+    }
+
+    if (
         municipalityKey(a) !==
         municipalityKey(b)
     ) {
@@ -753,6 +795,26 @@ export function compareCandidates(
         );
     }
 
+    const districtValueSimilarityScore =
+        districtValueSimilarity(
+            a,
+            b
+        );
+
+    if (
+        districtValueSimilarityScore >= 0.95
+    ) {
+        reasons.push(
+            "same district value signature"
+        );
+    } else if (
+        districtValueSimilarityScore >= 0.75
+    ) {
+        reasons.push(
+            "similar district value signature"
+        );
+    }
+
     // =========================================================================
     // Individual field identities
     // =========================================================================
@@ -859,6 +921,36 @@ export function compareCandidates(
 
         reasons.push(
             "same temporal dataset family"
+        );
+    }
+
+    /*
+    * Matching district identifiers are strong evidence that two
+    * layers represent the same municipal district system.
+    *
+    * This is intentionally subject to the hard requirements above:
+    *
+    *     - same municipality
+    *     - same political district type
+    *     - political boundaries
+    *     - polygon geometry
+    *
+    * Exact district-value agreement allows different ArcGIS services,
+    * titles, field names, and publishers to represent the same system.
+    */
+    if (
+        districtValueSimilarityScore === 1 &&
+        getDistinctDistrictValues(a).length >= 2 &&
+        getDistinctDistrictValues(b).length >= 2
+    ) {
+        confidence =
+            Math.max(
+                confidence,
+                0.70
+            );
+
+        reasons.push(
+            "exact district value signature"
         );
     }
 
@@ -1021,12 +1113,6 @@ export function groupEquivalentCandidates(
         return true;
     }
 
-    const pairComparisons =
-        new Map<
-            string,
-            CandidateComparison
-        >();
-
     /*
      * These are the equivalence edges that actually connected
      * candidates into a union-find component.
@@ -1059,11 +1145,6 @@ export function groupEquivalentCandidates(
                     sorted[j],
                     threshold
                 );
-
-            pairComparisons.set(
-                `${i}|${j}`,
-                comparison
-            );
 
             if (
                 comparison.equivalent &&

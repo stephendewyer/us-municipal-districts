@@ -60,11 +60,11 @@ function temporalPriority(
         case "current":
             return 3;
 
-        case "undated":
-            return 2;
-
         case "historical":
             return 1;
+
+        case "undated":
+            return 0;
 
         default:
             return 0;
@@ -656,8 +656,7 @@ export function selectCanonicalSource(
                     item.candidateScore
                         .score !==
                     Number.NEGATIVE_INFINITY
-            )
-            .sort(
+            ).sort(
                 (a, b) => {
 
                     /*
@@ -741,6 +740,25 @@ export function selectCanonicalSource(
                     );
                 }
             );
+
+    console.log(
+        "CANONICAL RANKING DEBUG:",
+        ranked.map(item => ({
+            title:
+                item.candidate.inspection.title ??
+                item.candidate.inspection.layerName ??
+                item.candidate.candidate.title,
+            temporalPriority: item.temporalPriority,
+            sourceRole:
+                item.candidate.classification.sourceRole,
+            sourceRolePriority:
+                sourceRolePriority(item.candidate),
+            officialMunicipalSource:
+                item.candidate.classification.officialMunicipalSource,
+            canonicalBonus: item.canonicalBonus,
+            candidateScore: item.candidateScore.score
+        }))
+    );
 
     const best =
         ranked[0];
