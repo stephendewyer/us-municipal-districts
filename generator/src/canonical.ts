@@ -828,7 +828,7 @@ export function selectCanonicalSource(
                 validationConfidence < 70
             ) ||
 
-            group.confidence < 75
+            group.confidence < 0.75
         );
 
     const coverageReason =

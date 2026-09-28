@@ -492,6 +492,7 @@ function createRegistryEntry(
                          * municipality's canonical source.
                          */
                         official:
+                            alternative.officialMunicipalSource ??
                             false,
 
                         score:
