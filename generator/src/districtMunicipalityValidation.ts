@@ -1,6 +1,5 @@
 import type {
-    CensusPlace,
-    InspectedCandidate
+    CensusPlace
 } from "./types.js";
 
 // =============================================================================
@@ -13,17 +12,34 @@ export type DistrictMunicipalityScope =
     | "unknown";
 
 export interface DistrictMunicipalityValidation {
+
+    /**
+     * Whether the district values appear to represent:
+     *
+     * - the target municipality only
+     * - multiple explicitly identified municipalities
+     * - an unknown municipality scope
+     */
     scope: DistrictMunicipalityScope;
 
+    /**
+     * Target municipality being evaluated.
+     */
     targetMunicipality?: string;
 
+    /**
+     * Municipalities explicitly identified by the district values.
+     */
     municipalities: string[];
 
+    /**
+     * Human-readable evidence supporting the result.
+     */
     evidence: string[];
 
-    /** 
+    /**
      * True when district values explicitly identify more than one
-     * municipality.
+     * municipality, including the target municipality.
      */
     spansMultipleMunicipalities: boolean;
 }
@@ -37,42 +53,76 @@ export interface DistrictMunicipalityValidation {
  * candidate are specific to the target municipality or explicitly
  * span multiple municipalities.
  *
- * This is intentionally conservative.
+ * This validator operates only on district values themselves.
  *
- * We only classify a candidate as "multi-municipality" when the
- * district values themselves contain explicit municipality names.
+ * It intentionally does NOT infer municipality scope from:
  *
- * We do NOT infer multi-municipality coverage merely because:
+ * - publisher
+ * - URL
+ * - service name
+ * - dataset description
+ * - county terminology
+ * - geography
  *
- * - the publisher is a county
- * - the URL contains "county"
- * - the dataset description mentions multiple jurisdictions
- * - the geography overlaps multiple municipalities
+ * Those signals are handled by other validation stages.
  *
- * Those are handled by other validation stages.
+ * Examples:
+ *
+ *     ["City of Milwaukee Common Council 1", ...]
+ *         -> target
+ *
+ *     ["Milwaukee Common Council 1",
+ *      "Cudahy 1",
+ *      "Franklin 1"]
+ *         -> currently unknown unless the values explicitly identify
+ *            municipalities using a recognized pattern
+ *
+ *     ["City of Milwaukee 1",
+ *      "City of Cudahy 1"]
+ *         -> multi-municipality
  */
 export function validateDistrictMunicipality(
-    candidate: InspectedCandidate,
-    place: CensusPlace
+    districtValues: string[],
+    place: CensusPlace,
+    knownPlaces: CensusPlace[]
 ): DistrictMunicipalityValidation {
 
     const targetMunicipality =
         normalize(place.city);
 
-    const districtValues =
-        getDistrictValues(candidate);
+    const knownMunicipalities =
+        new Set(
+            knownPlaces
+                .map(
+                    knownPlace =>
+                        normalize(knownPlace.city)
+                )
+                .filter(Boolean)
+        );
+
+    const normalizedDistrictValues =
+        normalizeList(
+            districtValues
+        );
 
     const municipalities =
         new Set<string>();
 
     const evidence: string[] = [];
 
-    for (const value of districtValues) {
+    for (
+        const value of normalizedDistrictValues
+    ) {
 
         const detected =
-            detectMunicipalities(value);
+            detectMunicipalities(
+                value,
+                knownMunicipalities
+            );
 
-        for (const municipality of detected) {
+        for (
+            const municipality of detected
+        ) {
 
             municipalities.add(
                 municipality
@@ -101,13 +151,16 @@ export function validateDistrictMunicipality(
                 targetMunicipality
         );
 
-    /*
+    // =========================================================================
+    // Multiple municipalities
+    // =========================================================================
+
+    /**
      * Strongest case:
      *
      *     Milwaukee Common Council 1
-     *     Cudahy 1
-     *     Franklin 1
-     *     Glendale 1
+     *     City of Cudahy 1
+     *     City of Franklin 1
      *
      * The district values explicitly identify multiple municipalities.
      */
@@ -123,14 +176,25 @@ export function validateDistrictMunicipality(
 
         return {
             scope: "multi-municipality",
-            targetMunicipality: place.city,
-            municipalities: municipalityList,
+
+            targetMunicipality:
+                place.city,
+
+            municipalities:
+                municipalityList,
+
             evidence,
-            spansMultipleMunicipalities: true
+
+            spansMultipleMunicipalities:
+                true
         };
     }
 
-    /*
+    // =========================================================================
+    // Target municipality only
+    // =========================================================================
+
+    /**
      * If district values explicitly identify only the target
      * municipality, treat them as municipality-specific.
      */
@@ -145,51 +209,51 @@ export function validateDistrictMunicipality(
 
         return {
             scope: "target",
-            targetMunicipality: place.city,
-            municipalities: municipalityList,
+
+            targetMunicipality:
+                place.city,
+
+            municipalities:
+                municipalityList,
+
             evidence,
-            spansMultipleMunicipalities: false
+
+            spansMultipleMunicipalities:
+                false
         };
     }
 
-    /*
-     * If we cannot establish municipality identity from the
+    // =========================================================================
+    // Unknown
+    // =========================================================================
+
+    /**
+     * If municipality identity cannot be established from the
      * district values themselves, do not guess.
+     *
+     * This is important because values such as:
+     *
+     *     1
+     *     2
+     *     3
+     *
+     * do not contain enough information to determine municipality
+     * scope.
      */
     return {
         scope: "unknown",
-        targetMunicipality: place.city,
-        municipalities: municipalityList,
+
+        targetMunicipality:
+            place.city,
+
+        municipalities:
+            municipalityList,
+
         evidence,
-        spansMultipleMunicipalities: false
+
+        spansMultipleMunicipalities:
+            false
     };
-}
-
-// =============================================================================
-// District values
-// =============================================================================
-
-function getDistrictValues(
-    candidate: InspectedCandidate
-): string[] {
-
-    const inspectionValues =
-        candidate.inspection.distinctDistrictValues ?? [];
-
-    if (
-        inspectionValues.length > 0
-    ) {
-        return normalizeList(
-            inspectionValues
-        );
-    }
-
-    const validationValues =
-        candidate.validation?.distinctDistrictValues ?? [];
-
-    return normalizeList(
-        validationValues
-    );
 }
 
 // =============================================================================
@@ -199,7 +263,7 @@ function getDistrictValues(
 /**
  * Detect explicit municipality names in an individual district value.
  *
- * Examples:
+ * Recognized forms include:
  *
  *     "City of Milwaukee Common Council 1"
  *         -> ["milwaukee"]
@@ -210,16 +274,25 @@ function getDistrictValues(
  *     "Village of Bayside 1"
  *         -> ["bayside"]
  *
+ *     "Town of Lisbon 1"
+ *         -> ["lisbon"]
+ *
  *     "Milwaukee Common Council 1"
  *         -> ["milwaukee"]
  *
+ * Values such as:
+ *
  *     "1"
- *         -> []
+ *     "Ward 1"
+ *     "District 1"
+ *
+ * do not provide enough information to identify a municipality.
  *
  * The function intentionally does not attempt geographic inference.
  */
 function detectMunicipalities(
-    value: string
+    value: string,
+    knownMunicipalities: Set<string>
 ): string[] {
 
     const normalized =
@@ -232,12 +305,15 @@ function detectMunicipalities(
     const municipalities =
         new Set<string>();
 
-    /*
-     * Explicit "City of X", "Village of X", and "Town of X".
-     */
+    // =========================================================================
+    // Explicit "City of X", "Village of X", and "Town of X"
+    // =========================================================================
+
     const explicitPatterns = [
         /\bcity of ([a-z][a-z\s]*?)(?=\s+\d+\b|\s+(?:common council|council|board|district|ward)\b|$)/i,
+
         /\bvillage of ([a-z][a-z\s]*?)(?=\s+\d+\b|\s+(?:common council|council|board|district|ward)\b|$)/i,
+
         /\btown of ([a-z][a-z\s]*?)(?=\s+\d+\b|\s+(?:common council|council|board|district|ward)\b|$)/i
     ];
 
@@ -262,6 +338,7 @@ function detectMunicipalities(
             if (
                 municipality
             ) {
+
                 municipalities.add(
                     municipality
                 );
@@ -269,14 +346,16 @@ function detectMunicipalities(
         }
     }
 
-    /*
-     * Milwaukee's dataset also contains values such as:
+    // =========================================================================
+    // "X Common Council"
+    // =========================================================================
+
+    /**
+     * Handles values such as:
      *
-     *     "Milwaukee Common Council 1"
+     *     Milwaukee Common Council 1
      *
      * where the municipality is not prefixed with "City of".
-     *
-     * Handle that form conservatively.
      */
     const commonCouncil =
         normalized.match(
@@ -294,6 +373,39 @@ function detectMunicipalities(
 
         if (
             municipality
+        ) {
+
+            municipalities.add(
+                municipality
+            );
+        }
+    }
+
+    // =========================================================================
+    // Known municipality name followed by a district value
+    // =========================================================================
+
+    /**
+     * Handles values such as:
+     *
+     *     Cudahy 1
+     *     Franklin 1
+     *     Glendale 3
+     *     Wauwatosa 8
+     *
+     * using the Census-place municipality names supplied by the caller.
+     *
+     * This avoids hard-coding individual municipalities.
+     */
+    for (
+        const municipality of knownMunicipalities
+    ) {
+
+        if (
+            value === municipality ||
+            value.startsWith(
+                `${municipality} `
+            )
         ) {
             municipalities.add(
                 municipality
@@ -316,7 +428,7 @@ function normalize(
 
     return (value ?? "")
         .replace(
-            /([a-z])([A-Z])/g,
+            /([a-z0-9])([A-Z])/g,
             "$1 $2"
         )
         .replace(
@@ -354,8 +466,9 @@ function normalizeList(
     return [
         ...new Set(
             values
-                .map(value =>
-                    normalize(value)
+                .map(
+                    value =>
+                        normalize(value)
                 )
                 .filter(Boolean)
         )
