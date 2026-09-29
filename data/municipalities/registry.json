@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-29T19:38:49.403Z",
+  "generatedAt": "2026-09-29T21:21:33.723Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -146,6 +146,58 @@
             "score": 168
           }
         ],
+        "requiresReview": true
+      }
+    },
+    {
+      "placeFips": "5553000",
+      "city": "Milwaukee",
+      "state": "WI",
+      "boundaryType": "aldermanic-district",
+      "source": {
+        "sourceType": "arcgis",
+        "url": "https://milwaukeemaps.milwaukee.gov/arcgis/rest/services/election/alderman/MapServer/0",
+        "serviceType": "MapServer",
+        "title": "Aldermanic district outlines",
+        "official": true,
+        "verified": true,
+        "fieldMapping": {
+          "district": "DISTRICT",
+          "name": "DISTRICT"
+        }
+      },
+      "generatedFile": "geometry/5553000/aldermanic-district.geojson",
+      "metadata": {
+        "generatedAt": "2026-09-29T21:21:33.723Z",
+        "generatorVersion": "0.1.0",
+        "alternatives": [],
+        "requiresReview": false
+      }
+    },
+    {
+      "placeFips": "5553000",
+      "city": "Milwaukee",
+      "state": "WI",
+      "boundaryType": "council-district",
+      "source": {
+        "sourceType": "arcgis",
+        "url": "https://services2.arcgis.com/s1wgJQKbKJihhhaT/arcgis/rest/services/City_Common_Council_District_or_Village_Board_of_Trustees/FeatureServer/47",
+        "itemId": "0a2a09943a2b4042ad79f732328cae5e",
+        "organizationId": "s1wgJQKbKJihhhaT",
+        "serviceType": "FeatureServer",
+        "title": "City Common Council District or Village Board of Trustees in Milwaukee County",
+        "official": false,
+        "verified": true,
+        "fieldMapping": {
+          "district": "District_Descrip",
+          "name": "Member_Name"
+        }
+      },
+      "generatedFile": "geometry/5553000/council-district.geojson",
+      "metadata": {
+        "generatedAt": "2026-09-29T21:07:13.459Z",
+        "generatorVersion": "0.1.0",
+        "alternatives": [],
         "requiresReview": true
       }
     }

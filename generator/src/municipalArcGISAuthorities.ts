@@ -29,5 +29,13 @@ export const MUNICIPAL_ARCGIS_AUTHORITIES:
             state: "il",
             organizationId: "REPLACE_WITH_CHICAGO_ORG_ID",
             organizationName: "City of Chicago"
+        },
+        {
+            city: "milwaukee",
+            state: "wi",
+            hosts: [
+                "milwaukeemaps.milwaukee.gov"
+            ],
+            organizationName: "City of Milwaukee"
         }
     ];

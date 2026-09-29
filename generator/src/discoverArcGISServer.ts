@@ -100,6 +100,8 @@ const POLITICAL_SERVICE_TERMS = [
 
     "alderman_district",
 
+    "alderman",
+
     "municipal_districts",
 
     "municipal_district",
@@ -739,6 +741,9 @@ function getPoliticalTermScore(
         case "alderman_districts":
         case "alderman_district":
             return 15;
+            
+        case "alderman":
+            return 12;
 
         case "municipal_districts":
         case "municipal_district":

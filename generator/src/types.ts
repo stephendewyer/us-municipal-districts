@@ -10,6 +10,10 @@ import type {
     MunicipalityGeographyValidation
 } from "./validateMunicipalityGeography.js";
 
+import type {
+    DistrictMunicipalityValidation
+} from "./districtMunicipalityValidation.js";
+
 // =============================================================================
 // Basic geographic types
 // =============================================================================
@@ -797,13 +801,16 @@ export interface InspectedCandidate {
 
     municipalityGeographyValidation?: MunicipalityGeographyValidation;
 
-    rejectionStage?: 
+    districtMunicipalityValidation?: DistrictMunicipalityValidation;
+
+    rejectionStage?:
         | "classification"
         | "municipality"
         | "political-validation"
-        | "geography";
+        | "geography"
+        | "district-municipality";
 
-     rejectionReason?: string;
+    rejectionReason?: string;
 }
 
 
@@ -1011,27 +1018,20 @@ export interface SearchRelevance {
  */
 export interface MunicipalityValidation {
 
-    /**
-     * Municipality-specific validation score.
-     *
-     * Positive values indicate evidence that the layer belongs
-     * to the target municipality.
-     *
-     * Negative values indicate evidence that the layer belongs
-     * to a larger or different geographic jurisdiction.
-     */
     score: number;
 
-    /**
-     * Human-readable evidence contributing to the score.
-     */
     reasons: string[];
 
-    /**
-     * Whether the candidate appears to belong to the
-     * municipality being processed.
-     */
     likelyMunicipalityMatch: boolean;
+
+    multiMunicipality?: boolean;
+
+    targetMunicipalityDistrictValueCount?: number;
+
+    otherMunicipalityDistrictValueCount?: number;
+
+    otherMunicipalities?: string[];
+
 }
 
 

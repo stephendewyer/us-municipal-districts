@@ -5,6 +5,10 @@ import {
     writeFile
 } from "node:fs/promises";
 
+import {
+    MUNICIPAL_ARCGIS_AUTHORITIES
+} from "./municipalArcGISAuthorities.js";
+
 import { createHash } from "node:crypto";
 
 import path from "node:path";
@@ -631,8 +635,15 @@ async function discoverMunicipality(
     // =========================================================================
 
     const serverRoots =
-        discoverArcGISServerRoots(
-            searchCandidates
+        Array.from(
+            new Set([
+                ...discoverArcGISServerRoots(
+                    searchCandidates
+                ),
+                ...discoverMunicipalAuthorityServerRoots(
+                    place
+                )
+            ])
         )
         .filter(
             isExternalArcGISServerRoot
@@ -1002,22 +1013,26 @@ async function discoverMunicipality(
                 );
             }
 
-            console.log(
-                "PROVENANCE BEFORE CLASSIFICATION:",
-                {
-                    title: candidate.title,
-                    url: candidate.url,
-                    itemId: candidate.itemId,
-                    owner: candidate.owner,
-                    organizationId: candidate.organizationId,
-                    description: candidate.description,
-                    snippet: candidate.snippet,
-                    tags: candidate.tags,
-                    typeKeywords: candidate.typeKeywords,
-                    contentStatus: candidate.contentStatus,
-                    accessInformation: candidate.accessInformation
-                }
-            );
+            const DEBUG = process.env.DEBUG === "true";
+
+            if (DEBUG) {
+                console.log(
+                    "PROVENANCE BEFORE CLASSIFICATION:",
+                    {
+                        title: candidate.title,
+                        url: candidate.url,
+                        itemId: candidate.itemId,
+                        owner: candidate.owner,
+                        organizationId: candidate.organizationId,
+                        description: candidate.description,
+                        snippet: candidate.snippet,
+                        tags: candidate.tags,
+                        typeKeywords: candidate.typeKeywords,
+                        contentStatus: candidate.contentStatus,
+                        accessInformation: candidate.accessInformation
+                    }
+                );
+            }
 
             const classification =
                 classifyCandidate(
@@ -1028,23 +1043,25 @@ async function discoverMunicipality(
                     },
                     inspection
                 );
-
-            console.log(
-                "CLASSIFICATION RESULT:",
-                {
-                    title: inspection.title,
-                    isCensusDataset:
-                        classification.isCensusDataset,
-                    isPoliticalBoundary:
-                        classification.isPoliticalBoundary,
-                    rejected:
-                        classification.rejected,
-                    matches:
-                        classification.matches,
-                    rejectionReasons:
-                        classification.rejectionReasons
-                }
-            );
+            
+            if (DEBUG) {
+                console.log(
+                    "CLASSIFICATION RESULT:",
+                    {
+                        title: inspection.title,
+                        isCensusDataset:
+                            classification.isCensusDataset,
+                        isPoliticalBoundary:
+                            classification.isPoliticalBoundary,
+                        rejected:
+                            classification.rejected,
+                        matches:
+                            classification.matches,
+                        rejectionReasons:
+                            classification.rejectionReasons
+                    }
+                );
+            };
 
             if (options.verbose) {
                 printClassification(
@@ -3349,6 +3366,29 @@ function printMunicipalitySummary(
             `\n      CANONICAL: none`
         );
     }
+}
+
+function discoverMunicipalAuthorityServerRoots(
+    place: CensusPlace
+): string[] {
+
+    const authority =
+        MUNICIPAL_ARCGIS_AUTHORITIES.find(
+            item =>
+                item.city.toLowerCase() ===
+                    place.city.toLowerCase() &&
+                item.state.toLowerCase() ===
+                    place.state.toLowerCase()
+        );
+
+    if (!authority?.hosts) {
+        return [];
+    }
+
+    return authority.hosts.map(
+        host =>
+            `https://${host}/arcgis/rest/services`
+    );
 }
 
 function discoverArcGISServerRoots(
