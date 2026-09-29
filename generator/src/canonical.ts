@@ -16,6 +16,10 @@ import {
     validateTemporal
 } from "./temporalValidation.js";
 
+import {
+    MUNICIPAL_ARCGIS_AUTHORITIES
+} from "./municipalArcGISAuthorities.js";
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -326,6 +330,15 @@ function canonicalSourceBonus(
         bonus += 20;
     }
 
+    const auxiliaryLayer =
+        /\bhash\b/.test(identityText) ||
+        /\bfill\b/.test(identityText) ||
+        /\boutline\b/.test(identityText);
+
+    if (auxiliaryLayer) {
+        bonus -= 10;
+    }
+
     if (
         candidate.classification
             .officialMunicipalSource
@@ -334,6 +347,56 @@ function canonicalSourceBonus(
     }
 
     return bonus;
+}
+
+// =============================================================================
+// Municipal service-host preference
+// =============================================================================
+
+function municipalServicePriority(
+    candidate: EquivalentLayerGroup["candidates"][number]
+): number {
+    if (!candidate.classification.officialMunicipalSource) {
+        return 0;
+    }
+
+    const url =
+        (
+            candidate.inspection.url ??
+            candidate.inspection.serviceUrl ??
+            candidate.candidate.url ??
+            ""
+        ).toLowerCase();
+
+    const city =
+        normalizeField(candidate.candidate.city);
+
+    const state =
+        normalizeField(candidate.candidate.state);
+
+    const authority =
+        MUNICIPAL_ARCGIS_AUTHORITIES.find(
+            item =>
+                normalizeField(item.city) === city &&
+                normalizeField(item.state) === state
+        );
+
+    if (
+        authority?.hosts?.some(
+            host =>
+                url.includes(host.toLowerCase())
+        )
+    ) {
+        return 2;
+    }
+
+    if (
+        url.includes("services.arcgis.com/")
+    ) {
+        return 1;
+    }
+
+    return 0;
 }
 
 // =============================================================================
@@ -635,21 +698,14 @@ export function selectCanonicalSource(
         eligibleCandidates
             .map(candidate => ({
                 candidate,
-
-                candidateScore:
-                    scoreCandidate(
-                        candidate
-                    ),
-
-                temporalPriority:
-                    temporalPriority(
-                        candidate
-                    ),
-
-                canonicalBonus:
-                    canonicalSourceBonus(
-                        candidate
-                    )
+                temporalPriority: temporalPriority(candidate),
+                sourceRolePriority: sourceRolePriority(candidate),
+                officialMunicipalSource:
+                    candidate.classification.officialMunicipalSource ? 1 : 0,
+                municipalServicePriority:
+                    municipalServicePriority(candidate),
+                canonicalBonus: canonicalSourceBonus(candidate),
+                candidateScore: scoreCandidate(candidate)
             }))
             .filter(
                 item =>
@@ -719,7 +775,24 @@ export function selectCanonicalSource(
                     }
 
                     /*
-                    * 4. Boundary-native identity.
+                    * 4. Native municipal GIS service.
+                    *
+                    * When two equivalent candidates are both official municipal
+                    * sources, prefer the municipality's own ArcGIS Server endpoint
+                    * over an ArcGIS Online representation of the same dataset.
+                    */
+                    if (
+                        b.municipalServicePriority !==
+                        a.municipalServicePriority
+                    ) {
+                        return (
+                            b.municipalServicePriority -
+                            a.municipalServicePriority
+                        );
+                    }
+
+                    /*
+                    * 5. Boundary-native identity.
                     */
                     if (
                         b.canonicalBonus !==
@@ -732,7 +805,7 @@ export function selectCanonicalSource(
                     }
 
                     /*
-                    * 5. Full candidate ranking.
+                    * 6. Full candidate ranking.
                     */
                     return compareCandidateScores(
                         a.candidateScore,
@@ -753,6 +826,8 @@ export function selectCanonicalSource(
                 item.candidate.classification.sourceRole,
             sourceRolePriority:
                 sourceRolePriority(item.candidate),
+            municipalServicePriority:
+                item.municipalServicePriority,
             officialMunicipalSource:
                 item.candidate.classification.officialMunicipalSource,
             canonicalBonus: item.canonicalBonus,

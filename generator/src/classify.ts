@@ -793,25 +793,61 @@ function isOfficialMunicipalSource(
             candidate.state
         );
 
+    // -------------------------------------------------------------------------
+    // Portal / discovery provenance
+    // -------------------------------------------------------------------------
+
     const owner =
         normalize(
+            candidate.owner ??
             inspection.owner
         );
+
+    const organizationId =
+        candidate.organizationId ??
+        inspection.organizationId;
 
     const organization =
         normalize(
             inspection.organization
         );
 
-    const description =
-        normalize(
-            inspection.description
-        );
+    const description = [
+        candidate.description,
+        inspection.description
+    ]
+        .map(normalize)
+        .filter(Boolean)
+        .join(" ");
 
     const serviceDescription =
         normalize(
             inspection.serviceDescription
         );
+
+    const snippet =
+        normalize(
+            candidate.snippet
+        );
+
+    const accessInformation =
+        normalize(
+            candidate.accessInformation
+        );
+
+    const tags =
+        (candidate.tags ?? [])
+            .map(normalize)
+            .join(" ");
+
+    const typeKeywords =
+        (candidate.typeKeywords ?? [])
+            .map(normalize)
+            .join(" ");
+
+    // -------------------------------------------------------------------------
+    // URL provenance
+    // -------------------------------------------------------------------------
 
     const url =
         normalize(
@@ -832,7 +868,11 @@ function isOfficialMunicipalSource(
         owner,
         organization,
         description,
-        serviceDescription
+        serviceDescription,
+        snippet,
+        accessInformation,
+        tags,
+        typeKeywords
     ]
         .filter(Boolean)
         .join(" ");
@@ -866,14 +906,49 @@ function isOfficialMunicipalSource(
         matchesKnownMunicipalAuthority(
             city,
             state,
-            inspection.organizationId
+            organizationId
         )
     ) {
         return true;
     }
 
     // -------------------------------------------------------------------------
-    // 3. Known municipal ArcGIS Enterprise host
+    // 3. Municipal Portal owner
+    //
+    // Example:
+    //
+    //     City_of_Phoenix
+    //     City_of_Tucson
+    //     Town_of_Gilbert
+    //
+    // normalize() converts underscores/hyphens into spaces, so the
+    // comparison becomes:
+    //
+    //     city of phoenix
+    //
+    // -------------------------------------------------------------------------
+
+    if (
+        city &&
+        owner
+    ) {
+        const municipalOwnerPattern =
+            new RegExp(
+                `\\b(?:city|town|village|municipality)\\s+of\\s+${escapeRegex(city)}\\b`,
+                "i"
+            );
+
+        if (
+            municipalOwnerPattern.test(
+                owner
+            )
+        ) {
+            return true;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. Known municipal ArcGIS Enterprise host
     // -------------------------------------------------------------------------
 
     const authority =
@@ -895,7 +970,7 @@ function isOfficialMunicipalSource(
     }
 
     // -------------------------------------------------------------------------
-    // 4. Explicit publisher / owner / maintainer evidence
+    // 5. Explicit publisher / owner / maintainer evidence
     // -------------------------------------------------------------------------
 
     if (
@@ -952,7 +1027,7 @@ function isOfficialMunicipalSource(
     }
 
     // -------------------------------------------------------------------------
-    // 5. Explicit municipal GIS/data portal identity
+    // 6. Explicit municipal GIS / data portal identity
     // -------------------------------------------------------------------------
 
     if (
@@ -980,6 +1055,7 @@ function isOfficialMunicipalSource(
      *     "City of Tucson" in a description
      *     "municipal"
      *     "government"
+     *     a generic ArcGIS organization
      *
      * as sufficient evidence.
      */

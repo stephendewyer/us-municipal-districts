@@ -241,7 +241,13 @@ function createCandidate(
         "Tucson Ward Boundaries",
 
     temporalStatus?:
-        CandidateClassification["temporalStatus"]
+        CandidateClassification["temporalStatus"],
+
+    sourceRole?:
+        CandidateClassification["sourceRole"],
+
+    officialMunicipalSource =
+        false
 ): InspectedCandidate {
 
     const candidate:
@@ -260,13 +266,17 @@ function createCandidate(
 
         classification:
             createClassification({
-                temporalStatus
+                temporalStatus,
+                officialMunicipalSource
             }),
 
         validation:
             createValidation()
     };
 
+    candidate.classification.sourceRole =
+        sourceRole ??
+        "unknown";
 
     if (
         geographyStatus !==
@@ -349,6 +359,8 @@ function createCandidate(
         };
     }
 
+    
+
 
     return candidate;
 }
@@ -375,7 +387,6 @@ function createGroup(
             ]
     };
 }
-
 
 function createPhoenixCandidate(
     url: string,
@@ -914,6 +925,107 @@ test(
         assert.equal(
             result.alternatives[0]?.title,
             "Tucson Ward Boundaries (2015)"
+        );
+    }
+);
+
+// =============================================================================
+// Phoenix canonical source selection
+// =============================================================================
+
+test(
+    "selectCanonicalSource prefers a native municipal GIS service over an official hosted representation",
+    () => {
+
+        const hosted =
+            createCandidate(
+                "strong-match",
+                "https://services.arcgis.com/cfKakmeHE95cgeEK/arcgis/rest/services/Council_Districts/FeatureServer/0",
+                "Council Districts and Members",
+                "undated",
+                "authoritative",
+                true
+            );
+
+        const native =
+            createCandidate(
+                "strong-match",
+                "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0",
+                "Council Districts and Members",
+                "undated",
+                "authoritative",
+                true
+            );
+
+        hosted.candidate.city = "Phoenix";
+        hosted.candidate.state = "AZ";
+
+        native.candidate.city = "Phoenix";
+        native.candidate.state = "AZ";
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    hosted,
+                    native
+                ])
+            );
+
+        assert.ok(result);
+        assert.equal(
+            result.url,
+            native.inspection.url
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource prefers the primary boundary layer over an auxiliary hash layer",
+    () => {
+
+        const hash =
+            createCandidate(
+                "strong-match",
+                "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/1",
+                "Council Districts and Members Hash",
+                "undated",
+                "authoritative",
+                true
+            );
+
+        const primary =
+            createCandidate(
+                "strong-match",
+                "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0",
+                "Council Districts and Members",
+                "undated",
+                "authoritative",
+                true
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    hash,
+                    primary
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            primary.inspection.url
+        );
+
+        assert.equal(
+            result.title,
+            "Council Districts and Members"
         );
     }
 );

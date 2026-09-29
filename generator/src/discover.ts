@@ -1002,6 +1002,23 @@ async function discoverMunicipality(
                 );
             }
 
+            console.log(
+                "PROVENANCE BEFORE CLASSIFICATION:",
+                {
+                    title: candidate.title,
+                    url: candidate.url,
+                    itemId: candidate.itemId,
+                    owner: candidate.owner,
+                    organizationId: candidate.organizationId,
+                    description: candidate.description,
+                    snippet: candidate.snippet,
+                    tags: candidate.tags,
+                    typeKeywords: candidate.typeKeywords,
+                    contentStatus: candidate.contentStatus,
+                    accessInformation: candidate.accessInformation
+                }
+            );
+
             const classification =
                 classifyCandidate(
                     {
