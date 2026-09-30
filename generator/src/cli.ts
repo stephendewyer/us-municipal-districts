@@ -290,6 +290,17 @@ function isCandidateShape(
         return false;
     }
 
+    /*
+     * Explicit pipeline rejection reason is optional.
+     */
+    if (
+        "rejectionReason" in value &&
+        value.rejectionReason !== undefined &&
+        !isString(value.rejectionReason)
+    ) {
+        return false;
+    }
+
     return true;
 }
 
@@ -467,10 +478,25 @@ function getRejectionReasons(
 ): string[] {
 
     if (
-        !isCandidateShape(candidate)
+        !isCandidateShape(
+            candidate
+        )
     ) {
         return [
             "malformed candidate shape"
+        ];
+    }
+
+    // -------------------------------------------------------------------------
+    // Explicit pipeline rejection reason
+    // -------------------------------------------------------------------------
+
+    if (
+        typeof candidate.rejectionReason === "string" &&
+        candidate.rejectionReason.trim().length > 0
+    ) {
+        return [
+            candidate.rejectionReason
         ];
     }
 

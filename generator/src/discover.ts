@@ -1134,29 +1134,30 @@ async function discoverMunicipality(
                     },
                     place
                 );
+            if (process.env.DEBUG === "true") {
+                console.log(
+                    "\nMUNICIPALITY VALIDATION DEBUG:",
+                    {
+                        title:
+                            inspection.title ??
+                            inspection.layerName ??
+                            candidate.title,
 
-            console.log(
-                "\nMUNICIPALITY VALIDATION DEBUG:",
-                {
-                    title:
-                        inspection.title ??
-                        inspection.layerName ??
-                        candidate.title,
+                        url:
+                            inspection.url,
 
-                    url:
-                        inspection.url,
+                        score:
+                            municipalityValidation.score,
 
-                    score:
-                        municipalityValidation.score,
+                        likelyMunicipalityMatch:
+                            municipalityValidation
+                                .likelyMunicipalityMatch,
 
-                    likelyMunicipalityMatch:
-                        municipalityValidation
-                            .likelyMunicipalityMatch,
-
-                    reasons:
-                        municipalityValidation.reasons
-                }
-            );
+                        reasons:
+                            municipalityValidation.reasons
+                    }
+                );
+            };
 
             if (options.verbose) {
                 printMunicipalityValidation(
@@ -1188,7 +1189,8 @@ async function discoverMunicipality(
                     municipalityValidation,
                     municipalityGeographyValidation:
                         undefined,
-                    rejectionStage: "municipality",
+                    rejectionStage: 
+                        "district-municipality",
                     rejectionReason:
                         "strong negative municipality validation"
                 };
@@ -1271,39 +1273,46 @@ async function discoverMunicipality(
             `    Inspected representations: ${pendingCandidates.length}`
         );
     }
-    console.log(
-        "QUERY GROUP SUMMARY:",
-        [...queryGroups.entries()].map(
-            ([identity, group]) => ({
-                identity,
-                count: group.length,
-                candidates: group.map(
-                    pending => ({
-                        title:
-                            pending.inspection.title,
 
-                        url:
-                            pending.inspection.url,
+    if (process.env.DEBUG === "true") {
+        console.log(
+            "QUERY GROUP SUMMARY:",
+            [...queryGroups.entries()].map(
+                ([identity, group]) => ({
+                    identity,
+                    count: group.length,
+                    candidates: group.map(
+                        pending => ({
+                            title:
+                                pending.inspection.title,
 
-                        itemId:
-                            pending.candidate.itemId ??
-                            pending.inspection.itemId,
+                            url:
+                                pending.inspection.url,
 
-                        serviceItemId:
-                            pending.inspection.serviceItemId,
+                            itemId:
+                                pending.candidate.itemId ??
+                                pending.inspection.itemId,
 
-                        serviceUrl:
-                            pending.inspection.serviceUrl,
+                            serviceItemId:
+                                pending.inspection.serviceItemId,
 
-                        layerId:
-                            pending.inspection.layerId
-                    })
-                )
-            })
-        )
-    );
+                            serviceUrl:
+                                pending.inspection.serviceUrl,
+
+                            layerId:
+                                pending.inspection.layerId
+                        })
+                    )
+                })
+            )
+        );
+    };
 
     // -------------------------------------------------------------------------
+    // Phase B: run expensive queries once per logical layer.
+    // -------------------------------------------------------------------------
+
+        // -------------------------------------------------------------------------
     // Phase B: run expensive queries once per logical layer.
     // -------------------------------------------------------------------------
 
@@ -1333,8 +1342,10 @@ async function discoverMunicipality(
 
         const inspection =
             representative.inspection;
+
         const classification =
             representative.classification;
+
         const expectedDistrictCount =
             representative.expectedDistrictCount;
 
@@ -1437,79 +1448,6 @@ async function discoverMunicipality(
                 continue;
             }
 
-            // -----------------------------------------------------------------
-            // Validate district municipality scope ONCE.
-            // -----------------------------------------------------------------
-
-            const districtMunicipalityValidation =
-                inspection.distinctDistrictValues &&
-                inspection.distinctDistrictValues.length > 0
-                    ? validateDistrictMunicipality(
-                        inspection.distinctDistrictValues,
-                        place,
-                        places
-                    )
-                    : undefined;
-
-            if (
-                districtMunicipalityValidation?.scope ===
-                "multi-municipality"
-            ) {
-                if (options.verbose) {
-                    console.log(
-                        `      REJECTED: district values span multiple municipalities`
-                    );
-
-                    console.log(
-                        `      ${districtMunicipalityValidation.evidence.join("; ")}`
-                    );
-                }
-
-                for (const pending of group) {
-                    const rejectedCandidate:
-                        InspectedCandidate = {
-                            candidate:
-                                pending.candidate,
-
-                            inspection:
-                                pending.inspection,
-
-                            classification:
-                                pending.classification,
-
-                            validation,
-
-                            municipalityValidation:
-                                pending.municipalityValidation,
-
-                            municipalityGeographyValidation:
-                                undefined,
-
-                            rejectionStage:
-                                "municipality",
-
-                            rejectionReason:
-                                districtMunicipalityValidation.evidence.join(
-                                    "; "
-                                )
-                        };
-
-                    inspectedCandidates.push(
-                        rejectedCandidate
-                    );
-
-                    rejectedCandidates.push(
-                        rejectedCandidate
-                    );
-                }
-
-                continue;
-            }
-
-            // -----------------------------------------------------------------
-            // Continue with feature count / geographic validation...
-            // -----------------------------------------------------------------
-
         } catch (error) {
             if (options.verbose) {
                 console.warn(
@@ -1520,7 +1458,9 @@ async function discoverMunicipality(
                     `      ${representative.candidate.url}`
                 );
 
-                console.warn(error);
+                console.warn(
+                    error
+                );
             }
 
             continue;
@@ -1528,6 +1468,10 @@ async function discoverMunicipality(
 
         // -----------------------------------------------------------------
         // Validate district municipality scope ONCE.
+        //
+        // A political-boundary dataset may still contain districts belonging
+        // to multiple municipalities. Such a dataset is not a valid
+        // municipality-specific canonical source.
         // -----------------------------------------------------------------
 
         let districtMunicipalityValidation:
@@ -1579,8 +1523,11 @@ async function discoverMunicipality(
                             municipalityGeographyValidation:
                                 undefined,
 
+                            districtMunicipalityValidation:
+                                districtMunicipalityValidation,
+
                             rejectionStage:
-                                "municipality",
+                                "district-municipality",
 
                             rejectionReason:
                                 districtMunicipalityValidation.evidence.join(
@@ -1656,6 +1603,7 @@ async function discoverMunicipality(
                         }`
                     );
                 }
+
             } else if (
                 geometryResult.geometries.length === 0
             ) {
@@ -1665,6 +1613,7 @@ async function discoverMunicipality(
                         `no valid polygon geometries returned.`
                     );
                 }
+
             } else {
                 municipalityGeographyValidation =
                     await validateMunicipalityGeography(
@@ -1691,16 +1640,25 @@ async function discoverMunicipality(
                             InspectedCandidate = {
                                 candidate:
                                     pending.candidate,
+
                                 inspection:
                                     pending.inspection,
+
                                 classification:
                                     pending.classification,
+
                                 validation,
+
                                 municipalityValidation:
                                     pending.municipalityValidation,
+
                                 municipalityGeographyValidation,
+
+                                districtMunicipalityValidation,
+
                                 rejectionStage:
                                     "geography",
+
                                 rejectionReason:
                                     "candidate does not match municipality geography"
                             };
@@ -1723,6 +1681,7 @@ async function discoverMunicipality(
                     );
                 }
             }
+
         } catch (error) {
             /*
              * Geographic validation is strong supporting evidence,
@@ -1738,7 +1697,9 @@ async function discoverMunicipality(
                     `      ${inspection.url}`
                 );
 
-                console.warn(error);
+                console.warn(
+                    error
+                );
             }
         }
 
@@ -1752,8 +1713,10 @@ async function discoverMunicipality(
                     ? inspection
                     : {
                         ...pending.inspection,
+
                         distinctDistrictValues:
                             inspection.distinctDistrictValues,
+
                         featureCount:
                             inspection.featureCount
                     };
@@ -1761,10 +1724,13 @@ async function discoverMunicipality(
             inspectedCandidates.push({
                 candidate:
                     pending.candidate,
+
                 inspection:
                     candidateInspection,
+
                 classification:
                     pending.classification,
+
                 validation:
                     pending === representative
                         ? validation
@@ -1772,17 +1738,20 @@ async function discoverMunicipality(
                             validation,
                             candidateInspection
                         ),
+
                 municipalityValidation:
                     pending.municipalityValidation,
-                municipalityGeographyValidation
+
+                municipalityGeographyValidation,
+
+                districtMunicipalityValidation
             });
         }
     }
 
-
     
-    
-// 6. Build final DiscoveryResult
+    // =========================================================================
+    // 6. Build final DiscoveryResult
     // =========================================================================
 
     const result =
