@@ -34,6 +34,11 @@ export interface PipelineOptions {
      * Similarity required for two layers to be considered equivalent.
      */
     equivalenceThreshold?: number;
+
+    /**
+     * Known Census places used for municipality geography validation.
+     */
+    knownPlaces?: CensusPlace[];
 }
 
 
@@ -90,20 +95,25 @@ export function buildDiscoveryResult(
      * Discovery bookkeeping
      * =========================================================================
      *
-     * Discovery has three different concepts:
+     * Discovery has three distinct concepts:
      *
      *     1. inspected
-     *     2. accepted
+     *     2. valid
      *     3. canonical
      *
      * An inspected candidate has reached the ArcGIS inspection stage.
      *
-     * A rejected candidate was inspected but failed one of the downstream
+     * A rejected candidate was inspected but failed one or more downstream
      * validation gates.
      *
-     * A valid candidate passed all required validation gates.
+     * A valid candidate passed the required validation gates.
      *
-     * The important invariant is:
+     * Rejection decisions are made by discover.ts.
+     *
+     * This function organizes those results and performs the later
+     * candidate-ranking / equivalence / canonical-selection stages.
+     *
+     * Invariant:
      *
      *     inspectedCandidates
      *         ├── rejectedCandidates
@@ -116,10 +126,6 @@ export function buildDiscoveryResult(
      * and:
      *
      *     validCandidates ∩ rejectedCandidates = ∅
-     *
-     * Rejection decisions are made by discover.ts. This function should
-     * organize those results rather than independently reconstructing
-     * rejection status.
      */
 
     const inspectedCandidates =
@@ -142,6 +148,12 @@ export function buildDiscoveryResult(
     // =========================================================================
     // Valid candidates
     // =========================================================================
+    //
+    // discover.ts has already made the validation/rejection decision.
+    //
+    // buildDiscoveryResult() therefore does not independently determine
+    // whether a candidate is valid.
+    //
 
     const validCandidates =
         inspectedCandidates.filter(
@@ -155,6 +167,11 @@ export function buildDiscoveryResult(
     // =========================================================================
     // Rank valid candidates
     // =========================================================================
+    //
+    // Ranking is performed only after rejection.
+    //
+    // Rejected candidates must never influence canonical selection.
+    //
 
     const rankedCandidates:
         CandidateScore[] =
@@ -167,18 +184,18 @@ export function buildDiscoveryResult(
     // Detect equivalent layers
     // =========================================================================
     //
-    // IMPORTANT:
+    // Equivalence is evaluated only among valid candidates.
     //
-    // equivalence.ts must ensure that candidates with different
-    // districtType values cannot be placed into the same equivalence group.
+    // Candidates with different districtType values must never be placed
+    // into the same equivalence group.
     //
     // For example:
     //
     //     ward
     //     council-district
     //
-    // must always remain separate groups even if their geometries,
-    // fields, or metadata happen to look similar.
+    // must remain separate groups even if their geometries, fields, or
+    // metadata happen to look similar.
     //
 
     const equivalentGroups =
@@ -190,20 +207,21 @@ export function buildDiscoveryResult(
 
 
     // =========================================================================
-    // Select canonical source for every equivalence group
+    // Select canonical source for each equivalence group
     // =========================================================================
     //
-    // This produces one canonical source per political district system.
+    // This produces one canonical source per distinct municipal district
+    // system represented by the discovered data.
     //
     // Example:
     //
     //     Group 1 → ward
-    //         → current ward boundary
+    //         → current authoritative ward boundary
     //
     //     Group 2 → council-district
-    //         → current council district boundary
+    //         → current authoritative council district boundary
     //
-    // These are both legitimate canonical sources for the same municipality.
+    // Both may legitimately exist for the same municipality.
     //
 
     let canonicalSources:
@@ -212,10 +230,40 @@ export function buildDiscoveryResult(
             equivalentGroups
         );
 
+
+    // =========================================================================
+    // Select municipality-level canonical source
+    // =========================================================================
+    //
+    // This is intentionally separate from canonicalSources.
+    //
+    // canonicalSources:
+    //     one canonical source per equivalence group
+    //
+    // canonical:
+    //     one canonical source for the municipality as a whole
+    //
+    // selectMunicipalityCanonicalSource() performs the cross-group
+    // comparison using source role, official municipal status, temporal
+    // priority, municipal-service priority, canonical-source bonuses,
+    // and candidate ranking.
+    //
+
     const canonical =
         selectMunicipalityCanonicalSource(
             equivalentGroups
         );
+
+
+    // =========================================================================
+    // Apply manual review
+    // =========================================================================
+    //
+    // Review is a presentation/selection-state override.
+    //
+    // It does not change which candidate was selected, its score, or the
+    // underlying validation results.
+    //
 
     const reviewedCanonical =
         canonical &&
@@ -226,10 +274,6 @@ export function buildDiscoveryResult(
             }
             : canonical;
 
-
-    // =========================================================================
-    // Apply manual review
-    // =========================================================================
 
     if (
         options.review
@@ -256,11 +300,10 @@ export function buildDiscoveryResult(
         place,
 
         /*
-         * `candidates` represents the candidates that reached inspection.
+         * `candidates` represents candidates that reached inspection.
          *
-         * It is intentionally equivalent to inspectedCandidates at this
-         * stage. Search-result candidates that were discarded before
-         * inspection should not be counted here.
+         * Search-result candidates discarded before inspection are not
+         * represented here.
          */
         candidates:
             inspectedCandidates.map(
@@ -280,9 +323,7 @@ export function buildDiscoveryResult(
 
         canonicalSources,
 
-        canonical: 
+        canonical:
             reviewedCanonical
-
-    }
-
+    };
 }
