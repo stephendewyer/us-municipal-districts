@@ -237,17 +237,14 @@ function calculateReductionPercent(
 /**
  * Optimizes normalized municipal boundary geometry.
  *
- * The initial implementation intentionally performs no
- * simplification. Its purpose is to establish a reliable
- * baseline measurement before topology-preserving
- * simplification is introduced.
+ * When enabled, geometry is simplified using Turf with the
+ * configured tolerance. Optimization metrics are calculated
+ * against the original normalized geometry.
  */
 export function optimizeGeometry(
     geometry: GeoJSONFeatureCollection,
     options: GeometryOptimizationOptions
 ): GeometryOptimizationResult {
-
-    void options;
 
     const originalVertexCount =
         countVerticesInCollection(

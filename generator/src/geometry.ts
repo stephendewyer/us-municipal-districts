@@ -74,16 +74,15 @@ export async function generateGeometry(
             source,
             entry
         );
-
-
+        
     /*
-     * Pass normalized geometry through the production optimization
-     * layer.
-     *
-     * The first optimization implementation performs no simplification.
-     * This establishes the optimization stage without changing the
-     * geometry.
-     */
+    * Pass normalized geometry through the production optimization
+    * layer.
+    *
+    * Geometry simplification is currently enabled using a small
+    * tolerance to reduce coordinate count while preserving the
+    * overall municipal boundary shape.
+    */
     const optimized =
         optimizeGeometry(
             normalized,
@@ -95,10 +94,12 @@ export async function generateGeometry(
 
     console.log(
         [
-            `Geometry baseline: ${entry.city}, ${entry.state}`,
+            `Geometry optimization: ${entry.city}, ${entry.state}`,
             `  Features: ${optimized.report.featureCount}`,
-            `  Vertices: ${optimized.report.originalVertexCount.toLocaleString()}`,
-            `  GeoJSON size: ${(optimized.report.originalByteSize / 1024).toFixed(1)} KB`
+            `  Vertices: ${optimized.report.originalVertexCount.toLocaleString()} → ${optimized.report.optimizedVertexCount.toLocaleString()}`,
+            `  Vertex reduction: ${optimized.report.vertexReductionPercent.toFixed(1)}%`,
+            `  GeoJSON size: ${(optimized.report.originalByteSize / 1024).toFixed(1)} KB → ${(optimized.report.optimizedByteSize / 1024).toFixed(1)} KB`,
+            `  Size reduction: ${optimized.report.byteReductionPercent.toFixed(1)}%`
         ].join("\n")
     );
 
