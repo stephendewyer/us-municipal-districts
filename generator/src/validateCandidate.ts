@@ -13,9 +13,9 @@ import type {
 
 const MIN_DISTINCT_VALUES = 2;
 
-const MAX_DISTINCT_VALUES = 100;
-
 const MAX_UNEXPECTED_DISTRICT_VALUES = 10;
+
+const MAX_DISTINCT_VALUES = 50;
 
 const MIN_COVERAGE = 0.50;
 
@@ -107,9 +107,10 @@ function scoreDistrictFieldName(
         return 0;
     }
 
-    /*
-     * Exact district identifiers are strongest.
-     */
+    // -------------------------------------------------------------------------
+    // Exact district identifiers
+    // -------------------------------------------------------------------------
+
     if (
         normalized === "district" ||
         normalized === "district id" ||
@@ -138,6 +139,10 @@ function scoreDistrictFieldName(
         return 100;
     }
 
+    // -------------------------------------------------------------------------
+    // Partial district identifiers
+    // -------------------------------------------------------------------------
+
     if (
         normalized.includes("district")
     ) {
@@ -162,9 +167,10 @@ function scoreDistrictFieldName(
         return 70;
     }
 
-    /*
-     * Generic political fields.
-     */
+    // -------------------------------------------------------------------------
+    // Generic political fields
+    // -------------------------------------------------------------------------
+
     if (
         isPoliticalFieldName(normalized)
     ) {
@@ -416,23 +422,9 @@ function getCandidateDistrictFields(
     const fields =
         inspection.fields ?? [];
 
-    /*
-     * Start with fields explicitly identified by inspection.
-     */
     const explicitFields =
         inspection.districtFields ?? [];
 
-    /*
-     * Then identify fields whose names/aliases actually look like
-     * district identifiers.
-     *
-     * IMPORTANT:
-     *
-     * Do not consider every field in the layer.
-     *
-     * REP_NAME, REP_URL, EMAIL, etc. are attributes associated with
-     * districts, but they are not district identifiers.
-     */
     const semanticFields =
         fields
             .filter(
@@ -531,6 +523,159 @@ function classifyValuePattern(
 }
 
 // =============================================================================
+// Numeric district extraction
+// =============================================================================
+
+function extractDistrictNumber(
+    value: string
+): number | undefined {
+    const normalized =
+        normalizeField(value);
+
+    if (/^\d+$/.test(normalized)) {
+        const number =
+            Number(normalized);
+
+        return Number.isInteger(number) &&
+            number >= 1
+            ? number
+            : undefined;
+    }
+
+    const wardMatch =
+        normalized.match(
+            /^ward\s+(\d+)[a-z]?$/i
+        );
+
+    if (wardMatch) {
+        const number =
+            Number(wardMatch[1]);
+
+        return Number.isInteger(number) &&
+            number >= 1
+            ? number
+            : undefined;
+    }
+
+    const districtMatch =
+        normalized.match(
+            /^(?:district|council\s+district)\s+(\d+)[a-z]?$/i
+        );
+
+    if (districtMatch) {
+        const number =
+            Number(districtMatch[1]);
+
+        return Number.isInteger(number) &&
+            number >= 1
+            ? number
+            : undefined;
+    }
+
+    return undefined;
+}
+
+// =============================================================================
+// Expected district values
+// =============================================================================
+
+function expectedNumericDistrictValues(
+    expectedDistrictCount: number
+): Set<number> {
+    const expected =
+        new Set<number>();
+
+    for (
+        let district = 1;
+        district <= expectedDistrictCount;
+        district += 1
+    ) {
+        expected.add(district);
+    }
+
+    return expected;
+}
+
+// =============================================================================
+// Unexpected district values
+// =============================================================================
+
+function countUnexpectedDistrictValues(
+    values: string[],
+    expectedDistrictCount:
+        number | undefined,
+    pattern:
+        FieldAnalysis["pattern"]
+): number {
+    if (
+        expectedDistrictCount === undefined ||
+        expectedDistrictCount <= 0
+    ) {
+        return 0;
+    }
+
+    /*
+     * For numeric / ward-number / district-number fields we can determine
+     * exactly which values fall outside the expected district range.
+     *
+     * Example:
+     *
+     *   expected = 8
+     *   values = 1 ... 8
+     *
+     * => 0 unexpected
+     *
+     * For a mixed field such as Phoenix CityCouncilDistricts:
+     *
+     *   1 ... 8
+     *   ACACIA
+     *   BARREL
+     *   ...
+     *
+     * the named values are all unexpected.
+     */
+    if (
+        pattern === "numeric" ||
+        pattern === "ward-number" ||
+        pattern === "district-number"
+    ) {
+        const expected =
+            expectedNumericDistrictValues(
+                expectedDistrictCount
+            );
+
+        let unexpected = 0;
+
+        for (const value of values) {
+            const number =
+                extractDistrictNumber(
+                    value
+                );
+
+            if (
+                number === undefined ||
+                !expected.has(number)
+            ) {
+                unexpected += 1;
+            }
+        }
+
+        return unexpected;
+    }
+
+    /*
+     * For a named or mixed field we cannot assume that the valid districts
+     * are literally 1..N. In that case, the safest structural measurement
+     * is the number of values beyond the expected cardinality.
+     */
+    return Math.max(
+        0,
+        values.length -
+            expectedDistrictCount
+    );
+}
+
+// =============================================================================
 // Missing district values
 // =============================================================================
 
@@ -546,72 +691,30 @@ function inferMissingDistrictValues(
         return [];
     }
 
-    const normalizedValues =
-        values.map(
-            value =>
-                normalizeField(value)
-        );
+    const numericValues =
+        values
+            .map(
+                value =>
+                    extractDistrictNumber(
+                        value
+                    )
+            )
+            .filter(
+                (
+                    value
+                ): value is number =>
+                    value !== undefined
+            );
 
-    let numericValues: number[] = [];
-
+    /*
+     * If the field is mixed, we should not claim that named values are
+     * missing numeric districts. We can only infer missing values when
+     * every observed value can be interpreted numerically.
+     */
     if (
-        normalizedValues.every(
-            value =>
-                /^\d+$/.test(value)
-        )
+        numericValues.length !==
+        values.length
     ) {
-        numericValues =
-            normalizedValues.map(
-                value =>
-                    Number(value)
-            );
-    } else if (
-        normalizedValues.every(
-            value =>
-                /^ward\s+\d+[a-z]?$/i.test(
-                    value
-                )
-        )
-    ) {
-        numericValues =
-            normalizedValues.map(
-                value =>
-                    Number(
-                        value
-                            .replace(
-                                /^ward\s+/i,
-                                ""
-                            )
-                            .replace(
-                                /[a-z]$/i,
-                                ""
-                            )
-                    )
-            );
-    } else if (
-        normalizedValues.every(
-            value =>
-                /^(?:district|council\s+district)\s+\d+[a-z]?$/i.test(
-                    value
-                )
-        )
-    ) {
-        numericValues =
-            normalizedValues.map(
-                value =>
-                    Number(
-                        value
-                            .replace(
-                                /^(?:district|council\s+district)\s+/i,
-                                ""
-                            )
-                            .replace(
-                                /[a-z]$/i,
-                                ""
-                            )
-                    )
-            );
-    } else {
         return [];
     }
 
@@ -646,6 +749,98 @@ function inferMissingDistrictValues(
 }
 
 // =============================================================================
+// Complete district coverage
+// =============================================================================
+
+function determineCompleteDistrictCoverage(
+    values: string[],
+    expectedDistrictCount:
+        number | undefined,
+    pattern:
+        FieldAnalysis["pattern"]
+): boolean | undefined {
+    if (
+        expectedDistrictCount === undefined ||
+        expectedDistrictCount <= 0
+    ) {
+        return undefined;
+    }
+
+    if (
+        values.length !==
+        expectedDistrictCount
+    ) {
+        return false;
+    }
+
+    /*
+     * For numeric district fields, completeness means exactly 1..N.
+     */
+    if (
+        pattern === "numeric" ||
+        pattern === "ward-number" ||
+        pattern === "district-number"
+    ) {
+        const expected =
+            expectedNumericDistrictValues(
+                expectedDistrictCount
+            );
+
+        const observed =
+            new Set<number>();
+
+        for (const value of values) {
+            const number =
+                extractDistrictNumber(
+                    value
+                );
+
+            if (
+                number === undefined
+            ) {
+                return false;
+            }
+
+            observed.add(number);
+        }
+
+        if (
+            observed.size !==
+            expectedDistrictCount
+        ) {
+            return false;
+        }
+
+        for (const district of expected) {
+            if (
+                !observed.has(
+                    district
+                )
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /*
+     * For named districts, exact cardinality is the strongest structural
+     * conclusion available from the inspection data.
+     */
+    if (
+        pattern === "named"
+    ) {
+        return true;
+    }
+
+    /*
+     * Mixed values can never constitute complete district coverage.
+     */
+    return false;
+}
+
+// =============================================================================
 // District field analysis
 // =============================================================================
 
@@ -667,7 +862,7 @@ function analyzeDistrictField(
                 normalizeField(field)
         );
 
-    const fieldValues =
+    const metadataValues =
         (
             fieldMetadata as
             {
@@ -688,9 +883,8 @@ function analyzeDistrictField(
         inspection.distinctDistrictValues;
 
     /*
-     * The inspection-level distinct values belong to the district field
-     * selected by the inspection stage. Therefore they should only be
-     * used for the field explicitly reported by inspection.
+     * The inspection-level values belong to the district field selected
+     * by the inspection stage. Only use them for that field.
      */
     const useInspectionValues =
         inspectionValues &&
@@ -708,7 +902,7 @@ function analyzeDistrictField(
     const values =
         useInspectionValues
             ? inspectionValues
-            : fieldValues;
+            : metadataValues;
 
     const distinctValues =
         unique(
@@ -724,6 +918,11 @@ function analyzeDistrictField(
     const expectedCount =
         expectedDistrictCount?.count;
 
+    const pattern =
+        classifyValuePattern(
+            distinctValues
+        );
+
     const observedCoverage =
         expectedCount !== undefined &&
         expectedCount > 0
@@ -735,19 +934,18 @@ function analyzeDistrictField(
             : undefined;
 
     const unexpectedDistrictValueCount =
-        expectedCount !== undefined
-            ? Math.max(
-                0,
-                observedDistrictCount -
-                    expectedCount
-            )
-            : 0;
+        countUnexpectedDistrictValues(
+            distinctValues,
+            expectedCount,
+            pattern
+        );
 
     const completeDistrictCoverage =
-        expectedCount !== undefined
-            ? observedDistrictCount ===
-                expectedCount
-            : undefined;
+        determineCompleteDistrictCoverage(
+            distinctValues,
+            expectedCount,
+            pattern
+        );
 
     const missingDistrictValues =
         inferMissingDistrictValues(
@@ -758,10 +956,10 @@ function analyzeDistrictField(
     let fieldScore =
         scoreDistrictFieldName(field);
 
-    /*
-     * A field with no observed values should not receive the same
-     * district-field confidence as a populated district identifier.
-     */
+    // -------------------------------------------------------------------------
+    // Empty field
+    // -------------------------------------------------------------------------
+
     if (
         observedDistrictCount === 0
     ) {
@@ -772,14 +970,9 @@ function analyzeDistrictField(
             );
     }
 
-    /*
-     * A populated field with a recognizable district pattern receives
-     * additional confidence.
-     */
-    const pattern =
-        classifyValuePattern(
-            distinctValues
-        );
+    // -------------------------------------------------------------------------
+    // Recognizable district pattern
+    // -------------------------------------------------------------------------
 
     if (
         pattern === "numeric" ||
@@ -797,19 +990,33 @@ function analyzeDistrictField(
         fieldScore -= 10;
     }
 
-    /*
-     * Complete authoritative coverage is strong evidence.
-     */
+    // -------------------------------------------------------------------------
+    // Complete authoritative coverage
+    // -------------------------------------------------------------------------
+
     if (
         completeDistrictCoverage === true
     ) {
         fieldScore += 25;
     }
 
-    /*
-     * Excess distinct values relative to the independently established
-     * expectation are strong negative evidence.
-     */
+    // -------------------------------------------------------------------------
+    // Unexpected values
+    // -------------------------------------------------------------------------
+
+    if (
+        unexpectedDistrictValueCount > 0
+    ) {
+        fieldScore -= Math.min(
+            40,
+            unexpectedDistrictValueCount * 3
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Excess cardinality
+    // -------------------------------------------------------------------------
+
     if (
         expectedCount !== undefined &&
         observedDistrictCount >
@@ -959,32 +1166,34 @@ function calculateConfidence(
         confidence -= 15;
     }
 
-    /*
-     * A mixed district field is a major negative signal.
-     *
-     * This is particularly important for the Phoenix
-     * Maricopa_County_City_Council_Districts layer, whose Ward field
-     * contains:
-     *
-     *     1 ... 8
-     *     ACACIA
-     *     BARREL
-     *     CACTUS
-     *     ...
-     *
-     * It must not receive high confidence simply because it is named
-     * Ward and contains the expected numeric district values.
-     */
+    // -------------------------------------------------------------------------
+    // Mixed-value rejection
+    // -------------------------------------------------------------------------
+
     if (
         best.pattern === "mixed"
     ) {
         confidence -= 25;
     }
 
-    /*
-     * Excess distinct values relative to the authoritative expectation
-     * are also a strong negative signal.
-     */
+    // -------------------------------------------------------------------------
+    // Unexpected values
+    // -------------------------------------------------------------------------
+
+    if (
+        best.unexpectedDistrictValueCount >
+        0
+    ) {
+        confidence -= Math.min(
+            30,
+            best.unexpectedDistrictValueCount * 2
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Excess cardinality
+    // -------------------------------------------------------------------------
+
     if (
         best.expectedDistrictCount !== undefined &&
         best.observedDistrictCount >
@@ -1089,6 +1298,28 @@ function determineAcceptance(
     } else if (
         best.observedDistrictCount >
         MAX_DISTINCT_VALUES
+    ) {
+        return false;
+    }
+
+    // =========================================================================
+    // Unexpected-value guard
+    // =========================================================================
+
+    /*
+     * When an authoritative expectation exists, values outside the expected
+     * district set are strong negative evidence.
+     *
+     * This is what catches Phoenix CityCouncilDistricts:
+     *
+     *   expected: 1..8
+     *   observed: 1..8 + ACACIA + BARREL + ...
+     *
+     * The layer is therefore not a clean municipal district boundary source.
+     */
+    if (
+        best.unexpectedDistrictValueCount >
+        0
     ) {
         return false;
     }
@@ -1356,8 +1587,17 @@ export function validateCandidate(
                         pattern:
                             analysis.pattern,
 
+                        unexpectedDistrictValueCount:
+                            analysis.unexpectedDistrictValueCount,
+
                         completeDistrictCoverage:
-                            analysis.completeDistrictCoverage
+                            analysis.completeDistrictCoverage,
+
+                        missingDistrictValues:
+                            analysis.missingDistrictValues,
+
+                        distinctValues:
+                            analysis.distinctValues
                     })
                 ),
 
@@ -1410,6 +1650,15 @@ export function validateCandidate(
 
             classificationPolitical:
                 classification.isPoliticalBoundary,
+
+            classificationMunicipalPolitical:
+                classification.isMunicipalPoliticalBoundary,
+
+            classificationRejected:
+                classification.rejected,
+
+            sourceRole:
+                classification.sourceRole,
 
             districtField:
                 best.field,
@@ -1494,6 +1743,15 @@ export function validateCandidate(
         ) {
             rejectionReasons.push(
                 "too many distinct district values"
+            );
+        }
+
+        if (
+            best.unexpectedDistrictValueCount >
+            0
+        ) {
+            rejectionReasons.push(
+                `district field contains ${best.unexpectedDistrictValueCount} unexpected district value${best.unexpectedDistrictValueCount === 1 ? "" : "s"}`
             );
         }
 
@@ -1591,6 +1849,15 @@ export function validateCandidate(
     ) {
         evidence.push(
             `Distinct district values observed: ${best.distinctValues.length}.`
+        );
+    }
+
+    if (
+        best.unexpectedDistrictValueCount >
+        0
+    ) {
+        evidence.push(
+            `Unexpected district values observed: ${best.unexpectedDistrictValueCount}.`
         );
     }
 
