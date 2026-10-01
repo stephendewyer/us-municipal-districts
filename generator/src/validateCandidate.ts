@@ -13,6 +13,7 @@ import type {
 
 const MIN_DISTINCT_VALUES = 2;
 const MAX_DISTINCT_VALUES = 100;
+const MAX_UNEXPECTED_DISTRICT_VALUES = 10;
 const MIN_COVERAGE = 0.50;
 
 // =============================================================================
@@ -1014,7 +1015,34 @@ function determineAcceptance(
         return false;
     }
 
+    // =========================================================================
+    // District-value cardinality guard
+    // =========================================================================
+    //
+    // District cardinality is evaluated against independently established
+    // expectations whenever available.
+    //
+    // We do not infer an expected district count from observed values.
+    //
+    // If an authoritative expected count exists, a substantial excess of
+    // observed values is evidence that the selected field is not actually
+    // the municipal district identifier.
+    //
+    // If no expected count exists, MAX_DISTINCT_VALUES provides only a
+    // conservative fallback sanity check.
+    //
+
     if (
+        best.expectedDistrictCount !== undefined
+    ) {
+        if (
+            best.observedDistrictCount >
+            best.expectedDistrictCount +
+                MAX_UNEXPECTED_DISTRICT_VALUES
+        ) {
+            return false;
+        }
+    } else if (
         best.observedDistrictCount >
         MAX_DISTINCT_VALUES
     ) {
@@ -1334,8 +1362,18 @@ export function validateCandidate(
         }
 
         if (
-            best.distinctValues.length >
-            MAX_DISTINCT_VALUES
+            best.expectedDistrictCount !== undefined &&
+            best.observedDistrictCount >
+                best.expectedDistrictCount +
+                    MAX_UNEXPECTED_DISTRICT_VALUES
+        ) {
+            rejectionReasons.push(
+                `too many distinct district values for expected district count`
+            );
+        } else if (
+            best.expectedDistrictCount === undefined &&
+            best.observedDistrictCount >
+                MAX_DISTINCT_VALUES
         ) {
             rejectionReasons.push(
                 "too many distinct district values"

@@ -1753,7 +1753,17 @@ async function discoverMunicipality(
     // =========================================================================
     // 6. Build final DiscoveryResult
     // =========================================================================
-
+    console.dir(
+        inspectedCandidates.find(
+            candidate =>
+                candidate.inspection.url.includes(
+                    "/election/alderman/MapServer/0"
+                )
+        ),
+        {
+            depth: null
+        }
+    );
     const result =
         buildDiscoveryResult(
             place,

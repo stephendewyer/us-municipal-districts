@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-09-30T23:27:58.013Z",
+  "generatedAt": "2026-10-01T17:34:33.546Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -168,7 +168,7 @@
       },
       "generatedFile": "geometry/5553000/aldermanic-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-30T23:27:58.013Z",
+        "generatedAt": "2026-10-01T17:34:33.546Z",
         "generatorVersion": "0.1.0",
         "alternatives": [],
         "requiresReview": false
@@ -199,6 +199,31 @@
         "generatorVersion": "0.1.0",
         "alternatives": [],
         "requiresReview": true
+      }
+    },
+    {
+      "placeFips": "5553000",
+      "city": "Milwaukee",
+      "state": "WI",
+      "boundaryType": "ward",
+      "source": {
+        "sourceType": "arcgis",
+        "url": "https://milwaukeemaps.milwaukee.gov/arcgis/rest/services/election/election_wards/MapServer/1",
+        "serviceType": "MapServer",
+        "title": "Voting wards",
+        "official": true,
+        "verified": true,
+        "fieldMapping": {
+          "district": "WARD",
+          "name": "WARD"
+        }
+      },
+      "generatedFile": "geometry/5553000/ward.geojson",
+      "metadata": {
+        "generatedAt": "2026-10-01T11:58:24.776Z",
+        "generatorVersion": "0.1.0",
+        "alternatives": [],
+        "requiresReview": false
       }
     }
   ]
