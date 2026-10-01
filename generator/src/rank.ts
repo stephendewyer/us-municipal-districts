@@ -4,6 +4,10 @@ import type {
 } from "./types.js";
 
 import {
+    evaluateCandidateEligibility
+} from "./candidateEligibility.js";
+
+import {
     validateTemporal
 } from "./temporalValidation.js";
 
@@ -20,93 +24,6 @@ function getDistrictField(
     );
 }
 
-function isPolygon(
-    candidate: InspectedCandidate
-): boolean {
-    return (
-        candidate.inspection.geometryType ===
-            "esriGeometryPolygon" ||
-        candidate.inspection.geometryType ===
-            "polygon"
-    );
-}
-
-function hasValidatedPoliticalBoundary(
-    candidate: InspectedCandidate
-): boolean {
-    const validation = candidate.validation;
-
-    return Boolean(
-        validation &&
-        validation.isLikelyPoliticalBoundary &&
-        validation.confidence >= 60 &&
-        validation.districtField &&
-        (
-            validation.geometryType ===
-                "esriGeometryPolygon" ||
-            validation.geometryType ===
-                "polygon"
-        )
-    );
-}
-
-function hasStrongNegativeEvidence(
-    candidate: InspectedCandidate
-): boolean {
-
-    const classification =
-        candidate.classification;
-
-    const political =
-        classification.matches.political ?? [];
-
-    /*
-     * Once a candidate has been positively identified as a
-     * political boundary, census/parcel/housing evidence should
-     * not automatically reject it.
-     *
-     * Those terms may describe:
-     *
-     * - attributes contained in the dataset
-     * - related demographic information
-     * - source documentation
-     * - metadata inherited from another layer
-     *
-     * They are only strong negative evidence when the candidate
-     * lacks convincing political identity.
-     */
-    const hasPoliticalIdentity =
-        classification.isPoliticalBoundary ||
-        political.length > 0;
-
-    if (
-        !hasPoliticalIdentity &&
-        (
-            classification.isCensusDataset ||
-            classification.isParcelDataset ||
-            classification.isHousingDataset
-        )
-    ) {
-        return true;
-    }
-
-    const thematic =
-        classification.matches.thematic ?? [];
-
-    /*
-     * A thematic dataset is strong negative evidence only when
-     * there is no political identity to counter it.
-     */
-    if (
-        !hasPoliticalIdentity &&
-        thematic.length > 0
-    ) {
-        return true;
-    }
-
-    return false;
-}
-
 // -----------------------------------------------------------------------------
 // Geographic validation scoring
 // -----------------------------------------------------------------------------
@@ -114,10 +31,9 @@ function hasStrongNegativeEvidence(
 /**
  * Returns the ranking contribution from municipality geography validation.
  *
- * Geographic validation is intentionally a ranking signal rather than a
- * hard eligibility gate. A candidate can still be useful when geographic
- * validation is unavailable, but a candidate that has been demonstrated to
- * overlap the municipality boundary should rank substantially higher.
+ * Geography is a quality signal, not an eligibility decision.
+ *
+ * Eligibility decisions belong in candidateEligibility.ts.
  */
 function getGeographyScore(
     candidate: InspectedCandidate
@@ -135,6 +51,7 @@ function getGeographyScore(
     }
 
     switch (geography.status) {
+
         case "strong-match":
             return {
                 score: 30,
@@ -181,9 +98,25 @@ function getGeographyScore(
 // Candidate scoring
 // -----------------------------------------------------------------------------
 
+/**
+ * Scores an eligible candidate.
+ *
+ * IMPORTANT:
+ *
+ * Eligibility is NOT determined here.
+ *
+ * candidateEligibility.ts is responsible for determining whether a
+ * candidate is eligible.
+ *
+ * rank.ts is responsible for determining how strong an eligible candidate is.
+ *
+ * This function therefore assumes that the candidate has already passed
+ * candidate eligibility evaluation.
+ */
 export function scoreCandidate(
     candidate: InspectedCandidate
 ): CandidateScore {
+
     const reasons: string[] = [];
 
     const classification =
@@ -196,69 +129,20 @@ export function scoreCandidate(
         candidate.validation;
 
     // -------------------------------------------------------------------------
-    // Hard rejection gates
-    // -------------------------------------------------------------------------
-
-    if (classification.rejected) {
-        return {
-            candidate,
-            score: Number.NEGATIVE_INFINITY,
-            reasons: [
-                "candidate rejected by classification"
-            ]
-        };
-    }
-
-    if (!isPolygon(candidate)) {
-        return {
-            candidate,
-            score: Number.NEGATIVE_INFINITY,
-            reasons: [
-                "candidate is not polygon geometry"
-            ]
-        };
-    }
-
-    if (!classification.isMunicipalPoliticalBoundary) {
-        return {
-            candidate,
-            score: Number.NEGATIVE_INFINITY,
-            reasons: [
-                "candidate is not classified as a municipal political boundary"
-            ]
-        };
-    }
-
-    if (!hasValidatedPoliticalBoundary(candidate)) {
-        return {
-            candidate,
-            score: Number.NEGATIVE_INFINITY,
-            reasons: [
-                "candidate failed validated political-boundary gate"
-            ]
-        };
-    }
-
-    if (hasStrongNegativeEvidence(candidate)) {
-        return {
-            candidate,
-            score: Number.NEGATIVE_INFINITY,
-            reasons: [
-                "candidate contains strong non-political/thematic evidence"
-            ]
-        };
-    }
-
-    // -------------------------------------------------------------------------
     // Base score
     // -------------------------------------------------------------------------
 
     let score = 0;
 
     score += 40;
+
     reasons.push(
         "+40 validated political boundary"
     );
+
+    // -------------------------------------------------------------------------
+    // Official municipal source
+    // -------------------------------------------------------------------------
 
     if (
         classification.officialMunicipalSource
@@ -270,13 +154,23 @@ export function scoreCandidate(
         );
     }
 
-    if (classification.districtType) {
+    // -------------------------------------------------------------------------
+    // District type
+    // -------------------------------------------------------------------------
+
+    if (
+        classification.districtType
+    ) {
         score += 15;
 
         reasons.push(
             `+15 district type: ${classification.districtType}`
         );
     }
+
+    // -------------------------------------------------------------------------
+    // District field
+    // -------------------------------------------------------------------------
 
     const districtField =
         getDistrictField(candidate);
@@ -289,6 +183,19 @@ export function scoreCandidate(
         );
     }
 
+    // -------------------------------------------------------------------------
+    // Polygon geometry
+    // -------------------------------------------------------------------------
+
+    /*
+     * Polygon geometry is an eligibility requirement.
+     *
+     * Because this function only scores eligible candidates, the polygon
+     * requirement has already been established by candidateEligibility.ts.
+     *
+     * This score therefore represents the quality contribution associated
+     * with satisfying that requirement.
+     */
     score += 10;
 
     reasons.push(
@@ -300,38 +207,46 @@ export function scoreCandidate(
     // -------------------------------------------------------------------------
 
     if (validation) {
+
         score += 25;
 
         reasons.push(
             "+25 candidate validation available"
         );
 
+        // ---------------------------------------------------------------------
+        // Validation confidence
+        // ---------------------------------------------------------------------
+
         /*
-         * Validation confidence uses a 0–100 scale.
+         * Eligibility establishes the minimum acceptable confidence.
          *
-         * 90+ = high confidence
-         * 80+ = strong confidence
-         * 70+ = moderate confidence
-         *
-         * The hard minimum validation gate above remains 60.
+         * Ranking differentiates candidates above that minimum.
          */
-        if (validation.confidence >= 90) {
+        if (
+            validation.confidence >= 90
+        ) {
+
             score += 20;
 
             reasons.push(
                 "+20 validation confidence >= 90"
             );
+
         } else if (
             validation.confidence >= 80
         ) {
+
             score += 15;
 
             reasons.push(
                 "+15 validation confidence >= 80"
             );
+
         } else if (
             validation.confidence >= 70
         ) {
+
             score += 8;
 
             reasons.push(
@@ -339,28 +254,34 @@ export function scoreCandidate(
             );
         }
 
+        // ---------------------------------------------------------------------
+        // Distinct district values
+        // ---------------------------------------------------------------------
+
         if (
-            validation.distinctDistrictValues
-                .length >= 5
+            validation.distinctDistrictValues.length >= 5
         ) {
+
             score += 10;
 
             reasons.push(
                 "+10 at least 5 distinct district values"
             );
+
         } else if (
-            validation.distinctDistrictValues
-                .length >= 3
+            validation.distinctDistrictValues.length >= 3
         ) {
+
             score += 7;
 
             reasons.push(
                 "+7 at least 3 distinct district values"
             );
+
         } else if (
-            validation.distinctDistrictValues
-                .length >= 2
+            validation.distinctDistrictValues.length >= 2
         ) {
+
             score += 4;
 
             reasons.push(
@@ -368,10 +289,16 @@ export function scoreCandidate(
             );
         }
 
+        // ---------------------------------------------------------------------
+        // District value pattern
+        // ---------------------------------------------------------------------
+
         switch (
             validation.districtValuePattern
         ) {
+
             case "ward-number":
+
                 score += 12;
 
                 reasons.push(
@@ -381,6 +308,7 @@ export function scoreCandidate(
                 break;
 
             case "district-number":
+
                 score += 12;
 
                 reasons.push(
@@ -390,6 +318,7 @@ export function scoreCandidate(
                 break;
 
             case "numeric":
+
                 score += 5;
 
                 reasons.push(
@@ -399,6 +328,7 @@ export function scoreCandidate(
                 break;
 
             case "named":
+
                 score += 4;
 
                 reasons.push(
@@ -408,7 +338,14 @@ export function scoreCandidate(
                 break;
         }
 
-        if (validation.sampleCount > 0) {
+        // ---------------------------------------------------------------------
+        // Validation sample
+        // ---------------------------------------------------------------------
+
+        if (
+            validation.sampleCount > 0
+        ) {
+
             score += 3;
 
             reasons.push(
@@ -422,11 +359,17 @@ export function scoreCandidate(
     // -------------------------------------------------------------------------
 
     const geographyScore =
-        getGeographyScore(candidate);
+        getGeographyScore(
+            candidate
+        );
 
-    score += geographyScore.score;
+    score +=
+        geographyScore.score;
 
-    if (geographyScore.reason) {
+    if (
+        geographyScore.reason
+    ) {
+
         reasons.push(
             geographyScore.reason
         );
@@ -436,15 +379,20 @@ export function scoreCandidate(
     // District name field
     // -------------------------------------------------------------------------
 
-    if (inspection.nameField) {
+    if (
+        inspection.nameField
+    ) {
+
         score += 5;
 
         reasons.push(
             `+5 district name field: ${inspection.nameField}`
         );
+
     } else if (
         inspection.nameFields.length > 0
     ) {
+
         score += 2;
 
         reasons.push(
@@ -452,9 +400,9 @@ export function scoreCandidate(
         );
     }
 
-    // =============================================================================
+    // -------------------------------------------------------------------------
     // Temporal evidence
-    // =============================================================================
+    // -------------------------------------------------------------------------
 
     const temporal =
         validateTemporal(
@@ -469,9 +417,7 @@ export function scoreCandidate(
             temporal.score >= 0
                 ? "+"
                 : ""
-        }${
-            temporal.score
-        } temporal status: ${
+        }${temporal.score} temporal status: ${
             temporal.status
         }`
     );
@@ -480,6 +426,7 @@ export function scoreCandidate(
         const reason of
         temporal.reasons
     ) {
+
         reasons.push(
             `temporal evidence: ${reason}`
         );
@@ -493,12 +440,17 @@ export function scoreCandidate(
         candidate.candidate.requiresReview ||
         classification.requiresReview
     ) {
+
         score -= 10;
 
         reasons.push(
             "-10 requires review"
         );
     }
+
+    // -------------------------------------------------------------------------
+    // Result
+    // -------------------------------------------------------------------------
 
     return {
         candidate,
@@ -511,45 +463,59 @@ export function scoreCandidate(
 // Candidate comparison
 // -----------------------------------------------------------------------------
 
+/**
+ * Deterministically compares two already-scored candidates.
+ *
+ * Primary ordering is total score.
+ *
+ * Remaining comparisons are deterministic tie-breakers.
+ */
 export function compareCandidateScores(
     a: CandidateScore,
     b: CandidateScore
 ): number {
-    // Primary ordering: total score, descending.
-    if (b.score !== a.score) {
-        return b.score - a.score;
-    }
 
-    // Prefer candidates that passed the validated
-    // political-boundary gate.
-    const aValidated =
-        hasValidatedPoliticalBoundary(
-            a.candidate
-        );
-
-    const bValidated =
-        hasValidatedPoliticalBoundary(
-            b.candidate
-        );
-
-    if (aValidated !== bValidated) {
-        return aValidated ? -1 : 1;
-    }
-
-    // Prefer higher attribute-validation confidence.
-    const aConfidence =
-        a.candidate.validation?.confidence ?? 0;
-
-    const bConfidence =
-        b.candidate.validation?.confidence ?? 0;
+    // -------------------------------------------------------------------------
+    // 1. Primary ordering: total score
+    // -------------------------------------------------------------------------
 
     if (
-        aConfidence !== bConfidence
+        b.score !== a.score
     ) {
-        return bConfidence - aConfidence;
+
+        return (
+            b.score -
+            a.score
+        );
     }
 
-    // Prefer candidates that do not require review.
+    // -------------------------------------------------------------------------
+    // 2. Validation confidence
+    // -------------------------------------------------------------------------
+
+    const aConfidence =
+        a.candidate.validation?.confidence ??
+        0;
+
+    const bConfidence =
+        b.candidate.validation?.confidence ??
+        0;
+
+    if (
+        aConfidence !==
+        bConfidence
+    ) {
+
+        return (
+            bConfidence -
+            aConfidence
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. Review status
+    // -------------------------------------------------------------------------
+
     const aRequiresReview =
         a.candidate.candidate.requiresReview ||
         a.candidate.classification.requiresReview;
@@ -562,10 +528,18 @@ export function compareCandidateScores(
         aRequiresReview !==
         bRequiresReview
     ) {
-        return aRequiresReview ? 1 : -1;
+
+        return (
+            aRequiresReview
+                ? 1
+                : -1
+        );
     }
 
-    // Prefer official municipal sources.
+    // -------------------------------------------------------------------------
+    // 4. Official municipal source
+    // -------------------------------------------------------------------------
+
     const aOfficial =
         a.candidate.classification
             .officialMunicipalSource;
@@ -574,55 +548,134 @@ export function compareCandidateScores(
         b.candidate.classification
             .officialMunicipalSource;
 
-    if (aOfficial !== bOfficial) {
-        return aOfficial ? -1 : 1;
+    if (
+        aOfficial !==
+        bOfficial
+    ) {
+
+        return (
+            aOfficial
+                ? -1
+                : 1
+        );
     }
 
-    // Prefer FeatureServer over MapServer when
-    // otherwise equivalent.
+    // -------------------------------------------------------------------------
+    // 5. Municipal service priority
+    // -------------------------------------------------------------------------
+
+    /*
+     * When all meaningful scoring signals are tied, prefer a candidate
+     * published through the municipality's FeatureServer representation.
+     *
+     * This remains a deterministic tie-breaker rather than a major
+     * quality signal.
+     */
     const aService =
         a.candidate.inspection.serviceType;
 
     const bService =
         b.candidate.inspection.serviceType;
 
-    if (aService !== bService) {
+    if (
+        aService !==
+        bService
+    ) {
+
         return (
-            aService === "FeatureServer"
+            aService ===
+            "FeatureServer"
                 ? -1
                 : 1
         );
     }
 
-    // Prefer a candidate with a known district field.
+    // -------------------------------------------------------------------------
+    // 6. Known district field
+    // -------------------------------------------------------------------------
+
     const aField =
-        getDistrictField(a.candidate);
+        getDistrictField(
+            a.candidate
+        );
 
     const bField =
-        getDistrictField(b.candidate);
+        getDistrictField(
+            b.candidate
+        );
 
     if (
         Boolean(aField) !==
         Boolean(bField)
     ) {
-        return aField ? -1 : 1;
+
+        return (
+            aField
+                ? -1
+                : 1
+        );
     }
 
-    // Final deterministic tie-breaker.
-    return a.candidate.inspection.url
-        .localeCompare(
-            b.candidate.inspection.url
-        );
+    // -------------------------------------------------------------------------
+    // 7. Deterministic URL tie-breaker
+    // -------------------------------------------------------------------------
+
+    return (
+        a.candidate.inspection.url
+            .localeCompare(
+                b.candidate.inspection.url
+            )
+    );
 }
 
 // -----------------------------------------------------------------------------
 // Ranking
 // -----------------------------------------------------------------------------
 
+/**
+ * Evaluates eligibility, removes ineligible candidates, scores eligible
+ * candidates, and orders them from highest to lowest quality.
+ *
+ * IMPORTANT:
+ *
+ * Eligibility and ranking are intentionally separate concepts.
+ *
+ * candidateEligibility.ts:
+ *
+ *     "Can this candidate be considered?"
+ *
+ * rank.ts:
+ *
+ *     "How good is this eligible candidate relative to the others?"
+ *
+ * Rejected candidates are not included in the returned ranking.
+ *
+ * If rejection reporting is required, callers should invoke
+ * evaluateCandidateEligibility() separately.
+ */
 export function rankCandidates(
     candidates: InspectedCandidate[]
 ): CandidateScore[] {
+
     return candidates
-        .map(scoreCandidate)
-        .sort(compareCandidateScores);
+        .map(candidate => ({
+            candidate,
+            eligibility:
+                evaluateCandidateEligibility(
+                    candidate
+                )
+        }))
+        .filter(
+            result =>
+                result.eligibility.eligible
+        )
+        .map(
+            result =>
+                scoreCandidate(
+                    result.candidate
+                )
+        )
+        .sort(
+            compareCandidateScores
+        );
 }
