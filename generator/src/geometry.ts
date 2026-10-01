@@ -88,7 +88,8 @@ export async function generateGeometry(
         optimizeGeometry(
             normalized,
             {
-                simplify: false
+                simplify: true,
+                tolerance: 0.00001
             }
         );
 

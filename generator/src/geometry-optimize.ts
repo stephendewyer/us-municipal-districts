@@ -1,18 +1,27 @@
 import type {
+    GeoJSONFeature,
     GeoJSONFeatureCollection
 } from "./geometry.js";
+
+import {
+    simplify
+} from "@turf/turf";
 
 
 export interface GeometryOptimizationOptions {
 
     /**
      * Whether geometry simplification should be performed.
-     *
-     * The initial implementation intentionally leaves this disabled
-     * so that normalized geometry can be benchmarked before any
-     * simplification is introduced.
      */
     simplify: boolean;
+
+    /**
+     * Simplification tolerance in degrees.
+     *
+     * The tolerance is interpreted in the coordinate system
+     * of the normalized GeoJSON geometry.
+     */
+    tolerance?: number;
 }
 
 
@@ -66,6 +75,50 @@ export interface GeometryOptimizationResult {
      * Metrics describing the optimization.
      */
     report: GeometryOptimizationReport;
+}
+
+function simplifyFeature(
+    feature: GeoJSONFeature,
+    tolerance: number
+): GeoJSONFeature {
+
+    if (
+        feature.geometry === null
+    ) {
+        return feature;
+    }
+
+    const simplified =
+        simplify(
+            feature as any,
+            {
+                tolerance,
+                highQuality: true,
+                mutate: false
+            }
+        );
+
+    return simplified as GeoJSONFeature;
+}
+
+function simplifyCollection(
+    geometry: GeoJSONFeatureCollection,
+    tolerance: number
+): GeoJSONFeatureCollection {
+
+    return {
+        type:
+            "FeatureCollection",
+
+        features:
+            geometry.features.map(
+                feature =>
+                    simplifyFeature(
+                        feature,
+                        tolerance
+                    )
+            )
+    };
 }
 
 
@@ -213,7 +266,12 @@ export function optimizeGeometry(
      * a reliable baseline for future optimization.
      */
     const optimizedGeometry =
-        geometry;
+        options.simplify
+            ? simplifyCollection(
+                geometry,
+                options.tolerance ?? 0.00001
+            )
+            : geometry;
 
     const optimizedVertexCount =
         countVerticesInCollection(

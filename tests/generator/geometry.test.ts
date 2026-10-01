@@ -15,6 +15,10 @@ import {
     generateGeometry
 } from "../../generator/src/geometry.js";
 
+import {
+    optimizeGeometry
+} from "../../generator/src/geometry-optimize.js";
+
 
 // =============================================================================
 // Test helpers
@@ -756,6 +760,253 @@ test(
                 district:
                     "2"
             }
+        );
+    }
+);
+
+test(
+    "optimizeGeometry preserves geometry when simplification is disabled",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.98, 32.22],
+                                [-110.97, 32.22],
+                                [-110.97, 32.23],
+                                [-110.98, 32.23],
+                                [-110.98, 32.22]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    simplify:
+                        false
+                }
+            );
+
+        assert.deepEqual(
+            result.geometry,
+            geometry
+        );
+
+        assert.equal(
+            result.report.featureCount,
+            1
+        );
+
+        assert.equal(
+            result.report.originalVertexCount,
+            5
+        );
+
+        assert.equal(
+            result.report.optimizedVertexCount,
+            5
+        );
+
+        assert.equal(
+            result.report.vertexReductionPercent,
+            0
+        );
+
+        assert.equal(
+            result.report.originalByteSize,
+            result.report.optimizedByteSize
+        );
+
+        assert.equal(
+            result.report.byteReductionPercent,
+            0
+        );
+    }
+);
+
+test(
+    "optimizeGeometry counts Polygon and MultiPolygon vertices",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {},
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [0, 0],
+                                [1, 0],
+                                [1, 1],
+                                [0, 1],
+                                [0, 0]
+                            ]
+                        ]
+                    }
+                },
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {},
+
+                    geometry: {
+                        type:
+                            "MultiPolygon" as const,
+
+                        coordinates: [
+                            [
+                                [
+                                    [2, 2],
+                                    [3, 2],
+                                    [3, 3],
+                                    [2, 3],
+                                    [2, 2]
+                                ]
+                            ],
+                            [
+                                [
+                                    [4, 4],
+                                    [5, 4],
+                                    [5, 5],
+                                    [4, 5],
+                                    [4, 4]
+                                ]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    simplify:
+                        false
+                }
+            );
+
+        assert.equal(
+            result.report.featureCount,
+            2
+        );
+
+        assert.equal(
+            result.report.originalVertexCount,
+            15
+        );
+
+        assert.equal(
+            result.report.optimizedVertexCount,
+            15
+        );
+    }
+);
+
+test(
+    "optimizeGeometry simplifies geometry when enabled",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [0, 0],
+                                [0.1, 0],
+                                [0.2, 0],
+                                [0.3, 0],
+                                [0.4, 0],
+                                [1, 0],
+                                [1, 1],
+                                [0, 1],
+                                [0, 0]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    simplify:
+                        true,
+
+                    tolerance:
+                        0.01
+                }
+            );
+
+        assert.ok(
+            result.report.optimizedVertexCount <
+            result.report.originalVertexCount
+        );
+
+        assert.ok(
+            result.report.optimizedByteSize <
+            result.report.originalByteSize
+        );
+
+        assert.ok(
+            result.report.vertexReductionPercent >
+            0
+        );
+
+        assert.ok(
+            result.report.byteReductionPercent >
+            0
         );
     }
 );
