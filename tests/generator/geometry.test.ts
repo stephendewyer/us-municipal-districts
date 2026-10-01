@@ -1010,3 +1010,198 @@ test(
         );
     }
 );
+
+test(
+    "optimizeGeometry reports valid geometry integrity",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.98, 32.22],
+                                [-110.97, 32.22],
+                                [-110.97, 32.23],
+                                [-110.98, 32.23],
+                                [-110.98, 32.22]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    simplify:
+                        true,
+
+                    tolerance:
+                        0.00001
+                }
+            );
+
+
+        assert.equal(
+            result.integrity.featureCountPreserved,
+            true
+        );
+
+        assert.equal(
+            result.integrity.geometryTypesPreserved,
+            true
+        );
+
+        assert.equal(
+            result.integrity.validGeometries,
+            true
+        );
+
+        assert.equal(
+            result.integrity.propertiesPreserved,
+            true
+        );
+
+        assert.equal(
+            result.integrity.valid,
+            true
+        );
+    }
+);
+
+test(
+    "optimizeGeometry detects changed properties",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.98, 32.22],
+                                [-110.97, 32.22],
+                                [-110.97, 32.23],
+                                [-110.98, 32.23],
+                                [-110.98, 32.22]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    simplify:
+                        false
+                }
+            );
+
+
+        assert.equal(
+            result.integrity.propertiesPreserved,
+            true
+        );
+
+        assert.equal(
+            result.integrity.valid,
+            true
+        );
+    }
+);
+
+test(
+    "geometry integrity detects invalid optimized geometry",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.98, 32.22],
+                                [-110.97, 32.23],
+                                [-110.97, 32.22],
+                                [-110.98, 32.23],
+                                [-110.98, 32.22]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    simplify:
+                        false
+                }
+            );
+
+
+        assert.equal(
+            result.integrity.validGeometries,
+            false
+        );
+
+        assert.equal(
+            result.integrity.valid,
+            false
+        );
+    }
+);

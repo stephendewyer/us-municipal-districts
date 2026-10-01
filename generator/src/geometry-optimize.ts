@@ -4,6 +4,8 @@ import type {
 } from "./geometry.js";
 
 import {
+    booleanValid,
+    feature,
     simplify
 } from "@turf/turf";
 
@@ -63,6 +65,36 @@ export interface GeometryOptimizationReport {
     byteReductionPercent: number;
 }
 
+export interface GeometryIntegrityReport {
+
+    /**
+     * Whether the optimized geometry contains the same
+     * number of features as the original geometry.
+     */
+    featureCountPreserved: boolean;
+
+    /**
+     * Whether every optimized feature has a supported
+     * geometry type.
+     */
+    geometryTypesPreserved: boolean;
+
+    /**
+     * Whether every optimized polygon geometry is valid.
+     */
+    validGeometries: boolean;
+
+    /**
+     * Whether district properties are unchanged.
+     */
+    propertiesPreserved: boolean;
+
+    /**
+     * Whether all integrity checks passed.
+     */
+    valid: boolean;
+}
+
 
 export interface GeometryOptimizationResult {
 
@@ -75,6 +107,12 @@ export interface GeometryOptimizationResult {
      * Metrics describing the optimization.
      */
     report: GeometryOptimizationReport;
+
+    /**
+     * Integrity checks comparing optimized geometry
+     * with the original normalized geometry.
+     */
+    integrity: GeometryIntegrityReport;
 }
 
 function simplifyFeature(
@@ -233,6 +271,102 @@ function calculateReductionPercent(
     ) * 100;
 }
 
+// =============================================================================
+// Geometry integrity validation
+// =============================================================================
+
+function validateGeometryIntegrity(
+    original: GeoJSONFeatureCollection,
+    optimized: GeoJSONFeatureCollection
+): GeometryIntegrityReport {
+
+    const featureCountPreserved =
+        original.features.length ===
+        optimized.features.length;
+
+
+    const geometryTypesPreserved =
+        original.features.every(
+            (originalFeature, index) => {
+
+                const optimizedFeature =
+                    optimized.features[index];
+
+                if (
+                    originalFeature.geometry === null ||
+                    optimizedFeature.geometry === null
+                ) {
+                    return (
+                        originalFeature.geometry ===
+                        optimizedFeature.geometry
+                    );
+                }
+
+                return (
+                    originalFeature.geometry.type ===
+                    optimizedFeature.geometry.type
+                );
+            }
+        );
+
+
+    const validGeometries =
+        optimized.features.every(
+            featureItem => {
+
+                if (
+                    featureItem.geometry === null
+                ) {
+                    return false;
+                }
+
+                try {
+
+                    return booleanValid(
+                        feature(
+                            featureItem.geometry as any
+                        )
+                    );
+
+                } catch {
+
+                    return false;
+                }
+            }
+        );
+
+
+    const propertiesPreserved =
+        original.features.every(
+            (originalFeature, index) => {
+
+                const optimizedFeature =
+                    optimized.features[index];
+
+                return JSON.stringify(
+                    originalFeature.properties
+                ) === JSON.stringify(
+                    optimizedFeature.properties
+                );
+            }
+        );
+
+
+    const valid =
+        featureCountPreserved &&
+        geometryTypesPreserved &&
+        validGeometries &&
+        propertiesPreserved;
+
+
+    return {
+        featureCountPreserved,
+        geometryTypesPreserved,
+        validGeometries,
+        propertiesPreserved,
+        valid
+    };
+}
 
 /**
  * Optimizes normalized municipal boundary geometry.
@@ -280,6 +414,13 @@ export function optimizeGeometry(
             optimizedGeometry
         );
 
+    const integrity =
+        validateGeometryIntegrity(
+            geometry,
+            optimizedGeometry
+        );
+
+
     return {
         geometry: optimizedGeometry,
 
@@ -306,6 +447,8 @@ export function optimizeGeometry(
                     originalByteSize,
                     optimizedByteSize
                 )
-        }
+        },
+
+        integrity
     };
 }
