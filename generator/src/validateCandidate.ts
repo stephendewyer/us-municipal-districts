@@ -13,8 +13,6 @@ import type {
 
 const MIN_DISTINCT_VALUES = 2;
 
-const MAX_UNEXPECTED_DISTRICT_VALUES = 10;
-
 const MAX_DISTINCT_VALUES = 50;
 
 const MIN_COVERAGE = 0.50;
@@ -1056,9 +1054,7 @@ function analyzeDistrictField(
 
         districtCountConsistent:
             expectedCount !== undefined
-                ? observedDistrictCount <=
-                    expectedCount +
-                        MAX_UNEXPECTED_DISTRICT_VALUES
+                ? unexpectedDistrictValueCount === 0
                 : undefined,
 
         completeDistrictCoverage,
@@ -1286,18 +1282,9 @@ function determineAcceptance(
     // =========================================================================
 
     if (
-        best.expectedDistrictCount !== undefined
-    ) {
-        if (
-            best.observedDistrictCount >
-            best.expectedDistrictCount +
-                MAX_UNEXPECTED_DISTRICT_VALUES
-        ) {
-            return false;
-        }
-    } else if (
+        best.expectedDistrictCount === undefined &&
         best.observedDistrictCount >
-        MAX_DISTINCT_VALUES
+            MAX_DISTINCT_VALUES
     ) {
         return false;
     }
@@ -1306,17 +1293,6 @@ function determineAcceptance(
     // Unexpected-value guard
     // =========================================================================
 
-    /*
-     * When an authoritative expectation exists, values outside the expected
-     * district set are strong negative evidence.
-     *
-     * This is what catches Phoenix CityCouncilDistricts:
-     *
-     *   expected: 1..8
-     *   observed: 1..8 + ACACIA + BARREL + ...
-     *
-     * The layer is therefore not a clean municipal district boundary source.
-     */
     if (
         best.unexpectedDistrictValueCount >
         0
@@ -1728,15 +1704,6 @@ export function validateCandidate(
         }
 
         if (
-            best.expectedDistrictCount !== undefined &&
-            best.observedDistrictCount >
-                best.expectedDistrictCount +
-                    MAX_UNEXPECTED_DISTRICT_VALUES
-        ) {
-            rejectionReasons.push(
-                "too many distinct district values for expected district count"
-            );
-        } else if (
             best.expectedDistrictCount === undefined &&
             best.observedDistrictCount >
                 MAX_DISTINCT_VALUES
