@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-10-01T17:34:33.546Z",
+  "generatedAt": "2026-10-01T19:30:56.401Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-09-30T23:24:15.508Z",
+        "generatedAt": "2026-10-01T19:30:56.401Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -168,7 +168,7 @@
       },
       "generatedFile": "geometry/5553000/aldermanic-district.geojson",
       "metadata": {
-        "generatedAt": "2026-10-01T17:34:33.546Z",
+        "generatedAt": "2026-10-01T18:33:30.934Z",
         "generatorVersion": "0.1.0",
         "alternatives": [],
         "requiresReview": false

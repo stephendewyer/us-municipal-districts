@@ -117,6 +117,19 @@ export function scoreCandidate(
     candidate: InspectedCandidate
 ): CandidateScore {
 
+    const eligibility =
+        evaluateCandidateEligibility(
+            candidate
+        );
+
+    if (!eligibility.eligible) {
+        throw new Error(
+            `Cannot score ineligible candidate: ${
+                candidate.inspection.title
+            }`
+        );
+    }
+
     const reasons: string[] = [];
 
     const classification =
