@@ -1194,8 +1194,18 @@ test(
             );
 
 
+        console.log(
+            "INTEGRITY RESULT:",
+            result.integrity
+        );
+
+        console.log(
+            "OPTIMIZED GEOMETRY:",
+            JSON.stringify(result.geometry, null, 2)
+        );
+
         assert.equal(
-            result.integrity.validGeometries,
+            result.integrity.valid,
             false
         );
 

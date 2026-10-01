@@ -275,6 +275,272 @@ function calculateReductionPercent(
 // Geometry integrity validation
 // =============================================================================
 
+/**
+ * Determines whether two line segments intersect.
+ *
+ * This includes proper crossings as well as collinear overlap.
+ */
+function segmentsIntersect(
+    a: number[],
+    b: number[],
+    c: number[],
+    d: number[]
+): boolean {
+
+    const orientation =
+        (
+            p: number[],
+            q: number[],
+            r: number[]
+        ): number => {
+
+            const value =
+                (q[1] - p[1]) *
+                (r[0] - q[0]) -
+                (q[0] - p[0]) *
+                (r[1] - q[1]);
+
+            if (Math.abs(value) < Number.EPSILON) {
+                return 0;
+            }
+
+            return value > 0
+                ? 1
+                : 2;
+        };
+
+
+    const onSegment =
+        (
+            p: number[],
+            q: number[],
+            r: number[]
+        ): boolean => {
+
+            return (
+                q[0] >= Math.min(p[0], r[0]) &&
+                q[0] <= Math.max(p[0], r[0]) &&
+                q[1] >= Math.min(p[1], r[1]) &&
+                q[1] <= Math.max(p[1], r[1])
+            );
+        };
+
+
+    const orientation1 =
+        orientation(a, b, c);
+
+    const orientation2 =
+        orientation(a, b, d);
+
+    const orientation3 =
+        orientation(c, d, a);
+
+    const orientation4 =
+        orientation(c, d, b);
+
+
+    /*
+     * General case: the two segments cross.
+     */
+    if (
+        orientation1 !== orientation2 &&
+        orientation3 !== orientation4
+    ) {
+        return true;
+    }
+
+
+    /*
+     * Special cases: collinear segments overlap.
+     */
+    if (
+        orientation1 === 0 &&
+        onSegment(a, c, b)
+    ) {
+        return true;
+    }
+
+    if (
+        orientation2 === 0 &&
+        onSegment(a, d, b)
+    ) {
+        return true;
+    }
+
+    if (
+        orientation3 === 0 &&
+        onSegment(c, a, d)
+    ) {
+        return true;
+    }
+
+    if (
+        orientation4 === 0 &&
+        onSegment(c, b, d)
+    ) {
+        return true;
+    }
+
+
+    return false;
+}
+
+
+/**
+ * Determines whether a LinearRing intersects itself.
+ *
+ * Adjacent segments are allowed to share their endpoints.
+ * The first and final segments are also allowed to share
+ * the closing vertex.
+ */
+function hasRingSelfIntersection(
+    ring: number[][]
+): boolean {
+
+    if (ring.length < 4) {
+        return true;
+    }
+
+
+    for (
+        let firstIndex = 0;
+        firstIndex < ring.length - 1;
+        firstIndex++
+    ) {
+
+        const firstStart =
+            ring[firstIndex];
+
+        const firstEnd =
+            ring[firstIndex + 1];
+
+
+        for (
+            let secondIndex = firstIndex + 1;
+            secondIndex < ring.length - 1;
+            secondIndex++
+        ) {
+
+            /*
+             * Adjacent segments legitimately share an endpoint.
+             */
+            if (
+                secondIndex ===
+                firstIndex + 1
+            ) {
+                continue;
+            }
+
+
+            /*
+             * The first and final segments legitimately
+             * share the closing vertex.
+             */
+            if (
+                firstIndex === 0 &&
+                secondIndex === ring.length - 2
+            ) {
+                continue;
+            }
+
+
+            const secondStart =
+                ring[secondIndex];
+
+            const secondEnd =
+                ring[secondIndex + 1];
+
+
+            if (
+                segmentsIntersect(
+                    firstStart,
+                    firstEnd,
+                    secondStart,
+                    secondEnd
+                )
+            ) {
+                return true;
+            }
+        }
+    }
+
+
+    return false;
+}
+
+
+/**
+ * Determines whether all rings in a Polygon are free
+ * of self-intersections.
+ */
+function polygonHasSelfIntersection(
+    coordinates: unknown
+): boolean {
+
+    if (!Array.isArray(coordinates)) {
+        return true;
+    }
+
+    return coordinates.some(
+        ring => {
+
+            if (!Array.isArray(ring)) {
+                return true;
+            }
+
+            return hasRingSelfIntersection(
+                ring as number[][]
+            );
+        }
+    );
+}
+
+
+/**
+ * Determines whether a Polygon or MultiPolygon contains
+ * a self-intersecting ring.
+ */
+function geometryHasSelfIntersection(
+    geometry: GeoJSONFeature["geometry"]
+): boolean {
+
+    if (
+        geometry === null
+    ) {
+        return true;
+    }
+
+
+    if (
+        geometry.type === "Polygon"
+    ) {
+
+        return polygonHasSelfIntersection(
+            geometry.coordinates as number[][][]
+        );
+    }
+
+
+    if (
+        geometry.type === "MultiPolygon"
+    ) {
+
+        const polygons =
+            geometry.coordinates as number[][][][];
+
+
+        return polygons.some(
+            polygon =>
+                polygonHasSelfIntersection(
+                    polygon
+                )
+        );
+    }
+
+
+    return false;
+}
+
 function validateGeometryIntegrity(
     original: GeoJSONFeatureCollection,
     optimized: GeoJSONFeatureCollection
@@ -320,12 +586,26 @@ function validateGeometryIntegrity(
                     return false;
                 }
 
+
                 try {
 
-                    return booleanValid(
-                        feature(
-                            featureItem.geometry as any
-                        )
+                    const turfValid =
+                        booleanValid(
+                            feature(
+                                featureItem.geometry as any
+                            )
+                        );
+
+
+                    const hasSelfIntersection =
+                        geometryHasSelfIntersection(
+                            featureItem.geometry
+                        );
+
+
+                    return (
+                        turfValid &&
+                        !hasSelfIntersection
                     );
 
                 } catch {
@@ -334,7 +614,6 @@ function validateGeometryIntegrity(
                 }
             }
         );
-
 
     const propertiesPreserved =
         original.features.every(
@@ -385,10 +664,12 @@ export function optimizeGeometry(
             geometry
         );
 
+
     const originalByteSize =
         getByteSize(
             geometry
         );
+
 
     /*
      * No simplification is performed yet.
@@ -404,15 +685,18 @@ export function optimizeGeometry(
             )
             : geometry;
 
+
     const optimizedVertexCount =
         countVerticesInCollection(
             optimizedGeometry
         );
 
+
     const optimizedByteSize =
         getByteSize(
             optimizedGeometry
         );
+
 
     const integrity =
         validateGeometryIntegrity(
@@ -422,7 +706,8 @@ export function optimizeGeometry(
 
 
     return {
-        geometry: optimizedGeometry,
+        geometry:
+            optimizedGeometry,
 
         report: {
             featureCount:
