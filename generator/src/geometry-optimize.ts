@@ -504,9 +504,15 @@ function calculateReductionPercent(
 // =============================================================================
 
 /**
- * Determines whether two line segments intersect.
+ * Determines whether two line segments properly cross.
  *
- * This includes proper crossings as well as collinear overlap.
+ * A proper crossing occurs when each segment passes from one
+ * side of the other segment to the opposite side.
+ *
+ * Collinear overlap and endpoint touching are intentionally not
+ * treated as proper crossings. Municipal boundary geometries can
+ * legitimately contain coincident or touching vertices/edges, and
+ * treating those as self-intersections produces false positives.
  */
 function segmentsIntersect(
     a: number[],
@@ -523,91 +529,74 @@ function segmentsIntersect(
         ): number => {
 
             const value =
-                (q[1] - p[1]) *
-                (r[0] - q[0]) -
                 (q[0] - p[0]) *
-                (r[1] - q[1]);
+                (r[1] - p[1]) -
+                (q[1] - p[1]) *
+                (r[0] - p[0]);
+
+            const epsilon =
+                1e-12;
 
             if (
-                Math.abs(value) <
-                Number.EPSILON
+                Math.abs(value) <= epsilon
             ) {
                 return 0;
             }
 
             return value > 0
                 ? 1
-                : 2;
-        };
-
-
-    const onSegment =
-        (
-            p: number[],
-            q: number[],
-            r: number[]
-        ): boolean => {
-
-            return (
-                q[0] >= Math.min(p[0], r[0]) &&
-                q[0] <= Math.max(p[0], r[0]) &&
-                q[1] >= Math.min(p[1], r[1]) &&
-                q[1] <= Math.max(p[1], r[1])
-            );
+                : -1;
         };
 
 
     const orientation1 =
-        orientation(a, b, c);
+        orientation(
+            a,
+            b,
+            c
+        );
 
     const orientation2 =
-        orientation(a, b, d);
+        orientation(
+            a,
+            b,
+            d
+        );
 
     const orientation3 =
-        orientation(c, d, a);
+        orientation(
+            c,
+            d,
+            a
+        );
 
     const orientation4 =
-        orientation(c, d, b);
+        orientation(
+            c,
+            d,
+            b
+        );
 
 
-    if (
+    /*
+     * A proper crossing requires each segment's endpoints
+     * to lie on opposite sides of the other segment.
+     *
+     * In particular, this deliberately excludes:
+     *
+     * - collinear segments
+     * - shared endpoints
+     * - endpoint-on-segment touching
+     * - collinear overlap
+     */
+    return (
+        orientation1 !== 0 &&
+        orientation2 !== 0 &&
+        orientation3 !== 0 &&
+        orientation4 !== 0 &&
         orientation1 !== orientation2 &&
         orientation3 !== orientation4
-    ) {
-        return true;
-    }
-
-
-    if (
-        orientation1 === 0 &&
-        onSegment(a, c, b)
-    ) {
-        return true;
-    }
-
-    if (
-        orientation2 === 0 &&
-        onSegment(a, d, b)
-    ) {
-        return true;
-    }
-
-    if (
-        orientation3 === 0 &&
-        onSegment(c, a, d)
-    ) {
-        return true;
-    }
-
-    if (
-        orientation4 === 0 &&
-        onSegment(c, b, d)
-    ) {
-        return true;
-    }
-
-
-    return false;
+    );
 }
 
 
@@ -823,6 +812,22 @@ export function validateGeometryIntegrity(
                             featureItem.geometry
                         );
 
+                    if (!turfValid || hasSelfIntersection) {
+                        console.log(
+                            "GEOMETRY INVALID DEBUG:",
+                            {
+                                district:
+                                    featureItem.properties?.district,
+
+                                geometryType:
+                                    featureItem.geometry.type,
+
+                                turfValid,
+
+                                hasSelfIntersection
+                            }
+                        );
+                    }
 
                     return (
                         turfValid &&

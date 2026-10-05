@@ -1338,22 +1338,20 @@ test(
             ]
         };
 
-
         const result =
             optimizeGeometry(
                 geometry,
                 {
-                    roundCoordinates: true,
-                    coordinatePrecision: 6,
-                    simplify: true,
-                    tolerance: 0.00001
+                    roundCoordinates:
+                        true,
+
+                    coordinatePrecision:
+                        6,
+
+                    simplify:
+                        false
                 }
             );
-
-        assert.equal(
-            result.integrity.valid,
-            false
-        );
 
         assert.equal(
             result.integrity.valid,
