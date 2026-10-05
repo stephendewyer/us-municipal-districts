@@ -1313,9 +1313,40 @@ test(
 
 test(
     "geometry integrity detects invalid geometry",
-    () => {
+() => {
+        const original = {
+            type:
+                "FeatureCollection" as const,
 
-        const geometry = {
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.98, 32.22],
+                                [-110.97, 32.22],
+                                [-110.97, 32.23],
+                                [-110.98, 32.23],
+                                [-110.98, 32.22]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+        const changed = {
             type:
                 "FeatureCollection" as const,
 
@@ -1349,8 +1380,8 @@ test(
 
         const result =
             validateGeometryIntegrity(
-                geometry,
-                geometry
+                original,
+                changed
             );
 
         assert.equal(
@@ -1363,7 +1394,9 @@ test(
             false
         );
     }
+
 );
+
 
 
 test(

@@ -876,7 +876,6 @@ export function validateGeometryIntegrity(
                 * municipal boundary.
                 */
                 const geometryValid =
-                    diagnostic.turfValid ||
                     !diagnostic.hasProperSelfIntersection;
 
 
