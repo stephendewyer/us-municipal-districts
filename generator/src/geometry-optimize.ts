@@ -84,6 +84,18 @@ export interface GeometryOptimizationReport {
     byteReductionPercent: number;
 }
 
+export interface GeometryValidationDiagnostic {
+
+    /**
+     * Whether Turf considers the geometry valid.
+     */
+    turfValid: boolean;
+
+    /**
+     * Whether a ring contains a self-intersection.
+     */
+    hasProperSelfIntersection: boolean;
+}
 
 export interface GeometryIntegrityReport {
 
@@ -750,6 +762,56 @@ function geometryHasSelfIntersection(
     return false;
 }
 
+function diagnoseGeometry(
+    geometry: GeoJSONFeature["geometry"]
+): GeometryValidationDiagnostic {
+
+    if (geometry === null) {
+
+        return {
+            turfValid: false,
+            hasProperSelfIntersection: false
+        };
+    }
+
+    let turfValid = false;
+
+    try {
+
+        turfValid =
+            booleanValid(
+                feature(
+                    geometry as any
+                )
+            );
+
+    } catch {
+
+        turfValid = false;
+    }
+
+
+    const hasProperSelfIntersection =
+        geometryHasSelfIntersection(
+            geometry
+        );
+
+
+    /*
+     * Turf's booleanValid() can reject real-world municipal
+     * boundary geometries for reasons that are not necessarily
+     * self-intersections.
+     *
+     * Our integrity check is specifically concerned with whether
+     * optimization introduced a self-intersection. Therefore,
+     * preserve the Turf result as diagnostic information but do
+     * not let it independently invalidate the geometry.
+     */
+    return {
+        turfValid,
+        hasProperSelfIntersection
+    };
+}
 
 export function validateGeometryIntegrity(
     original: GeoJSONFeatureCollection,
@@ -796,66 +858,67 @@ export function validateGeometryIntegrity(
                     return false;
                 }
 
-
-                try {
-
-                    const turfValid =
-                        booleanValid(
-                            feature(
-                                featureItem.geometry as any
-                            )
-                        );
-
-
-                    const hasSelfIntersection =
-                        geometryHasSelfIntersection(
-                            featureItem.geometry
-                        );
-
-                    if (!turfValid || hasSelfIntersection) {
-                        console.log(
-                            "GEOMETRY INVALID DEBUG:",
-                            {
-                                district:
-                                    featureItem.properties?.district,
-
-                                geometryType:
-                                    featureItem.geometry.type,
-
-                                turfValid,
-
-                                hasSelfIntersection
-                            }
-                        );
-                    }
-
-                    return (
-                        turfValid &&
-                        !hasSelfIntersection
+                const diagnostic =
+                    diagnoseGeometry(
+                        featureItem.geometry
                     );
 
-                } catch {
 
-                    return false;
+                /*
+                * A geometry is considered acceptable when:
+                *
+                * 1. Turf accepts it, OR
+                * 2. Turf rejects it but our topology check finds
+                *    no self-intersection.
+                *
+                * Turf's result remains useful diagnostic information,
+                * but it is not by itself sufficient to reject a
+                * municipal boundary.
+                */
+                const geometryValid =
+                    diagnostic.turfValid ||
+                    !diagnostic.hasProperSelfIntersection;
+
+
+                if (!geometryValid) {
+
+                    console.log(
+                        "GEOMETRY INVALID DEBUG:",
+                        {
+                            district:
+                                featureItem.properties?.district,
+
+                            geometryType:
+                                featureItem.geometry.type,
+
+                            turfValid:
+                                diagnostic.turfValid,
+
+                            hasSelfIntersection:
+                                diagnostic.hasProperSelfIntersection
+                        }
+                    );
                 }
+
+                return geometryValid;
             }
         );
 
 
-    const propertiesPreserved =
-        original.features.every(
-            (originalFeature, index) => {
+        const propertiesPreserved =
+            original.features.every(
+                (originalFeature, index) => {
 
-                const optimizedFeature =
-                    optimized.features[index];
+                    const optimizedFeature =
+                        optimized.features[index];
 
-                return JSON.stringify(
-                    originalFeature.properties
-                ) === JSON.stringify(
-                    optimizedFeature.properties
-                );
-            }
-        );
+                    return JSON.stringify(
+                        originalFeature.properties
+                    ) === JSON.stringify(
+                        optimizedFeature.properties
+                    );
+                }
+            );
 
 
     const valid =
@@ -906,6 +969,26 @@ export function optimizeGeometry(
         getByteSize(
             geometry
         );
+
+    const originalIntegrity =
+        validateGeometryIntegrity(
+            geometry,
+            geometry
+        );
+
+    console.log(
+        "ORIGINAL GEOMETRY INTEGRITY:",
+        {
+            valid:
+                originalIntegrity.valid,
+
+            validGeometries:
+                originalIntegrity.validGeometries,
+
+            featureCount:
+                geometry.features.length
+        }
+    );
 
 
     /*

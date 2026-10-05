@@ -1303,7 +1303,7 @@ test(
 );
 
 test(
-    "geometry integrity detects invalid optimized geometry",
+    "geometry integrity detects invalid geometry",
     () => {
 
         const geometry = {
@@ -1339,22 +1339,18 @@ test(
         };
 
         const result =
-            optimizeGeometry(
+            validateGeometryIntegrity(
                 geometry,
-                {
-                    roundCoordinates:
-                        true,
-
-                    coordinatePrecision:
-                        6,
-
-                    simplify:
-                        false
-                }
+                geometry
             );
 
         assert.equal(
-            result.integrity.valid,
+            result.validGeometries,
+            false
+        );
+
+        assert.equal(
+            result.valid,
             false
         );
     }
