@@ -804,8 +804,10 @@ test(
             optimizeGeometry(
                 geometry,
                 {
-                    simplify:
-                        false
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
                 }
             );
 
@@ -915,8 +917,10 @@ test(
             optimizeGeometry(
                 geometry,
                 {
-                    simplify:
-                        false
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
                 }
             );
 
@@ -981,11 +985,10 @@ test(
             optimizeGeometry(
                 geometry,
                 {
-                    simplify:
-                        true,
-
-                    tolerance:
-                        0.01
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
                 }
             );
 
@@ -1052,11 +1055,10 @@ test(
             optimizeGeometry(
                 geometry,
                 {
-                    simplify:
-                        true,
-
-                    tolerance:
-                        0.00001
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
                 }
             );
 
@@ -1129,8 +1131,10 @@ test(
             optimizeGeometry(
                 geometry,
                 {
-                    simplify:
-                        false
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
                 }
             );
 
@@ -1188,8 +1192,10 @@ test(
             optimizeGeometry(
                 geometry,
                 {
-                    simplify:
-                        false
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
                 }
             );
 
@@ -1212,6 +1218,505 @@ test(
         assert.equal(
             result.integrity.valid,
             false
+        );
+    }
+);
+
+test(
+    "geometry optimization preserves geometry when simplification is disabled",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.98, 32.22],
+                                [-110.97, 32.22],
+                                [-110.97, 32.23],
+                                [-110.98, 32.23],
+                                [-110.98, 32.22]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
+                }
+            );
+
+
+        assert.deepEqual(
+            result.geometry,
+            geometry
+        );
+
+
+        assert.equal(
+            result.report.originalVertexCount,
+            result.report.optimizedVertexCount
+        );
+
+
+        assert.equal(
+            result.report.originalByteSize,
+            result.report.optimizedByteSize
+        );
+
+
+        assert.equal(
+            result.report.vertexReductionPercent,
+            0
+        );
+
+
+        assert.equal(
+            result.report.byteReductionPercent,
+            0
+        );
+
+
+        assert.equal(
+            result.integrity.valid,
+            true
+        );
+    }
+);
+
+test(
+    "geometry optimization preserves geometry when simplification is disabled",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.98, 32.22],
+                                [-110.97, 32.22],
+                                [-110.97, 32.23],
+                                [-110.98, 32.23],
+                                [-110.98, 32.22]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
+                }
+            );
+
+
+        assert.deepEqual(
+            result.geometry,
+            geometry
+        );
+
+
+        assert.equal(
+            result.report.originalVertexCount,
+            result.report.optimizedVertexCount
+        );
+
+
+        assert.equal(
+            result.report.originalByteSize,
+            result.report.optimizedByteSize
+        );
+
+
+        assert.equal(
+            result.report.vertexReductionPercent,
+            0
+        );
+
+
+        assert.equal(
+            result.report.byteReductionPercent,
+            0
+        );
+
+
+        assert.equal(
+            result.integrity.valid,
+            true
+        );
+    }
+);
+
+test(
+    "geometry optimization reduces vertices when simplification is enabled",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.9800, 32.2200],
+                                [-110.9799, 32.2200],
+                                [-110.9798, 32.2200],
+                                [-110.9797, 32.2200],
+                                [-110.9796, 32.2200],
+                                [-110.9795, 32.2200],
+                                [-110.9794, 32.2200],
+                                [-110.9793, 32.2200],
+                                [-110.9792, 32.2200],
+                                [-110.9791, 32.2200],
+                                [-110.9790, 32.2200],
+                                [-110.9790, 32.2300],
+                                [-110.9800, 32.2300],
+                                [-110.9800, 32.2200]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
+                }
+            );
+
+
+        assert.ok(
+            result.report.optimizedVertexCount <
+            result.report.originalVertexCount
+        );
+
+
+        assert.ok(
+            result.report.vertexReductionPercent >
+            0
+        );
+
+
+        assert.ok(
+            result.report.optimizedByteSize <
+            result.report.originalByteSize
+        );
+
+
+        assert.ok(
+            result.report.byteReductionPercent >
+            0
+        );
+
+
+        assert.equal(
+            result.integrity.valid,
+            true
+        );
+    }
+);
+
+test(
+    "geometry optimization preserves district properties",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1",
+
+                        name:
+                            "Ward 1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.98, 32.22],
+                                [-110.97, 32.22],
+                                [-110.97, 32.23],
+                                [-110.98, 32.23],
+                                [-110.98, 32.22]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
+                }
+            );
+
+
+        assert.deepEqual(
+            result.geometry.features[0].properties,
+            geometry.features[0].properties
+        );
+
+
+        assert.equal(
+            result.integrity.propertiesPreserved,
+            true
+        );
+    }
+);
+
+test(
+    "geometry optimization preserves polygon holes",
+    () => {
+
+        const geometry = {
+            type:
+                "FeatureCollection" as const,
+
+            features: [
+                {
+                    type:
+                        "Feature" as const,
+
+                    properties: {
+                        district:
+                            "1"
+                    },
+
+                    geometry: {
+                        type:
+                            "Polygon" as const,
+
+                        coordinates: [
+
+                            // Outer ring
+                            [
+                                [-110.99, 32.21],
+                                [-110.96, 32.21],
+                                [-110.96, 32.24],
+                                [-110.99, 32.24],
+                                [-110.99, 32.21]
+                            ],
+
+                            // Hole
+                            [
+                                [-110.98, 32.22],
+                                [-110.97, 32.22],
+                                [-110.97, 32.23],
+                                [-110.98, 32.23],
+                                [-110.98, 32.22]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    roundCoordinates: true,
+                    coordinatePrecision: 6,
+                    simplify: true,
+                    tolerance: 0.00001
+                }
+            );
+
+
+        const optimized =
+            result.geometry.features[0].geometry;
+
+
+        assert.ok(
+            optimized !== null
+        );
+
+
+        if (
+            optimized.type !== "Polygon"
+        ) {
+            throw new Error(
+                "Expected optimized geometry to be a Polygon"
+            );
+        }
+
+
+        const coordinates =
+            optimized.coordinates as number[][][];
+
+        assert.equal(
+            coordinates.length,
+            2
+        );
+
+
+        assert.equal(
+            result.integrity.valid,
+            true
+        );
+    }
+);
+
+test(
+    "geometry optimization rounds coordinate precision",
+    () => {
+
+        const geometry = {
+            type: "FeatureCollection" as const,
+
+            features: [
+                {
+                    type: "Feature" as const,
+
+                    properties: {
+                        district: "1"
+                    },
+
+                    geometry: {
+                        type: "Polygon" as const,
+
+                        coordinates: [
+                            [
+                                [-110.980123456, 32.220123456],
+                                [-110.970123456, 32.220123456],
+                                [-110.970123456, 32.230123456],
+                                [-110.980123456, 32.230123456],
+                                [-110.980123456, 32.220123456]
+                            ]
+                        ]
+                    }
+                }
+            ]
+        };
+
+
+        const result =
+            optimizeGeometry(
+                geometry,
+                {
+                    roundCoordinates: true,
+                    simplify: false,
+                    coordinatePrecision: 6
+                }
+            );
+
+
+        const optimized =
+            result.geometry.features[0].geometry;
+
+
+        assert.ok(
+            optimized !== null
+        );
+
+
+        assert.equal(
+            optimized.type,
+            "Polygon"
+        );
+
+
+        if (
+            optimized.type !== "Polygon"
+        ) {
+            throw new Error(
+                "Expected optimized geometry to be a Polygon"
+            );
+        }
+
+
+        const coordinates =
+            optimized.coordinates as number[][][];
+
+
+        assert.deepEqual(
+            coordinates[0][0],
+            [-110.980123, 32.220123]
         );
     }
 );

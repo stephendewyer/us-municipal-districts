@@ -13,6 +13,17 @@ import {
 export interface GeometryOptimizationOptions {
 
     /**
+     * Whether coordinate precision should be reduced.
+     */
+    roundCoordinates: boolean;
+
+    /**
+     * Number of decimal places to retain when rounding
+     * coordinate values.
+     */
+    coordinatePrecision?: number;
+
+    /**
      * Whether geometry simplification should be performed.
      */
     simplify: boolean;
@@ -65,6 +76,7 @@ export interface GeometryOptimizationReport {
     byteReductionPercent: number;
 }
 
+
 export interface GeometryIntegrityReport {
 
     /**
@@ -115,6 +127,11 @@ export interface GeometryOptimizationResult {
     integrity: GeometryIntegrityReport;
 }
 
+
+// =============================================================================
+// Geometry simplification
+// =============================================================================
+
 function simplifyFeature(
     feature: GeoJSONFeature,
     tolerance: number
@@ -139,6 +156,7 @@ function simplifyFeature(
     return simplified as GeoJSONFeature;
 }
 
+
 function simplifyCollection(
     geometry: GeoJSONFeatureCollection,
     tolerance: number
@@ -160,6 +178,10 @@ function simplifyCollection(
 }
 
 
+// =============================================================================
+// Coordinate precision
+// =============================================================================
+
 /**
  * Determines whether a value is an array containing numeric
  * coordinate values.
@@ -178,6 +200,113 @@ function isCoordinate(
     );
 }
 
+
+/**
+ * Rounds a coordinate value to a fixed number of decimal places.
+ */
+function roundCoordinate(
+    value: number,
+    precision: number
+): number {
+
+    const factor =
+        10 ** precision;
+
+    return (
+        Math.round(
+            value * factor
+        ) / factor
+    );
+}
+
+
+/**
+ * Recursively rounds all coordinate values in a GeoJSON
+ * coordinate array.
+ */
+function roundCoordinates(
+    coordinates: unknown,
+    precision: number
+): unknown {
+
+    if (!Array.isArray(coordinates)) {
+        return coordinates;
+    }
+
+    if (isCoordinate(coordinates)) {
+        return coordinates.map(
+            coordinate =>
+                roundCoordinate(
+                    coordinate,
+                    precision
+                )
+        );
+    }
+
+    return coordinates.map(
+        value =>
+            roundCoordinates(
+                value,
+                precision
+            )
+    );
+}
+
+/**
+ * Rounds coordinate precision for a single GeoJSON feature.
+ */
+function roundFeatureCoordinates(
+    feature: GeoJSONFeature,
+    precision: number
+): GeoJSONFeature {
+
+    if (
+        feature.geometry === null
+    ) {
+        return feature;
+    }
+
+    return {
+        ...feature,
+
+        geometry: {
+            ...feature.geometry,
+
+            coordinates:
+                roundCoordinates(
+                    feature.geometry.coordinates,
+                    precision
+                ) as typeof feature.geometry.coordinates
+        }
+    };
+}
+
+/**
+ * Rounds coordinate precision throughout a FeatureCollection.
+ */
+function roundCollectionCoordinates(
+    geometry: GeoJSONFeatureCollection,
+    precision: number
+): GeoJSONFeatureCollection {
+
+    return {
+        ...geometry,
+
+        features:
+            geometry.features.map(
+                feature =>
+                    roundFeatureCoordinates(
+                        feature,
+                        precision
+                    )
+            )
+    };
+}
+
+
+// =============================================================================
+// Geometry metrics
+// =============================================================================
 
 /**
  * Recursively counts coordinate positions in Polygon and
@@ -217,17 +346,17 @@ function countVerticesInCollection(
     return geometry.features.reduce(
         (
             count: number,
-            feature
+            featureItem
         ) => {
 
-            if (!feature.geometry) {
+            if (!featureItem.geometry) {
                 return count;
             }
 
             return (
                 count +
                 countVertices(
-                    feature.geometry.coordinates
+                    featureItem.geometry.coordinates
                 )
             );
         },
@@ -271,6 +400,7 @@ function calculateReductionPercent(
     ) * 100;
 }
 
+
 // =============================================================================
 // Geometry integrity validation
 // =============================================================================
@@ -300,7 +430,10 @@ function segmentsIntersect(
                 (q[0] - p[0]) *
                 (r[1] - q[1]);
 
-            if (Math.abs(value) < Number.EPSILON) {
+            if (
+                Math.abs(value) <
+                Number.EPSILON
+            ) {
                 return 0;
             }
 
@@ -339,9 +472,6 @@ function segmentsIntersect(
         orientation(c, d, b);
 
 
-    /*
-     * General case: the two segments cross.
-     */
     if (
         orientation1 !== orientation2 &&
         orientation3 !== orientation4
@@ -350,9 +480,6 @@ function segmentsIntersect(
     }
 
 
-    /*
-     * Special cases: collinear segments overlap.
-     */
     if (
         orientation1 === 0 &&
         onSegment(a, c, b)
@@ -397,7 +524,9 @@ function hasRingSelfIntersection(
     ring: number[][]
 ): boolean {
 
-    if (ring.length < 4) {
+    if (
+        ring.length < 4
+    ) {
         return true;
     }
 
@@ -421,9 +550,6 @@ function hasRingSelfIntersection(
             secondIndex++
         ) {
 
-            /*
-             * Adjacent segments legitimately share an endpoint.
-             */
             if (
                 secondIndex ===
                 firstIndex + 1
@@ -432,10 +558,6 @@ function hasRingSelfIntersection(
             }
 
 
-            /*
-             * The first and final segments legitimately
-             * share the closing vertex.
-             */
             if (
                 firstIndex === 0 &&
                 secondIndex === ring.length - 2
@@ -541,6 +663,7 @@ function geometryHasSelfIntersection(
     return false;
 }
 
+
 function validateGeometryIntegrity(
     original: GeoJSONFeatureCollection,
     optimized: GeoJSONFeatureCollection
@@ -615,6 +738,7 @@ function validateGeometryIntegrity(
             }
         );
 
+
     const propertiesPreserved =
         original.features.every(
             (originalFeature, index) => {
@@ -647,12 +771,22 @@ function validateGeometryIntegrity(
     };
 }
 
+
+// =============================================================================
+// Optimization pipeline
+// =============================================================================
+
 /**
  * Optimizes normalized municipal boundary geometry.
  *
- * When enabled, geometry is simplified using Turf with the
- * configured tolerance. Optimization metrics are calculated
- * against the original normalized geometry.
+ * Optimization occurs in two stages:
+ *
+ * 1. Coordinate precision reduction.
+ * 2. Optional Turf geometry simplification.
+ *
+ * The final geometry is validated against the original
+ * normalized geometry. If optimization produces invalid
+ * geometry, the original geometry is returned.
  */
 export function optimizeGeometry(
     geometry: GeoJSONFeatureCollection,
@@ -672,18 +806,88 @@ export function optimizeGeometry(
 
 
     /*
-     * No simplification is performed yet.
+     * -------------------------------------------------------------------------
+     * Optimization pipeline
+     * -------------------------------------------------------------------------
      *
-     * Keeping the normalized geometry unchanged establishes
-     * a reliable baseline for future optimization.
+     * Optimization is performed in this order:
+     *
+     *   1. Coordinate precision reduction
+     *   2. Geometry simplification
+     *
+     * Each stage operates on the result of the previous stage.
      */
-    const optimizedGeometry =
+
+    let optimizedGeometry =
+        geometry;
+
+
+    /*
+     * -------------------------------------------------------------------------
+     * Stage 1: coordinate precision reduction
+     * -------------------------------------------------------------------------
+     */
+
+    if (
+        options.roundCoordinates
+    ) {
+
+        optimizedGeometry =
+            roundCollectionCoordinates(
+                optimizedGeometry,
+                options.coordinatePrecision ?? 6
+            );
+    }
+
+
+    /*
+     * -------------------------------------------------------------------------
+     * Stage 2: topology-preserving simplification
+     * -------------------------------------------------------------------------
+     */
+
+    if (
         options.simplify
-            ? simplifyCollection(
-                geometry,
+    ) {
+
+        optimizedGeometry =
+            simplifyCollection(
+                optimizedGeometry,
                 options.tolerance ?? 0.00001
-            )
-            : geometry;
+            );
+    }
+
+
+    /*
+     * -------------------------------------------------------------------------
+     * Integrity validation
+     * -------------------------------------------------------------------------
+     *
+     * Validate the final optimized geometry against the original
+     * normalized geometry.
+     */
+
+    const integrity =
+        validateGeometryIntegrity(
+            geometry,
+            optimizedGeometry
+        );
+
+
+    /*
+     * Never return invalid geometry.
+     *
+     * If optimization produced invalid geometry, fall back to the
+     * original normalized geometry.
+     */
+
+    if (
+        !integrity.valid
+    ) {
+
+        optimizedGeometry =
+            geometry;
+    }
 
 
     const optimizedVertexCount =
@@ -698,7 +902,15 @@ export function optimizeGeometry(
         );
 
 
-    const integrity =
+    /*
+     * Recalculate integrity against the geometry that will actually
+     * be returned.
+     *
+     * This is important when the optimization pipeline falls back
+     * to the original geometry.
+     */
+
+    const finalIntegrity =
         validateGeometryIntegrity(
             geometry,
             optimizedGeometry
@@ -734,6 +946,7 @@ export function optimizeGeometry(
                 )
         },
 
-        integrity
+        integrity:
+            finalIntegrity
     };
 }
