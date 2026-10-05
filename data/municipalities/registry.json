@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-10-05T14:24:38.258Z",
+  "generatedAt": "2026-10-05T19:13:54.163Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -21,7 +21,7 @@
       },
       "generatedFile": "geometry/0455000/council-district.geojson",
       "metadata": {
-        "generatedAt": "2026-10-01T19:58:35.255Z",
+        "generatedAt": "2026-10-05T19:09:20.543Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
@@ -60,53 +60,58 @@
       "boundaryType": "ward",
       "source": {
         "sourceType": "arcgis",
-        "url": "https://gisdata.pima.gov/arcgis1/rest/services/GISOpenData/Boundaries2/MapServer/3",
-        "itemId": "025e8235c2ab4b09ba4e202d28cc2fc1",
-        "serviceType": "MapServer",
-        "title": "Wards - City of Tucson",
+        "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer/156",
+        "itemId": "cbb29b7016c04c43b3b51ba60db17643",
+        "organizationId": "Ezk9fcjSUkeadg6u",
+        "serviceType": "FeatureServer",
+        "title": "TucsonWards2022",
         "official": true,
         "verified": true,
         "fieldMapping": {
-          "district": "WARD",
+          "district": "Label",
           "name": "NAME"
         }
       },
       "generatedFile": "geometry/0477000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-28T17:35:14.278Z",
+        "generatedAt": "2026-10-05T19:13:11.405Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {
-            "url": "https://utility.arcgis.com/usrsvcs/servers/0657741d9e4a4289912330077707ad39/rest/services/PublicMaps/Boundaries/MapServer/15",
-            "itemId": "0657741d9e4a4289912330077707ad39",
+            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/COTWards_HFL/FeatureServer/6",
+            "itemId": "1abe5b7d93f749a1a3481b8899090082",
+            "organizationId": "9coHY2fvuFjG9HQX",
             "title": "WARD_COT",
-            "serviceType": "MapServer",
-            "official": true,
-            "score": 213
-          },
-          {
-            "url": "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer/156",
-            "itemId": "cbb29b7016c04c43b3b51ba60db17643",
-            "title": "TucsonWards2022",
             "serviceType": "FeatureServer",
             "official": true,
-            "score": 160
+            "score": 153
           },
           {
             "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/Ward_Boundaries_2000/FeatureServer/9",
             "itemId": "6d32fef8867b4cf3beb47659db4b797a",
+            "organizationId": "9coHY2fvuFjG9HQX",
             "title": "Wards_2000",
             "serviceType": "FeatureServer",
             "official": true,
             "score": 153
           },
           {
-            "url": "https://services3.arcgis.com/9coHY2fvuFjG9HQX/arcgis/rest/services/COTWards_HFL/FeatureServer/6",
-            "itemId": "1abe5b7d93f749a1a3481b8899090082",
+            "url": "https://utility.arcgis.com/usrsvcs/servers/0657741d9e4a4289912330077707ad39/rest/services/PublicMaps/Boundaries/MapServer/15",
+            "itemId": "0657741d9e4a4289912330077707ad39",
+            "organizationId": "9coHY2fvuFjG9HQX",
             "title": "WARD_COT",
-            "serviceType": "FeatureServer",
+            "serviceType": "MapServer",
+            "official": true,
+            "score": 213
+          },
+          {
+            "url": "https://gisdata.pima.gov/arcgis1/rest/services/GISOpenData/Boundaries2/MapServer/3",
+            "itemId": "025e8235c2ab4b09ba4e202d28cc2fc1",
+            "organizationId": "UTBp78iglGpbqp1B",
+            "title": "Wards - City of Tucson",
+            "serviceType": "MapServer",
             "official": false,
-            "score": 108
+            "score": 168
           }
         ],
         "requiresReview": true
@@ -133,7 +138,7 @@
       },
       "generatedFile": "geometry/1714000/ward.geojson",
       "metadata": {
-        "generatedAt": "2026-09-28T22:10:24.809Z",
+        "generatedAt": "2026-10-05T19:13:54.163Z",
         "generatorVersion": "0.1.0",
         "alternatives": [
           {

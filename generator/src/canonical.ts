@@ -4,6 +4,7 @@ import type {
     CanonicalSource,
     DistrictType,
     EquivalentLayerGroup,
+    InspectedCandidate,
     SourceRole
 } from "./types.js";
 
@@ -33,6 +34,35 @@ function normalizeField(value?: string): string {
         .trim();
 }
 
+/**
+ * Return the most useful temporal vintage year for tie-breaking.
+ *
+ * Temporal status is always compared first. This function is only used
+ * after two candidates have the same temporal status.
+ */
+function temporalVintage(
+    candidate: EquivalentLayerGroup["candidates"][number]
+): number {
+    const temporal =
+        validateTemporal(
+            candidate.inspection
+        );
+
+    if (temporal.endYear !== undefined) {
+        return temporal.endYear;
+    }
+
+    if (temporal.year !== undefined) {
+        return temporal.year;
+    }
+
+    if (temporal.startYear !== undefined) {
+        return temporal.startYear;
+    }
+
+    return 0;
+}
+
 // =============================================================================
 // Source role and temporal priority
 // =============================================================================
@@ -52,27 +82,99 @@ function sourceRolePriority(
     ];
 }
 
+/**
+ * Temporal precedence for canonical selection.
+ *
+ * This is deliberately a hard ranking dimension rather than a score bonus.
+ *
+ *     current  >  dated  >  undated  >  historical  >  future
+ *
+ * A candidate with a lower temporal priority must not defeat a candidate
+ * with a higher temporal priority merely because it has a higher general
+ * candidate score.
+ */
 function temporalPriority(
     candidate: EquivalentLayerGroup["candidates"][number]
 ): number {
+
     const temporal =
         validateTemporal(
             candidate.inspection
         );
 
     switch (temporal.status) {
+
         case "current":
             return 3;
+
+        case "undated":
+            return 2;
 
         case "historical":
             return 1;
 
-        case "undated":
-            return 0;
-
         default:
             return 0;
     }
+}
+
+// =============================================================================
+// Compare temporal candidates
+// =============================================================================
+
+/**
+ * Compare two candidates using temporal status and vintage.
+ *
+ * Returns:
+ *
+ *   < 0  => a should rank before b
+ *   > 0  => b should rank before a
+ *   ===0 => temporally equivalent
+ */
+function compareTemporalCandidates(
+    a: EquivalentLayerGroup["candidates"][number],
+    b: EquivalentLayerGroup["candidates"][number]
+): number {
+    const aPriority =
+        temporalPriority(a);
+
+    const bPriority =
+        temporalPriority(b);
+
+    if (
+        aPriority !==
+        bPriority
+    ) {
+        return (
+            bPriority -
+            aPriority
+        );
+    }
+
+    /*
+     * Only compare vintage when temporal status is equivalent.
+     *
+     * This is important because an undated candidate must not be compared
+     * against a historical candidate merely because one happens to contain
+     * a larger numeric year.
+     */
+    const aVintage =
+        temporalVintage(a);
+
+    const bVintage =
+        temporalVintage(b);
+
+    if (
+        aVintage !==
+        bVintage
+    ) {
+        return (
+            bVintage -
+            aVintage
+        );
+    }
+
+    return 0;
 }
 
 // =============================================================================
@@ -356,7 +458,10 @@ function canonicalSourceBonus(
 function municipalServicePriority(
     candidate: EquivalentLayerGroup["candidates"][number]
 ): number {
-    if (!candidate.classification.officialMunicipalSource) {
+    if (
+        !candidate.classification
+            .officialMunicipalSource
+    ) {
         return 0;
     }
 
@@ -369,29 +474,39 @@ function municipalServicePriority(
         ).toLowerCase();
 
     const city =
-        normalizeField(candidate.candidate.city);
+        normalizeField(
+            candidate.candidate.city
+        );
 
     const state =
-        normalizeField(candidate.candidate.state);
+        normalizeField(
+            candidate.candidate.state
+        );
 
     const authority =
         MUNICIPAL_ARCGIS_AUTHORITIES.find(
             item =>
-                normalizeField(item.city) === city &&
-                normalizeField(item.state) === state
+                normalizeField(item.city) ===
+                    city &&
+                normalizeField(item.state) ===
+                    state
         );
 
     if (
         authority?.hosts?.some(
             host =>
-                url.includes(host.toLowerCase())
+                url.includes(
+                    host.toLowerCase()
+                )
         )
     ) {
         return 2;
     }
 
     if (
-        url.includes("services.arcgis.com/")
+        url.includes(
+            "services.arcgis.com/"
+        )
     ) {
         return 1;
     }
@@ -445,7 +560,8 @@ function findDistrictField(
             )
             .sort(
                 (a, b) =>
-                    b.score - a.score
+                    b.score -
+                    a.score
             );
 
     if (rankedFields[0]) {
@@ -497,18 +613,22 @@ function isCanonicalCandidate(
     // 1. Classification eligibility
     // =========================================================================
 
-    if (classification.rejected) {
-        return false;
-    }
-
     if (
-        !classification.isMunicipalPoliticalBoundary
+        classification.rejected
     ) {
         return false;
     }
 
     if (
-        !classification.isBoundaryLayer
+        !classification
+            .isMunicipalPoliticalBoundary
+    ) {
+        return false;
+    }
+
+    if (
+        !classification
+            .isBoundaryLayer
     ) {
         return false;
     }
@@ -523,9 +643,6 @@ function isCanonicalCandidate(
     // 2. Source-role eligibility
     // =========================================================================
 
-    /*
-     * Derived analytical datasets are never canonical.
-     */
     if (
         classification.sourceRole ===
         "derived"
@@ -533,12 +650,6 @@ function isCanonicalCandidate(
         return false;
     }
 
-    /*
-     * Duplicate datasets are never canonical.
-     *
-     * They may remain available as alternatives, but the canonical
-     * source must represent the underlying boundary source itself.
-     */
     if (
         classification.sourceRole ===
         "duplicate"
@@ -555,35 +666,24 @@ function isCanonicalCandidate(
     }
 
     if (
-        !validation.isLikelyPoliticalBoundary
+        !validation
+            .isLikelyPoliticalBoundary
     ) {
         return false;
     }
 
-    /*
-     * Minimum validation confidence for canonical eligibility.
-     *
-     * Ranking may prefer candidates with higher confidence.
-     */
     if (
         validation.confidence < 60
     ) {
         return false;
     }
 
-    /*
-     * Validation must identify the actual district field.
-     */
     if (
         !validation.districtField
     ) {
         return false;
     }
 
-    /*
-     * The district field must also be resolvable from the inspected
-     * candidate schema.
-     */
     if (
         !findDistrictField(candidate)
     ) {
@@ -609,27 +709,20 @@ function isCanonicalCandidate(
     // 5. District coverage eligibility
     // =========================================================================
 
-    /*
-     * An explicitly incomplete candidate can never be canonical.
-     */
     if (
-        validation.completeDistrictCoverage ===
+        validation
+            .completeDistrictCoverage ===
         false
     ) {
         return false;
     }
 
-    /*
-     * When an expected district count exists, canonical selection
-     * requires complete district coverage.
-     *
-     * Undefined coverage is therefore acceptable only when there
-     * is no expected district count available.
-     */
     if (
-        validation.expectedDistrictCount !==
+        validation
+            .expectedDistrictCount !==
             undefined &&
-        validation.completeDistrictCoverage !==
+        validation
+            .completeDistrictCoverage !==
             true
     ) {
         return false;
@@ -639,12 +732,6 @@ function isCanonicalCandidate(
     // 6. Municipality geography eligibility
     // =========================================================================
 
-    /*
-     * Geography validation is optional.
-     *
-     * If it exists, an explicit mismatch or invalid result makes
-     * the candidate ineligible for canonical status.
-     */
     const geography =
         candidate
             .municipalityGeographyValidation;
@@ -662,10 +749,6 @@ function isCanonicalCandidate(
     ) {
         return false;
     }
-
-    // =========================================================================
-    // 7. Canonical eligibility satisfied
-    // =========================================================================
 
     return true;
 }
@@ -696,39 +779,56 @@ export function selectCanonicalSource(
 
     const ranked =
         eligibleCandidates
-            .map(candidate => ({
-                candidate,
-                temporalPriority: temporalPriority(candidate),
-                sourceRolePriority: sourceRolePriority(candidate),
-                officialMunicipalSource:
-                    candidate.classification.officialMunicipalSource ? 1 : 0,
-                municipalServicePriority:
-                    municipalServicePriority(candidate),
-                canonicalBonus: canonicalSourceBonus(candidate),
-                candidateScore: scoreCandidate(candidate)
-            }))
+            .map(candidate => {
+
+                const temporal =
+                    validateTemporal(
+                        candidate.inspection
+                    );
+
+                return {
+                    candidate,
+
+                    temporalPriority:
+                        temporalPriority(candidate),
+
+                    temporalVintage:
+                        temporal.endYear ??
+                        temporal.year ??
+                        temporal.startYear ??
+                        0,
+
+                    sourceRolePriority:
+                        sourceRolePriority(candidate),
+
+                    officialMunicipalSource:
+                        candidate.classification
+                            .officialMunicipalSource
+                            ? 1
+                            : 0,
+
+                    municipalServicePriority:
+                        municipalServicePriority(candidate),
+
+                    canonicalBonus:
+                        canonicalSourceBonus(candidate),
+
+                    candidateScore:
+                        scoreCandidate(candidate)
+                };
+            })
             .filter(
                 item =>
-                    item.candidateScore
-                        .score !==
+                    item.candidateScore.score !==
                     Number.NEGATIVE_INFINITY
-            ).sort(
+            )
+            .sort(
                 (a, b) => {
 
-                    /*
-                    * 1. Temporal priority.
-                    *
-                    * For equivalent political-boundary layers:
-                    *
-                    *     current > undated > historical
-                    *
-                    * A current boundary should therefore beat an older
-                    * equivalent boundary even if the older source has a
-                    * stronger source-role classification.
-                    */
+                    // 1. Temporal status is a primary canonical criterion.
                     if (
-                        b.temporalPriority !==
-                        a.temporalPriority
+                        a.temporalPriority !==
+                        b.temporalPriority
                     ) {
                         return (
                             b.temporalPriority -
@@ -736,54 +836,44 @@ export function selectCanonicalSource(
                         );
                     }
 
-                    /*
-                    * 2. Authoritative source role.
-                    */
-                    const sourceRoleDifference =
-                        sourceRolePriority(
-                            b.candidate
-                        ) -
-                        sourceRolePriority(
-                            a.candidate
-                        );
-
+                    // 2. Within the same temporal status,
+                    //    prefer the more recent vintage.
                     if (
-                        sourceRoleDifference !== 0
+                        a.temporalVintage !==
+                        b.temporalVintage
                     ) {
-                        return sourceRoleDifference;
+                        return (
+                            b.temporalVintage -
+                            a.temporalVintage
+                        );
                     }
 
-                    /*
-                    * 3. Official municipal source.
-                    */
-                    const officialDifference =
-                        Number(
-                            b.candidate
-                                .classification
-                                .officialMunicipalSource
-                        ) -
-                        Number(
-                            a.candidate
-                                .classification
-                                .officialMunicipalSource
-                        );
-
+                    // 3. Prefer authoritative sources.
                     if (
-                        officialDifference !== 0
+                        a.sourceRolePriority !==
+                        b.sourceRolePriority
                     ) {
-                        return officialDifference;
+                        return (
+                            b.sourceRolePriority -
+                            a.sourceRolePriority
+                        );
                     }
 
-                    /*
-                    * 4. Native municipal GIS service.
-                    *
-                    * When two equivalent candidates are both official municipal
-                    * sources, prefer the municipality's own ArcGIS Server endpoint
-                    * over an ArcGIS Online representation of the same dataset.
-                    */
+                    // 4. Prefer official municipal sources.
                     if (
-                        b.municipalServicePriority !==
-                        a.municipalServicePriority
+                        a.officialMunicipalSource !==
+                        b.officialMunicipalSource
+                    ) {
+                        return (
+                            b.officialMunicipalSource -
+                            a.officialMunicipalSource
+                        );
+                    }
+
+                    // 5. Prefer native municipal GIS services.
+                    if (
+                        a.municipalServicePriority !==
+                        b.municipalServicePriority
                     ) {
                         return (
                             b.municipalServicePriority -
@@ -791,48 +881,74 @@ export function selectCanonicalSource(
                         );
                     }
 
-                    /*
-                    * 5. Boundary-native identity.
-                    */
-                    if (
-                        b.canonicalBonus !==
-                        a.canonicalBonus
-                    ) {
-                        return (
-                            b.canonicalBonus -
-                            a.canonicalBonus
+                    // 6. Only now use the generic candidate score.
+                    const scoreComparison =
+                        compareCandidateScores(
+                            a.candidateScore,
+                            b.candidateScore
                         );
+
+                    if (scoreComparison !== 0) {
+                        return scoreComparison;
                     }
 
-                    /*
-                    * 6. Full candidate ranking.
-                    */
-                    return compareCandidateScores(
-                        a.candidateScore,
-                        b.candidateScore
+                    // 7. Final deterministic tie-breaker.
+                    return (
+                        a.candidate.inspection.url
+                            .localeCompare(
+                                b.candidate.inspection.url
+                            )
                     );
                 }
             );
 
     console.log(
         "CANONICAL RANKING DEBUG:",
-        ranked.map(item => ({
-            title:
-                item.candidate.inspection.title ??
-                item.candidate.inspection.layerName ??
-                item.candidate.candidate.title,
-            temporalPriority: item.temporalPriority,
-            sourceRole:
-                item.candidate.classification.sourceRole,
-            sourceRolePriority:
-                sourceRolePriority(item.candidate),
-            municipalServicePriority:
-                item.municipalServicePriority,
-            officialMunicipalSource:
-                item.candidate.classification.officialMunicipalSource,
-            canonicalBonus: item.canonicalBonus,
-            candidateScore: item.candidateScore.score
-        }))
+        ranked.map(item => {
+            const temporal =
+                validateTemporal(
+                    item.candidate.inspection
+                );
+
+            return {
+                title:
+                    item.candidate.inspection.title ??
+                    item.candidate.inspection.layerName ??
+                    item.candidate.candidate.title,
+
+                temporalStatus:
+                    temporal.status,
+
+                temporalPriority:
+                    item.temporalPriority,
+
+                temporalVintage:
+                    temporalVintage(
+                        item.candidate
+                    ),
+
+                sourceRole:
+                    item.candidate.classification.sourceRole,
+
+                sourceRolePriority:
+                    sourceRolePriority(
+                        item.candidate
+                    ),
+
+                municipalServicePriority:
+                    item.municipalServicePriority,
+
+                officialMunicipalSource:
+                    item.candidate.classification
+                        .officialMunicipalSource,
+
+                canonicalBonus:
+                    item.canonicalBonus,
+
+                candidateScore:
+                    item.candidateScore.score
+            };
+        })
     );
 
     const best =
@@ -852,14 +968,21 @@ export function selectCanonicalSource(
         candidate.classification;
 
     const districtField =
-        findDistrictField(candidate);
+        findDistrictField(
+            candidate
+        );
 
     if (
-        !classification.districtType ||
+        !classification
+            .districtType ||
         !districtField
     ) {
         return undefined;
     }
+
+    // =========================================================================
+    // Alternatives
+    // =========================================================================
 
     const alternatives:
         CanonicalAlternative[] =
@@ -873,23 +996,29 @@ export function selectCanonicalSource(
                 return {
                     url:
                         alternative
-                            .inspection.url,
+                            .inspection
+                            .url,
 
                     itemId:
                         alternative
-                            .candidate.itemId,
+                            .candidate
+                            .itemId,
 
                     organizationId:
                         alternative
-                            .candidate.organizationId,
+                            .candidate
+                            .organizationId,
 
                     title:
                         alternative
-                            .inspection.title ??
+                            .inspection
+                            .title ??
                         alternative
-                            .inspection.layerName ??
+                            .inspection
+                            .layerName ??
                         alternative
-                            .candidate.title,
+                            .candidate
+                            .title,
 
                     serviceType:
                         alternative
@@ -906,6 +1035,10 @@ export function selectCanonicalSource(
                             .score
                 };
             });
+
+    // =========================================================================
+    // Review status
+    // =========================================================================
 
     const validationConfidence =
         candidate.validation
@@ -931,12 +1064,18 @@ export function selectCanonicalSource(
             )
         );
 
+    // =========================================================================
+    // Selection reasons
+    // =========================================================================
+
     const coverageReason =
         candidate.validation
-            ?.completeDistrictCoverage === true
+            ?.completeDistrictCoverage ===
+            true
             ? "district coverage: complete"
             : candidate.validation
-                ?.completeDistrictCoverage === false
+                ?.completeDistrictCoverage ===
+                false
                 ? "district coverage: incomplete"
                 : "district coverage: unknown";
 
@@ -968,8 +1107,17 @@ export function selectCanonicalSource(
                 .officialMunicipalSource
         }`,
 
+        `temporal status: ${
+            classification
+                .temporalStatus
+        }`,
+
         `temporal priority: ${
             best.temporalPriority
+        }`,
+
+        `temporal vintage: ${
+            best.temporalVintage || "unknown"
         }`,
 
         coverageReason,
@@ -990,10 +1138,12 @@ export function selectCanonicalSource(
             inspection.url,
 
         itemId:
-            candidate.candidate.itemId,
-        
+            candidate.candidate
+                .itemId,
+
         organizationId:
-            candidate.candidate.organizationId,
+            candidate.candidate
+                .organizationId,
 
         title:
             inspection.title ??
@@ -1012,7 +1162,8 @@ export function selectCanonicalSource(
             candidate.candidate.placeFips,
 
         districtType:
-            classification.districtType,
+            classification
+                .districtType,
 
         serviceType:
             inspection.serviceType,
@@ -1031,8 +1182,8 @@ export function selectCanonicalSource(
             "unknown",
 
         /*
-         * Selection bonuses are intentionally not added to the
-         * stored candidate score.
+         * Selection bonuses are intentionally not added to the stored
+         * candidate score.
          */
         score:
             best.candidateScore.score,
@@ -1052,72 +1203,116 @@ export function selectCanonicalSource(
 export function selectCanonicalSources(
     groups: EquivalentLayerGroup[]
 ): CanonicalSource[] {
-    const sources: CanonicalSource[] = [];
+    const sources:
+        CanonicalSource[] = [];
 
-    for (const group of groups) {
+    for (
+        const group of groups
+    ) {
         console.log(
             "\nCANONICAL GROUP:",
             {
-                id: group.id,
-                confidence: group.confidence,
-                reasons: group.reasons,
-                candidates: group.candidates.map(
-                    candidate => ({
-                        title:
-                            candidate.inspection.title,
+                id:
+                    group.id,
 
-                        url:
-                            candidate.inspection.url,
+                confidence:
+                    group.confidence,
 
-                        sourceRole:
-                            candidate.classification
-                                .sourceRole,
+                reasons:
+                    group.reasons,
 
-                        districtType:
-                            candidate.classification
-                                .districtType,
+                candidates:
+                    group.candidates.map(
+                        candidate => ({
+                            title:
+                                candidate
+                                    .inspection
+                                    .title,
 
-                        confidence:
-                            candidate.validation
-                                ?.confidence,
+                            url:
+                                candidate
+                                    .inspection
+                                    .url,
 
-                        districtField:
-                            candidate.validation
-                                ?.districtField,
+                            temporalStatus:
+                                candidate
+                                    .classification
+                                    .temporalStatus,
 
-                        expectedDistrictCount:
-                            candidate.validation
-                                ?.expectedDistrictCount,
+                            temporalPriority:
+                                temporalPriority(
+                                    candidate
+                                ),
 
-                        completeDistrictCoverage:
-                            candidate.validation
-                                ?.completeDistrictCoverage,
+                            temporalVintage:
+                                temporalVintage(
+                                    candidate
+                                ),
 
-                        geography:
-                            candidate
-                                .municipalityGeographyValidation
-                                ?.status
-                    })
-                )
+                            sourceRole:
+                                candidate
+                                    .classification
+                                    .sourceRole,
+
+                            districtType:
+                                candidate
+                                    .classification
+                                    .districtType,
+
+                            confidence:
+                                candidate
+                                    .validation
+                                    ?.confidence,
+
+                            districtField:
+                                candidate
+                                    .validation
+                                    ?.districtField,
+
+                            expectedDistrictCount:
+                                candidate
+                                    .validation
+                                    ?.expectedDistrictCount,
+
+                            completeDistrictCoverage:
+                                candidate
+                                    .validation
+                                    ?.completeDistrictCoverage,
+
+                            geography:
+                                candidate
+                                    .municipalityGeographyValidation
+                                    ?.status
+                        })
+                    )
             }
         );
 
         const canonical =
-            selectCanonicalSource(group);
+            selectCanonicalSource(
+                group
+            );
 
         console.log(
             "CANONICAL RESULT:",
             canonical
                 ? {
-                    title: canonical.title,
-                    url: canonical.url,
-                    score: canonical.score
+                    title:
+                        canonical.title,
+
+                    url:
+                        canonical.url,
+
+                    score:
+                        canonical.score
                 }
                 : undefined
         );
 
         if (canonical) {
-            sources.push(canonical);
+            sources.push(
+                canonical
+            );
         }
     }
 
@@ -1133,9 +1328,13 @@ export function compareCanonicalSources(
     b: CanonicalSource
 ): number {
     if (
-        b.score !== a.score
+        b.score !==
+        a.score
     ) {
-        return b.score - a.score;
+        return (
+            b.score -
+            a.score
+        );
     }
 
     if (
@@ -1237,6 +1436,26 @@ export function selectMunicipalityCanonicalSource(
     groupWinners.sort(
         (a, b) => {
 
+            // ================================================================
+            // 1. Temporal status
+            // ================================================================
+
+            const temporalDifference =
+                compareTemporalCandidates(
+                    a.candidate,
+                    b.candidate
+                );
+
+            if (
+                temporalDifference !== 0
+            ) {
+                return temporalDifference;
+            }
+
+            // ================================================================
+            // 2. Source role
+            // ================================================================
+
             const sourceRoleDifference =
                 sourceRolePriority(
                     b.candidate
@@ -1250,6 +1469,10 @@ export function selectMunicipalityCanonicalSource(
             ) {
                 return sourceRoleDifference;
             }
+
+            // ================================================================
+            // 3. Official municipal source
+            // ================================================================
 
             const officialDifference =
                 Number(
@@ -1269,19 +1492,27 @@ export function selectMunicipalityCanonicalSource(
                 return officialDifference;
             }
 
-            const temporalDifference =
-                temporalPriority(
+            // ================================================================
+            // 4. Municipal service
+            // ================================================================
+
+            const municipalDifference =
+                municipalServicePriority(
                     b.candidate
                 ) -
-                temporalPriority(
+                municipalServicePriority(
                     a.candidate
                 );
 
             if (
-                temporalDifference !== 0
+                municipalDifference !== 0
             ) {
-                return temporalDifference;
+                return municipalDifference;
             }
+
+            // ================================================================
+            // 5. Canonical source identity
+            // ================================================================
 
             const canonicalBonusDifference =
                 canonicalSourceBonus(
@@ -1296,6 +1527,10 @@ export function selectMunicipalityCanonicalSource(
             ) {
                 return canonicalBonusDifference;
             }
+
+            // ================================================================
+            // 6. General canonical score
+            // ================================================================
 
             return compareCanonicalSources(
                 a.source,

@@ -14,7 +14,8 @@ import type {
 
 import {
     scoreCandidate,
-    rankCandidates
+    rankCandidates,
+    compareCandidateScores
 } from "../../generator/src/rank.js";
 
 
@@ -23,30 +24,56 @@ import {
 // =============================================================================
 
 function createDiscoveryCandidate(
-    url = "https://example.com/FeatureServer/0"
+    url =
+        "https://example.com/FeatureServer/0"
 ): DiscoveryCandidate {
+
     return {
-        placeFips: "0477000",
-        city: "Tucson",
-        state: "AZ",
+        placeFips:
+            "0477000",
+
+        city:
+            "Tucson",
+
+        state:
+            "AZ",
+
         url,
-        title: "Tucson Ward Boundaries",
-        score: 50,
-        requiresReview: false,
-        reasons: []
+
+        title:
+            "Tucson Ward Boundaries",
+
+        score:
+            50,
+
+        requiresReview:
+            false,
+
+        reasons:
+            []
     };
 }
 
 
 function createInspection(
-    url = "https://example.com/FeatureServer/0",
-    title = "Tucson Ward Boundaries"
+    url =
+        "https://example.com/FeatureServer/0",
+
+    title =
+        "Tucson Ward Boundaries"
 ): ArcGISInspection {
+
     return {
         url,
-        isArcGIS: true,
-        serviceType: "FeatureServer",
-        isLayer: true,
+
+        isArcGIS:
+            true,
+
+        serviceType:
+            "FeatureServer",
+
+        isLayer:
+            true,
 
         geometryType:
             "esriGeometryPolygon",
@@ -67,30 +94,56 @@ function createInspection(
 }
 
 
-function createClassification(): CandidateClassification {
-    return {
-        isBoundaryLayer: true,
-        isPoliticalBoundary: true,
-        isMunicipalPoliticalBoundary: true,
-        publisherLevel: "municipal",
-        isThematicDataset: false,
-        isCensusDataset: false,
-        isParcelDataset: false,
-        isHousingDataset: false,
+function createClassification(
+    temporalStatus:
+        CandidateClassification["temporalStatus"] =
+            "undated"
+): CandidateClassification {
 
-        officialMunicipalSource: false,
+    return {
+        isBoundaryLayer:
+            true,
+
+        isPoliticalBoundary:
+            true,
+
+        isMunicipalPoliticalBoundary:
+            true,
+
+        publisherLevel:
+            "municipal",
+
+        isThematicDataset:
+            false,
+
+        isCensusDataset:
+            false,
+
+        isParcelDataset:
+            false,
+
+        isHousingDataset:
+            false,
+
+        officialMunicipalSource:
+            false,
 
         districtType:
             "ward",
-        temporalStatus: "undated",
-        
-        sourceRole: "unknown",
 
-        rejected: false,
+        temporalStatus,
 
-        rejectionReasons: [],
+        sourceRole:
+            "unknown",
 
-        requiresReview: false,
+        rejected:
+            false,
+
+        rejectionReasons:
+            [],
+
+        requiresReview:
+            false,
 
         matches: {
             thematic: [],
@@ -113,17 +166,22 @@ function createClassification(): CandidateClassification {
 
 
 function createValidation(): ArcGISCandidateValidation {
-    return {
-        isLikelyPoliticalBoundary: true,
 
-        confidence: 90,
+    return {
+        isLikelyPoliticalBoundary:
+            true,
+
+        confidence:
+            90,
 
         districtField:
             "WARD",
 
-        sampleCount: 10,
+        sampleCount:
+            10,
 
-        featureCount: 10,
+        featureCount:
+            10,
 
         distinctDistrictValues: [
             "1",
@@ -160,7 +218,9 @@ function createCandidate(
         "Tucson Ward Boundaries"
 ): InspectedCandidate {
 
-    const candidate: InspectedCandidate = {
+    const candidate:
+        InspectedCandidate = {
+
         candidate:
             createDiscoveryCandidate(
                 url
@@ -184,21 +244,25 @@ function createCandidate(
         geographyStatus !==
         undefined
     ) {
+
+        const score =
+            geographyStatus ===
+                "strong-match"
+                ? 100
+                : geographyStatus ===
+                  "probable-match"
+                    ? 75
+                    : geographyStatus ===
+                      "weak-match"
+                        ? 40
+                        : 0;
+
         candidate.municipalityGeographyValidation = {
+
             status:
                 geographyStatus,
 
-            score:
-                geographyStatus ===
-                "strong-match"
-                    ? 100
-                    : geographyStatus ===
-                      "probable-match"
-                        ? 75
-                        : geographyStatus ===
-                          "weak-match"
-                            ? 40
-                            : 0,
+            score,
 
             likelyMunicipalityMatch:
                 geographyStatus ===
@@ -213,40 +277,13 @@ function createCandidate(
                 100,
 
             intersectionArea:
-                geographyStatus ===
-                "strong-match"
-                    ? 100
-                    : geographyStatus ===
-                      "probable-match"
-                        ? 75
-                        : geographyStatus ===
-                          "weak-match"
-                            ? 40
-                            : 0,
+                score,
 
             coverageOfMunicipality:
-                geographyStatus ===
-                "strong-match"
-                    ? 1
-                    : geographyStatus ===
-                      "probable-match"
-                        ? 0.75
-                        : geographyStatus ===
-                          "weak-match"
-                            ? 0.40
-                            : 0,
+                score / 100,
 
             candidateInsideMunicipality:
-                geographyStatus ===
-                "strong-match"
-                    ? 1
-                    : geographyStatus ===
-                      "probable-match"
-                        ? 0.75
-                        : geographyStatus ===
-                          "weak-match"
-                            ? 0.40
-                            : 0,
+                score / 100,
 
             candidateFeatureCount:
                 4,
@@ -435,9 +472,7 @@ test(
 
         const withGeography =
             scoreCandidate(
-                createCandidate(
-                    undefined
-                )
+                createCandidate()
             );
 
         assert.equal(
@@ -458,21 +493,17 @@ test(
 );
 
 
-// =============================================================================
-// Geographic ranking order
-// =============================================================================
-
 test(
     "strong geographic match outranks an otherwise equivalent candidate",
     () => {
 
-        const candidateWithoutGeography =
+        const withoutGeography =
             createCandidate(
                 undefined,
                 "https://example.com/a/FeatureServer/0"
             );
 
-        const candidateWithStrongGeography =
+        const withStrongGeography =
             createCandidate(
                 "strong-match",
                 "https://example.com/b/FeatureServer/0"
@@ -480,8 +511,8 @@ test(
 
         const ranked =
             rankCandidates([
-                candidateWithoutGeography,
-                candidateWithStrongGeography
+                withoutGeography,
+                withStrongGeography
             ]);
 
         assert.equal(
@@ -490,14 +521,16 @@ test(
         );
 
         assert.equal(
-            ranked[0].candidate
+            ranked[0]
+                .candidate
                 .municipalityGeographyValidation
                 ?.status,
             "strong-match"
         );
 
         assert.equal(
-            ranked[1].candidate
+            ranked[1]
+                .candidate
                 .municipalityGeographyValidation,
             undefined
         );
@@ -511,14 +544,14 @@ test(
 
 
 // =============================================================================
-// Temporal ranking
+// Temporal scoring
 // =============================================================================
 
 test(
-    "current temporal evidence adds 20 points",
+    "undated temporal evidence adds 0 points",
     () => {
 
-        const undated =
+        const result =
             scoreCandidate(
                 createCandidate(
                     undefined,
@@ -527,23 +560,40 @@ test(
                 )
             );
 
-        const current =
+        assert.equal(
+            result.candidate.classification.temporalStatus,
+            "undated"
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                "+0 temporal status: undated"
+            )
+        );
+    }
+);
+
+
+test(
+    "current temporal evidence adds 20 points",
+    () => {
+
+        const result =
             scoreCandidate(
                 createCandidate(
                     undefined,
-                    "https://example.com/b/FeatureServer/0",
+                    "https://example.com/a/FeatureServer/0",
                     "Current Tucson Ward Boundaries"
                 )
             );
 
         assert.equal(
-            current.score -
-                undated.score,
-            20
+            result.candidate.classification.temporalStatus,
+            "current"
         );
 
         assert.ok(
-            current.reasons.includes(
+            result.reasons.includes(
                 "+20 temporal status: current"
             )
         );
@@ -552,36 +602,32 @@ test(
 
 
 test(
-    "historical temporal evidence subtracts 60 points",
+    "a single past boundary year is dated",
     () => {
 
-        const undated =
+        const result =
             scoreCandidate(
                 createCandidate(
                     undefined,
                     "https://example.com/a/FeatureServer/0",
-                    "Tucson Ward Boundaries"
-                )
-            );
-
-        const historical =
-            scoreCandidate(
-                createCandidate(
-                    undefined,
-                    "https://example.com/b/FeatureServer/0",
-                    "Tucson Ward Boundaries (2015)"
+                    "Tucson Ward Boundaries 2022"
                 )
             );
 
         assert.equal(
-            historical.score -
-                undated.score,
-            -60
+            result.candidate.classification.temporalStatus,
+            "dated"
         );
 
         assert.ok(
-            historical.reasons.includes(
-                "-60 temporal status: historical"
+            result.reasons.includes(
+                "+5 temporal status: dated"
+            )
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                "temporal vintage year: 2022"
             )
         );
     }
@@ -589,14 +635,124 @@ test(
 
 
 test(
-    "current candidate outranks an otherwise equivalent historical candidate",
+    "a completed boundary range is dated rather than historical",
     () => {
 
-        const historical =
+        const result =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    "Tucson Ward Boundaries 2015-2023"
+                )
+            );
+
+        assert.equal(
+            result.candidate.classification.temporalStatus,
+            "dated"
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                "+5 temporal status: dated"
+            )
+        );
+
+        /*
+         * The latest year in a closed range is the temporal
+         * vintage used by ranking.
+         */
+        assert.ok(
+            result.reasons.includes(
+                "temporal vintage year: 2023"
+            )
+        );
+    }
+);
+
+
+test(
+    "explicitly historical boundary language is historical",
+    () => {
+
+        const result =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    "Historical Tucson Ward Boundaries 2015-2023"
+                )
+            );
+
+        assert.equal(
+            result.candidate.classification.temporalStatus,
+            "historical"
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                "-60 temporal status: historical"
+            )
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                "temporal vintage year: 2023"
+            )
+        );
+    }
+);
+
+
+test(
+    "future temporal evidence subtracts 10 points",
+    () => {
+
+        const futureYear =
+            new Date().getFullYear() + 1;
+
+        const result =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    `Tucson Ward Boundaries ${futureYear}`
+                )
+            );
+
+        assert.equal(
+            result.candidate.classification.temporalStatus,
+            "future"
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                "-10 temporal status: future"
+            )
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                `temporal vintage year: ${futureYear}`
+            )
+        );
+    }
+);
+
+
+// =============================================================================
+// Temporal ranking
+// =============================================================================
+
+test(
+    "current candidate outranks dated candidate",
+    () => {
+
+        const dated =
             createCandidate(
                 undefined,
                 "https://example.com/a/FeatureServer/0",
-                "Tucson Ward Boundaries (2015)"
+                "Tucson Ward Boundaries 2022"
             );
 
         const current =
@@ -608,14 +764,9 @@ test(
 
         const ranked =
             rankCandidates([
-                historical,
+                dated,
                 current
             ]);
-
-        assert.equal(
-            ranked.length,
-            2
-        );
 
         assert.equal(
             ranked[0]
@@ -630,12 +781,493 @@ test(
                 .candidate
                 .inspection
                 .title,
-            "Tucson Ward Boundaries (2015)"
+            "Tucson Ward Boundaries 2022"
+        );
+    }
+);
+
+
+test(
+    "dated candidate outranks undated candidate",
+    () => {
+
+        const undated =
+            createCandidate(
+                undefined,
+                "https://example.com/a/FeatureServer/0",
+                "Tucson Ward Boundaries"
+            );
+
+        const dated =
+            createCandidate(
+                undefined,
+                "https://example.com/b/FeatureServer/0",
+                "Tucson Ward Boundaries 2022"
+            );
+
+        const ranked =
+            rankCandidates([
+                undated,
+                dated
+            ]);
+
+        assert.equal(
+            ranked[0]
+                .candidate
+                .inspection
+                .title,
+            "Tucson Ward Boundaries 2022"
+        );
+
+        assert.equal(
+            ranked[1]
+                .candidate
+                .inspection
+                .title,
+            "Tucson Ward Boundaries"
+        );
+    }
+);
+
+
+test(
+    "undated candidate outranks historical candidate",
+    () => {
+
+        const historical =
+            createCandidate(
+                undefined,
+                "https://example.com/a/FeatureServer/0",
+                "Historical Tucson Ward Boundaries 2015-2023"
+            );
+
+        const undated =
+            createCandidate(
+                undefined,
+                "https://example.com/b/FeatureServer/0",
+                "Tucson Ward Boundaries"
+            );
+
+        const ranked =
+            rankCandidates([
+                historical,
+                undated
+            ]);
+
+        assert.equal(
+            ranked[0]
+                .candidate
+                .inspection
+                .title,
+            "Tucson Ward Boundaries"
+        );
+
+        assert.equal(
+            ranked[1]
+                .candidate
+                .inspection
+                .title,
+            "Historical Tucson Ward Boundaries 2015-2023"
+        );
+    }
+);
+
+
+test(
+    "historical candidate outranks future candidate",
+    () => {
+
+        const futureYear =
+            new Date().getFullYear() + 1;
+
+        const historical =
+            createCandidate(
+                undefined,
+                "https://example.com/a/FeatureServer/0",
+                "Historical Tucson Ward Boundaries 2015-2023"
+            );
+
+        const future =
+            createCandidate(
+                undefined,
+                "https://example.com/b/FeatureServer/0",
+                `Tucson Ward Boundaries ${futureYear}`
+            );
+
+        const ranked =
+            rankCandidates([
+                future,
+                historical
+            ]);
+
+        assert.equal(
+            ranked[0]
+                .candidate
+                .inspection
+                .title,
+            "Historical Tucson Ward Boundaries 2015-2023"
+        );
+
+        assert.equal(
+            ranked[1]
+                .candidate
+                .inspection
+                .title,
+            `Tucson Ward Boundaries ${futureYear}`
+        );
+    }
+);
+
+
+// =============================================================================
+// Temporal vintage tie-breaking
+// =============================================================================
+
+test(
+    "newer dated boundary vintage outranks older dated boundary vintage",
+    () => {
+
+        const older =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    "Tucson Ward Boundaries 2015"
+                )
+            );
+
+        const newer =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/b/FeatureServer/0",
+                    "Tucson Ward Boundaries 2022"
+                )
+            );
+
+        assert.equal(
+            older.candidate.classification.temporalStatus,
+            "dated"
+        );
+
+        assert.equal(
+            newer.candidate.classification.temporalStatus,
+            "dated"
+        );
+
+        const ranked =
+            [
+                older,
+                newer
+            ].sort(
+                compareCandidateScores
+            );
+
+        assert.equal(
+            ranked[0]
+                .candidate
+                .inspection
+                .title,
+            "Tucson Ward Boundaries 2022"
+        );
+
+        assert.equal(
+            ranked[1]
+                .candidate
+                .inspection
+                .title,
+            "Tucson Ward Boundaries 2015"
+        );
+    }
+);
+
+
+test(
+    "newer completed boundary range outranks older completed boundary range",
+    () => {
+
+        const older =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    "Tucson Ward Boundaries 2010-2018"
+                )
+            );
+
+        const newer =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/b/FeatureServer/0",
+                    "Tucson Ward Boundaries 2015-2023"
+                )
+            );
+
+        assert.equal(
+            older.candidate.classification.temporalStatus,
+            "dated"
+        );
+
+        assert.equal(
+            newer.candidate.classification.temporalStatus,
+            "dated"
+        );
+
+        const ranked =
+            [
+                older,
+                newer
+            ].sort(
+                compareCandidateScores
+            );
+
+        assert.equal(
+            ranked[0]
+                .candidate
+                .inspection
+                .title,
+            "Tucson Ward Boundaries 2015-2023"
+        );
+    }
+);
+
+
+// =============================================================================
+// Explicit historical semantics
+// =============================================================================
+
+test(
+    "historical language overrides a merely old boundary year",
+    () => {
+
+        const result =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    "Archived historical Tucson Ward Boundaries 2015"
+                )
+            );
+
+        assert.equal(
+            result.candidate.classification.temporalStatus,
+            "historical"
+        );
+
+        assert.equal(
+            result.candidate.classification.temporalStatus,
+            "historical"
         );
 
         assert.ok(
-            ranked[0].score >
-            ranked[1].score
+            result.reasons.includes(
+                "-60 temporal status: historical"
+            )
+        );
+    }
+);
+
+
+// =============================================================================
+// Current/open-ended boundary ranges
+// =============================================================================
+
+test(
+    "a current-year open-ended boundary range is current",
+    () => {
+
+        const currentYear =
+            new Date().getFullYear();
+
+        const result =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    `Tucson Ward Boundaries ${currentYear}-`
+                )
+            );
+
+        assert.equal(
+            result.candidate.classification.temporalStatus,
+            "current"
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                "+20 temporal status: current"
+            )
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                `temporal vintage year: ${currentYear}`
+            )
+        );
+    }
+);
+
+
+test(
+    "a past open-ended range explicitly ending in present is current",
+    () => {
+
+        const currentYear =
+            new Date().getFullYear();
+
+        const startYear =
+            currentYear - 2;
+
+        const result =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    `Tucson Ward Boundaries ${startYear}-present`
+                )
+            );
+
+        assert.equal(
+            result.candidate.classification.temporalStatus,
+            "current"
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                "+20 temporal status: current"
+            )
+        );
+
+        assert.ok(
+            result.reasons.includes(
+                `temporal vintage year: ${startYear}`
+            )
+        );
+    }
+);
+
+
+// =============================================================================
+// Temporal tie-breaking with equal scores
+// =============================================================================
+
+test(
+    "compareCandidateScores prefers current temporal status when total scores tie",
+    () => {
+
+        const dated =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    "Tucson Ward Boundaries 2022"
+                )
+            );
+
+        const current =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/b/FeatureServer/0",
+                    "Current Tucson Ward Boundaries"
+                )
+            );
+
+        /*
+         * Construct equivalent scores manually so that this test
+         * isolates the temporal tie-breaker rather than the temporal
+         * score itself.
+         */
+        const datedTie = {
+            ...dated,
+            score: 100
+        };
+
+        const currentTie = {
+            ...current,
+            score: 100
+        };
+
+        assert.ok(
+            compareCandidateScores(
+                currentTie,
+                datedTie
+            ) < 0
+        );
+
+        assert.ok(
+            compareCandidateScores(
+                datedTie,
+                currentTie
+            ) > 0
+        );
+    }
+);
+
+
+// =============================================================================
+// Deterministic tie-breaking
+// =============================================================================
+
+test(
+    "URL provides deterministic final tie-breaker",
+    () => {
+
+        const a =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/a/FeatureServer/0",
+                    "Tucson Ward Boundaries"
+                )
+            );
+
+        const b =
+            scoreCandidate(
+                createCandidate(
+                    undefined,
+                    "https://example.com/b/FeatureServer/0",
+                    "Tucson Ward Boundaries"
+                )
+            );
+
+        /*
+         * Equalize scores so that only the final URL tie-breaker
+         * determines the ordering.
+         */
+        const aTie = {
+            ...a,
+            score: 100
+        };
+
+        const bTie = {
+            ...b,
+            score: 100
+        };
+
+        const ranked =
+            [
+                bTie,
+                aTie
+            ].sort(
+                compareCandidateScores
+            );
+
+        assert.equal(
+            ranked[0]
+                .candidate
+                .inspection
+                .url,
+            "https://example.com/a/FeatureServer/0"
+        );
+
+        assert.equal(
+            ranked[1]
+                .candidate
+                .inspection
+                .url,
+            "https://example.com/b/FeatureServer/0"
         );
     }
 );

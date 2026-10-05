@@ -69,6 +69,18 @@ function createInspection(
 }
 
 
+function evaluate(
+    overrides: Partial<ArcGISInspection>
+) {
+
+    return validateTemporal(
+        createInspection(
+            overrides
+        )
+    );
+}
+
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -76,54 +88,122 @@ function createInspection(
 const CURRENT_YEAR =
     new Date().getFullYear();
 
+const PREVIOUS_YEAR =
+    CURRENT_YEAR - 1;
+
+const TWO_YEARS_AGO =
+    CURRENT_YEAR - 2;
+
 const NEXT_YEAR =
     CURRENT_YEAR + 1;
 
+const TWO_YEARS_AHEAD =
+    CURRENT_YEAR + 2;
+
 
 // =============================================================================
-// Title precedence
+// Undated behavior
 // =============================================================================
 
 test(
-    "classifies a historical year in the title as historical",
+    "returns undated when no metadata contains temporal evidence",
     () => {
 
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards (2015)"
-            });
-
-
         const result =
-            validateTemporal(
-                inspection
-            );
-
+            evaluate({
+                title:
+                    "Chicago Wards"
+            });
 
         assert.equal(
             result.status,
-            "historical"
+            "undated"
         );
-
-
-        assert.equal(
-            result.year,
-            2015
-        );
-
 
         assert.equal(
             result.score,
-            -60
+            0
         );
 
+        assert.equal(
+            result.year,
+            undefined
+        );
+
+        assert.equal(
+            result.startYear,
+            undefined
+        );
+
+        assert.equal(
+            result.endYear,
+            undefined
+        );
+
+        assert.deepEqual(
+            result.reasons,
+            [
+                "no explicit current, dated, historical, or future temporal evidence detected"
+            ]
+        );
+    }
+);
+
+
+test(
+    "empty metadata is undated",
+    () => {
+
+        const result =
+            evaluate({});
+
+        assert.equal(
+            result.status,
+            "undated"
+        );
+
+        assert.equal(
+            result.score,
+            0
+        );
+    }
+);
+
+
+// =============================================================================
+// Bare year behavior
+// =============================================================================
+
+test(
+    "a bare past year in a title is dated",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
+
+        assert.equal(
+            result.score,
+            5
+        );
 
         assert.ok(
             result.reasons.some(
                 reason =>
                     reason.includes(
-                        "title"
+                        "dated boundary vintage"
                     )
             )
         );
@@ -132,377 +212,25 @@ test(
 
 
 test(
-    "title-level historical evidence takes precedence over current description evidence",
+    "a bare current year in a title is current",
     () => {
 
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards (2015)",
-
-                description:
-                    "Current ward boundary data maintained by the city."
-            });
-
-
         const result =
-            validateTemporal(
-                inspection
-            );
-
+            evaluate({
+                title:
+                    `Chicago Wards ${CURRENT_YEAR}`
+            });
 
         assert.equal(
             result.status,
-            "historical"
+            "current"
         );
-
 
         assert.equal(
             result.year,
-            2015
-        );
-
-
-        assert.equal(
-            result.score,
-            -60
-        );
-
-
-        assert.ok(
-            result.reasons.some(
-                reason =>
-                    reason.includes(
-                        "title"
-                    )
-            )
-        );
-    }
-);
-
-
-test(
-    "title-level current evidence takes precedence over historical description evidence",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    "Current Chicago Wards",
-
-                description:
-                    "This dataset supersedes the 2015-2023 ward boundaries."
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "current"
-        );
-
-
-        assert.equal(
-            result.score,
-            20
-        );
-
-
-        assert.ok(
-            result.reasons.some(
-                reason =>
-                    reason.includes(
-                        "title"
-                    )
-            )
-        );
-    }
-);
-
-
-// =============================================================================
-// Historical titles
-// =============================================================================
-
-test(
-    "recognizes an explicit historical year in a ward title",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards 2015"
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "historical"
-        );
-
-
-        assert.equal(
-            result.year,
-            2015
-        );
-    }
-);
-
-
-test(
-    "recognizes an explicit historical year in a district title",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    "City Council Districts 2020"
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "historical"
-        );
-
-
-        assert.equal(
-            result.year,
-            2020
-        );
-    }
-);
-
-
-test(
-    "recognizes a historical numeric range in a title",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards 2015-2023"
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "historical"
-        );
-
-
-        assert.equal(
-            result.startYear,
-            2015
-        );
-
-
-        assert.equal(
-            result.endYear,
-            2023
-        );
-
-
-        assert.equal(
-            result.score,
-            -60
-        );
-    }
-);
-
-
-test(
-    "recognizes an en-dash historical range in a title",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards 2015–2023"
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "historical"
-        );
-
-
-        assert.equal(
-            result.startYear,
-            2015
-        );
-
-
-        assert.equal(
-            result.endYear,
-            2023
-        );
-    }
-);
-
-
-test(
-    "recognizes a natural-language historical range in a title",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards 2015 through 2023"
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "historical"
-        );
-
-
-        assert.equal(
-            result.startYear,
-            2015
-        );
-
-
-        assert.equal(
-            result.endYear,
-            2023
-        );
-    }
-);
-
-
-// =============================================================================
-// Current titles
-// =============================================================================
-
-test(
-    "recognizes current in a title",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    "Current Chicago Wards"
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "current"
-        );
-
-
-        assert.equal(
-            result.score,
-            20
-        );
-    }
-);
-
-
-test(
-    "recognizes currently in a title",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards — Currently Maintained"
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "current"
-        );
-
-
-        assert.equal(
-            result.score,
-            20
-        );
-    }
-);
-
-
-test(
-    "recognizes an open-ended current year range in a title",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    `Chicago Wards ${CURRENT_YEAR}-`
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "current"
-        );
-
-
-        assert.equal(
-            result.startYear,
             CURRENT_YEAR
         );
 
-
         assert.equal(
             result.score,
             20
@@ -512,68 +240,24 @@ test(
 
 
 test(
-    "recognizes a present-tense year range in a title",
+    "a bare future year in a title is future",
     () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    `Chicago Wards ${CURRENT_YEAR}-present`
-            });
-
 
         const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "current"
-        );
-
-
-        assert.equal(
-            result.startYear,
-            CURRENT_YEAR
-        );
-    }
-);
-
-
-// =============================================================================
-// Future titles
-// =============================================================================
-
-test(
-    "recognizes an explicit future year in a boundary title",
-    () => {
-
-        const inspection =
-            createInspection({
+            evaluate({
                 title:
                     `Chicago Wards ${NEXT_YEAR}`
             });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
 
         assert.equal(
             result.status,
             "future"
         );
 
-
         assert.equal(
             result.year,
             NEXT_YEAR
         );
-
 
         assert.equal(
             result.score,
@@ -583,47 +267,1360 @@ test(
 );
 
 
+test(
+    "a bare year in a non-boundary description is ignored",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Dataset references ${PREVIOUS_YEAR}.`
+            });
+
+        assert.equal(
+            result.status,
+            "undated"
+        );
+
+        assert.equal(
+            result.score,
+            0
+        );
+    }
+);
+
+
 // =============================================================================
-// Metadata fallback
+// Numeric ranges
 // =============================================================================
 
 test(
-    "uses layer name when title has no temporal evidence",
+    "a completed past numeric boundary range is dated",
     () => {
 
-        const inspection =
-            createInspection({
+        const result =
+            evaluate({
                 title:
-                    "Chicago Wards",
-
-                layerName:
-                    "Chicago Wards 2015"
+                    `Chicago Wards ${TWO_YEARS_AGO}-${PREVIOUS_YEAR}`
             });
 
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.startYear,
+            TWO_YEARS_AGO
+        );
+
+        assert.equal(
+            result.endYear,
+            PREVIOUS_YEAR
+        );
+
+        assert.equal(
+            result.year,
+            undefined
+        );
+
+        assert.equal(
+            result.score,
+            5
+        );
+    }
+);
+
+
+test(
+    "a numeric range ending in the current year is current",
+    () => {
 
         const result =
-            validateTemporal(
-                inspection
-            );
+            evaluate({
+                title:
+                    `Chicago Wards ${PREVIOUS_YEAR}-${CURRENT_YEAR}`
+            });
 
+        assert.equal(
+            result.status,
+            "current"
+        );
 
         /*
-         * The title contains the boundary term but no date.
-         * The implementation evaluates the title first, then the layer
-         * name because the title itself has no temporal classification.
+         * evaluateText() returns the current year through
+         * currentEvidence(), rather than startYear/endYear.
          */
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+
+        assert.equal(
+            result.startYear,
+            undefined
+        );
+
+        assert.equal(
+            result.endYear,
+            undefined
+        );
+
+        assert.equal(
+            result.score,
+            20
+        );
+    }
+);
+
+
+test(
+    "a numeric range entirely in the future is future",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${NEXT_YEAR}-${TWO_YEARS_AHEAD}`
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        assert.equal(
+            result.startYear,
+            NEXT_YEAR
+        );
+
+        assert.equal(
+            result.endYear,
+            TWO_YEARS_AHEAD
+        );
+
+        assert.equal(
+            result.year,
+            undefined
+        );
+
+        assert.equal(
+            result.score,
+            -10
+        );
+    }
+);
+
+
+test(
+    "an en-dash completed range is normalized and classified as dated",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${TWO_YEARS_AGO}–${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.startYear,
+            TWO_YEARS_AGO
+        );
+
+        assert.equal(
+            result.endYear,
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+test(
+    "an em-dash completed range is normalized and classified as dated",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${TWO_YEARS_AGO}—${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.startYear,
+            TWO_YEARS_AGO
+        );
+
+        assert.equal(
+            result.endYear,
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+// =============================================================================
+// Natural-language ranges
+// =============================================================================
+
+test(
+    "a through range ending before the current year is dated",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${TWO_YEARS_AGO} through ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.startYear,
+            TWO_YEARS_AGO
+        );
+
+        assert.equal(
+            result.endYear,
+            PREVIOUS_YEAR
+        );
+
+        assert.equal(
+            result.score,
+            5
+        );
+    }
+);
+
+
+test(
+    "a thru range ending before the current year is dated",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${TWO_YEARS_AGO} thru ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.startYear,
+            TWO_YEARS_AGO
+        );
+
+        assert.equal(
+            result.endYear,
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+test(
+    "a to range ending before the current year is dated",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${TWO_YEARS_AGO} to ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.startYear,
+            TWO_YEARS_AGO
+        );
+
+        assert.equal(
+            result.endYear,
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+test(
+    "a natural-language range ending in the current year is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${PREVIOUS_YEAR} through ${CURRENT_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+
+        assert.equal(
+            result.score,
+            20
+        );
+    }
+);
+
+
+// =============================================================================
+// Open-ended current ranges
+// =============================================================================
+
+test(
+    "a current-year trailing dash is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${CURRENT_YEAR}-`
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+
+        assert.equal(
+            result.startYear,
+            CURRENT_YEAR
+        );
+
+        assert.equal(
+            result.endYear,
+            undefined
+        );
+
+        assert.equal(
+            result.score,
+            20
+        );
+    }
+);
+
+
+test(
+    "a current-year present range is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${CURRENT_YEAR}-present`
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+
+        assert.equal(
+            result.startYear,
+            CURRENT_YEAR
+        );
+
+        assert.equal(
+            result.score,
+            20
+        );
+    }
+);
+
+
+test(
+    "a current-year current range is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${CURRENT_YEAR}-current`
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+
+        assert.equal(
+            result.startYear,
+            CURRENT_YEAR
+        );
+    }
+);
+
+
+test(
+    "a current-year ongoing range is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${CURRENT_YEAR}-ongoing`
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+
+        assert.equal(
+            result.startYear,
+            CURRENT_YEAR
+        );
+    }
+);
+
+
+test(
+    "a current-year active range is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${CURRENT_YEAR}-active`
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+
+        assert.equal(
+            result.startYear,
+            CURRENT_YEAR
+        );
+    }
+);
+
+
+test(
+    "a past-year present range is current and preserves its startYear",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${PREVIOUS_YEAR}-present`
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
+
+        assert.equal(
+            result.startYear,
+            PREVIOUS_YEAR
+        );
+
+        assert.equal(
+            result.endYear,
+            undefined
+        );
+
+        assert.equal(
+            result.score,
+            20
+        );
+    }
+);
+
+
+// =============================================================================
+// Current language
+// =============================================================================
+
+test(
+    "current language without a year is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Current Chicago Wards"
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            undefined
+        );
+
+        assert.equal(
+            result.score,
+            20
+        );
+    }
+);
+
+
+test(
+    "currently is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Chicago Wards currently maintained"
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.score,
+            20
+        );
+    }
+);
+
+
+test(
+    "ongoing is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Chicago Wards ongoing"
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+    }
+);
+
+
+test(
+    "active is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Active Chicago Wards"
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+    }
+);
+
+
+test(
+    "present is current",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Chicago Wards present"
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+    }
+);
+
+
+test(
+    "current language preserves an explicitly present current year",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Current Chicago Wards ${CURRENT_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+    }
+);
+
+
+// =============================================================================
+// Historical language
+// =============================================================================
+
+test(
+    "explicit historical language makes a past year historical",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Historical Chicago Wards ${PREVIOUS_YEAR}`
+            });
 
         assert.equal(
             result.status,
             "historical"
         );
 
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
+
+        assert.equal(
+            result.score,
+            -60
+        );
+    }
+);
+
+
+test(
+    "historic language makes a boundary historical",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Historic Chicago Wards ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "historical"
+        );
 
         assert.equal(
             result.year,
-            2015
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+test(
+    "former language makes a boundary historical",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Former Chicago Wards ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "historical"
         );
 
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+test(
+    "superseded language makes a boundary historical",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Superseded Chicago Wards ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "historical"
+        );
+
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+test(
+    "explicit historical language overrides an otherwise dated range",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Historical Chicago Wards ${TWO_YEARS_AGO}-${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "historical"
+        );
+
+        assert.equal(
+            result.startYear,
+            TWO_YEARS_AGO
+        );
+
+        assert.equal(
+            result.endYear,
+            PREVIOUS_YEAR
+        );
+
+        assert.equal(
+            result.score,
+            -60
+        );
+    }
+);
+
+
+test(
+    "historical language without a year still produces historical evidence",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Historical Chicago Wards"
+            });
+
+        assert.equal(
+            result.status,
+            "historical"
+        );
+
+        assert.equal(
+            result.year,
+            undefined
+        );
+
+        assert.equal(
+            result.startYear,
+            undefined
+        );
+
+        assert.equal(
+            result.endYear,
+            undefined
+        );
+
+        assert.equal(
+            result.score,
+            -60
+        );
+    }
+);
+
+
+// =============================================================================
+// Future language
+// =============================================================================
+
+test(
+    "explicit future language makes a future boundary future",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Future Chicago Wards ${NEXT_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        assert.equal(
+            result.year,
+            NEXT_YEAR
+        );
+
+        assert.equal(
+            result.score,
+            -10
+        );
+    }
+);
+
+
+test(
+    "proposed language makes a boundary future",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Proposed Chicago Wards ${NEXT_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        assert.equal(
+            result.year,
+            NEXT_YEAR
+        );
+    }
+);
+
+
+test(
+    "planned language makes a boundary future",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Planned Chicago Wards ${NEXT_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        assert.equal(
+            result.year,
+            NEXT_YEAR
+        );
+    }
+);
+
+
+test(
+    "explicit future language overrides a past year",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Future Chicago Wards ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        /*
+         * futureEvidence() receives only a year found by:
+         *
+         *     year > CURRENT_YEAR
+         *
+         * Therefore a future-language string containing only a past year
+         * produces future evidence with no year.
+         */
+        assert.equal(
+            result.year,
+            undefined
+        );
+
+        assert.equal(
+            result.score,
+            -10
+        );
+    }
+);
+
+
+test(
+    "explicit future language without a year still produces future evidence",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Proposed Chicago Wards"
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        assert.equal(
+            result.year,
+            undefined
+        );
+
+        assert.equal(
+            result.score,
+            -10
+        );
+    }
+);
+
+
+test(
+    "a future numeric range is future",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${NEXT_YEAR}-${TWO_YEARS_AHEAD}`
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        assert.equal(
+            result.startYear,
+            NEXT_YEAR
+        );
+
+        assert.equal(
+            result.endYear,
+            TWO_YEARS_AHEAD
+        );
+    }
+);
+
+
+// =============================================================================
+// Precedence inside evaluateText()
+// =============================================================================
+
+test(
+    "future language has precedence over historical language",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Future historical Chicago Wards ${NEXT_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        assert.equal(
+            result.year,
+            NEXT_YEAR
+        );
+    }
+);
+
+
+test(
+    "historical language has precedence over current language",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Historical current Chicago Wards ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "historical"
+        );
+
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+test(
+    "future language has precedence over current language",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Proposed current Chicago Wards ${NEXT_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        assert.equal(
+            result.year,
+            NEXT_YEAR
+        );
+    }
+);
+
+
+// =============================================================================
+// Non-vintage dates
+// =============================================================================
+
+test(
+    "an updated past year in a description is not temporal boundary evidence",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Updated ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "undated"
+        );
+
+        assert.equal(
+            result.score,
+            0
+        );
+    }
+);
+
+
+test(
+    "a published year is not temporal boundary evidence",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Published ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "undated"
+        );
+    }
+);
+
+
+test(
+    "a modified year is not temporal boundary evidence",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Last modified ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "undated"
+        );
+    }
+);
+
+
+test(
+    "an accessed year is not temporal boundary evidence",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Accessed ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "undated"
+        );
+    }
+);
+
+
+test(
+    "an exported year is not temporal boundary evidence",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Exported ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "undated"
+        );
+    }
+);
+
+
+test(
+    "a publication date does not override the absence of boundary evidence",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Chicago Wards",
+
+                description:
+                    `Published ${CURRENT_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "undated"
+        );
+    }
+);
+
+
+test(
+    "a numeric range is evaluated before the non-vintage date exclusion",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Updated ${TWO_YEARS_AGO}-${PREVIOUS_YEAR}`
+            });
+
+        /*
+         * This is an important exact-behavior test.
+         *
+         * Numeric ranges are checked before
+         * NON_VINTAGE_DATE_PATTERN.
+         */
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.startYear,
+            TWO_YEARS_AGO
+        );
+
+        assert.equal(
+            result.endYear,
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+// =============================================================================
+// Boundary context
+// =============================================================================
+
+test(
+    "a past year in a boundary description is dated",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Ward boundaries adopted in ${PREVIOUS_YEAR}.`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
+    }
+);
+
+
+test(
+    "a current year in a boundary description is current",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Ward boundaries for ${CURRENT_YEAR}.`
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+    }
+);
+
+
+test(
+    "a future year in a boundary description is future",
+    () => {
+
+        const result =
+            evaluate({
+                description:
+                    `Ward boundaries for ${NEXT_YEAR}.`
+            });
+
+        assert.equal(
+            result.status,
+            "future"
+        );
+
+        assert.equal(
+            result.year,
+            NEXT_YEAR
+        );
+    }
+);
+
+
+// =============================================================================
+// Metadata precedence
+// =============================================================================
+
+test(
+    "title evidence takes precedence over layer name evidence",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    `Chicago Wards ${PREVIOUS_YEAR}`,
+
+                layerName:
+                    `Chicago Wards ${CURRENT_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
+
+        assert.ok(
+            result.reasons.some(
+                reason =>
+                    reason.includes(
+                        "title"
+                    )
+            )
+        );
+    }
+);
+
+
+test(
+    "layer name is used when title has no temporal evidence",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Chicago Wards",
+
+                layerName:
+                    `Chicago Wards ${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
 
         assert.ok(
             result.reasons.some(
@@ -638,42 +1635,76 @@ test(
 
 
 test(
-    "uses description when title and layer name have no temporal evidence",
+    "service name is used after title and layer name",
     () => {
 
-        const inspection =
-            createInspection({
+        const result =
+            evaluate({
                 title:
                     "Chicago Wards",
 
-                description:
-                    "Ward boundaries effective from 2015 through 2023."
+                layerName:
+                    "Ward Boundaries",
+
+                serviceName:
+                    `Chicago Wards ${PREVIOUS_YEAR}`
             });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
 
         assert.equal(
             result.status,
-            "historical"
+            "dated"
         );
 
+        assert.equal(
+            result.year,
+            PREVIOUS_YEAR
+        );
+
+        assert.ok(
+            result.reasons.some(
+                reason =>
+                    reason.includes(
+                        "service name"
+                    )
+            )
+        );
+    }
+);
+
+
+test(
+    "layer description is used after service name",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Chicago Wards",
+
+                layerName:
+                    "Ward Boundaries",
+
+                serviceName:
+                    "Municipal Wards",
+
+                description:
+                    `Ward boundaries ${TWO_YEARS_AGO}-${PREVIOUS_YEAR}`
+            });
+
+        assert.equal(
+            result.status,
+            "dated"
+        );
 
         assert.equal(
             result.startYear,
-            2015
+            TWO_YEARS_AGO
         );
-
 
         assert.equal(
             result.endYear,
-            2023
+            PREVIOUS_YEAR
         );
-
 
         assert.ok(
             result.reasons.some(
@@ -688,36 +1719,27 @@ test(
 
 
 test(
-    "uses service description as temporal evidence",
+    "service description is used after layer description",
     () => {
 
-        const inspection =
-            createInspection({
+        const result =
+            evaluate({
                 title:
                     "Chicago Wards",
 
                 serviceDescription:
-                    "Current ward boundaries maintained by the municipality."
+                    "Current ward boundaries."
             });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
 
         assert.equal(
             result.status,
             "current"
         );
 
-
         assert.equal(
             result.score,
             20
         );
-
 
         assert.ok(
             result.reasons.some(
@@ -732,44 +1754,36 @@ test(
 
 
 test(
-    "uses tags when earlier metadata has no temporal evidence",
+    "the first temporal tag wins",
     () => {
 
-        const inspection =
-            createInspection({
+        const result =
+            evaluate({
                 title:
                     "Chicago Wards",
 
                 tags: [
-                    "political boundaries",
-                    "current"
+                    "municipal boundaries",
+                    `Chicago wards ${PREVIOUS_YEAR}`,
+                    `current wards ${CURRENT_YEAR}`
                 ]
             });
 
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
         assert.equal(
             result.status,
-            "current"
+            "dated"
         );
-
 
         assert.equal(
-            result.score,
-            20
+            result.year,
+            PREVIOUS_YEAR
         );
-
 
         assert.ok(
             result.reasons.some(
                 reason =>
                     reason.includes(
-                        "tag"
+                        `tag "Chicago wards ${PREVIOUS_YEAR}"`
                     )
             )
         );
@@ -778,38 +1792,32 @@ test(
 
 
 test(
-    "uses type keywords as the final metadata source",
+    "type keywords are evaluated after tags",
     () => {
 
-        const inspection =
-            createInspection({
+        const result =
+            evaluate({
                 title:
                     "Chicago Wards",
 
+                tags: [
+                    "municipal boundaries"
+                ],
+
                 typeKeywords: [
-                    "Political Boundary",
-                    "2025"
+                    `ward boundary ${PREVIOUS_YEAR}`
                 ]
             });
 
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
         assert.equal(
             result.status,
-            "historical"
+            "dated"
         );
-
 
         assert.equal(
             result.year,
-            2025
+            PREVIOUS_YEAR
         );
-
 
         assert.ok(
             result.reasons.some(
@@ -824,260 +1832,219 @@ test(
 
 
 // =============================================================================
-// Undated
+// attachCurrentYear behavior through validateTemporal()
 // =============================================================================
 
 test(
-    "returns undated when no temporal evidence exists",
+    "current metadata containing the current year preserves that year",
     () => {
 
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards"
-            });
-
-
         const result =
-            validateTemporal(
-                inspection
-            );
-
+            evaluate({
+                title:
+                    `Current Chicago Wards ${CURRENT_YEAR}`
+            });
 
         assert.equal(
             result.status,
-            "undated"
+            "current"
         );
 
+        assert.equal(
+            result.year,
+            CURRENT_YEAR
+        );
+    }
+);
+
+
+test(
+    "current metadata without the current year leaves year undefined",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Current Chicago Wards"
+            });
+
+        assert.equal(
+            result.status,
+            "current"
+        );
+
+        assert.equal(
+            result.year,
+            undefined
+        );
+    }
+);
+
+
+// =============================================================================
+// Real-world Tucson-style cases
+// =============================================================================
+
+test(
+    "TucsonWards2022 is dated rather than historical",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "TucsonWards2022"
+            });
+
+        /*
+         * "2022" is a bare past year in the title.
+         *
+         * There is no historical language such as "historic" or "former".
+         */
+        assert.equal(
+            result.status,
+            "dated"
+        );
+
+        assert.equal(
+            result.year,
+            2022
+        );
 
         assert.equal(
             result.score,
-            0
+            5
         );
+    }
+);
 
+
+test(
+    "Chicago 2015-2023 boundary data is dated rather than historical",
+    () => {
+
+        const result =
+            evaluate({
+                title:
+                    "Chicago Wards 2015-2023"
+            });
 
         assert.equal(
-            result.year,
-            undefined
+            result.status,
+            "dated"
         );
-
 
         assert.equal(
             result.startYear,
-            undefined
+            2015
         );
-
 
         assert.equal(
             result.endYear,
-            undefined
+            2023
         );
-    }
-);
-
-
-// =============================================================================
-// Incidental dates
-// =============================================================================
-
-test(
-    "does not classify an unrelated year in a generic title as historical",
-    () => {
-
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards"
-            });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
 
         assert.equal(
-            result.status,
-            "undated"
+            result.score,
+            5
         );
     }
 );
 
 
 test(
-    "does not classify an unrelated ordinance year in a description as historical",
+    "explicitly historical Chicago 2015-2023 boundary data is historical",
     () => {
 
-        const inspection =
-            createInspection({
-                title:
-                    "Chicago Wards",
-
-                description:
-                    "Dataset created pursuant to ordinance 2020-14."
-            });
-
-
         const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "undated"
-        );
-    }
-);
-
-
-// =============================================================================
-// Metadata precedence
-// =============================================================================
-
-test(
-    "layer name takes precedence over description",
-    () => {
-
-        const inspection =
-            createInspection({
+            evaluate({
                 title:
-                    "Chicago Wards",
-
-                layerName:
-                    "Chicago Wards 2015",
-
-                description:
-                    "Current ward boundaries."
+                    "Historical Chicago Wards 2015-2023"
             });
-
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
 
         assert.equal(
             result.status,
             "historical"
         );
 
-
         assert.equal(
-            result.year,
+            result.startYear,
             2015
         );
 
+        assert.equal(
+            result.endYear,
+            2023
+        );
 
-        assert.ok(
-            result.reasons.some(
-                reason =>
-                    reason.includes(
-                        "layer name"
-                    )
-            )
+        assert.equal(
+            result.score,
+            -60
         );
     }
 );
 
 
+// =============================================================================
+// Exact score contract
+// =============================================================================
+
 test(
-    "service name takes precedence over description",
+    "temporal scores are exactly current=20, dated=5, historical=-60, future=-10, undated=0",
     () => {
 
-        const inspection =
-            createInspection({
+        const current =
+            evaluate({
                 title:
-                    "Chicago Wards",
-
-                serviceName:
-                    "Chicago Wards 2015",
-
-                description:
-                    "Current ward boundaries."
+                    `Current Chicago Wards ${CURRENT_YEAR}`
             });
 
-
-        const result =
-            validateTemporal(
-                inspection
-            );
-
-
-        assert.equal(
-            result.status,
-            "historical"
-        );
-
-
-        assert.equal(
-            result.year,
-            2015
-        );
-
-
-        assert.ok(
-            result.reasons.some(
-                reason =>
-                    reason.includes(
-                        "service name"
-                    )
-            )
-        );
-    }
-);
-
-
-// =============================================================================
-// Result structure
-// =============================================================================
-
-test(
-    "returns a reasons array for every temporal result",
-    () => {
-
-        const inspections = [
-
-            createInspection({
+        const dated =
+            evaluate({
                 title:
-                    "Chicago Wards (2015)"
-            }),
+                    `Chicago Wards ${PREVIOUS_YEAR}`
+            });
 
-            createInspection({
+        const historical =
+            evaluate({
                 title:
-                    "Current Chicago Wards"
-            }),
+                    `Historical Chicago Wards ${PREVIOUS_YEAR}`
+            });
 
-            createInspection({
+        const future =
+            evaluate({
+                title:
+                    `Future Chicago Wards ${NEXT_YEAR}`
+            });
+
+        const undated =
+            evaluate({
                 title:
                     "Chicago Wards"
-            })
-        ];
+            });
 
+        assert.equal(
+            current.score,
+            20
+        );
 
-        for (
-            const inspection of inspections
-        ) {
+        assert.equal(
+            dated.score,
+            5
+        );
 
-            const result =
-                validateTemporal(
-                    inspection
-                );
+        assert.equal(
+            historical.score,
+            -60
+        );
 
+        assert.equal(
+            future.score,
+            -10
+        );
 
-            assert.ok(
-                Array.isArray(
-                    result.reasons
-                )
-            );
-
-
-            assert.ok(
-                result.reasons.length > 0
-            );
-        }
+        assert.equal(
+            undated.score,
+            0
+        );
     }
 );

@@ -11,6 +11,7 @@ import {
     validateTemporal
 } from "./temporalValidation.js";
 
+
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
@@ -18,10 +19,132 @@ import {
 function getDistrictField(
     candidate: InspectedCandidate
 ): string | undefined {
+
     return (
         candidate.inspection.districtField ??
         candidate.validation?.districtField
     );
+}
+
+function getTemporalEvidence(
+    candidate: InspectedCandidate
+) {
+    return validateTemporal(
+        candidate.inspection
+    );
+}
+
+
+function getTemporalYear(
+    candidate: InspectedCandidate
+): number {
+
+    const temporal =
+        getTemporalEvidence(
+            candidate
+        );
+
+    if (
+        temporal.endYear !== undefined
+    ) {
+        return temporal.endYear;
+    }
+
+    if (
+        temporal.year !== undefined
+    ) {
+        return temporal.year;
+    }
+
+    if (
+        temporal.startYear !== undefined
+    ) {
+        return temporal.startYear;
+    }
+
+    return 0;
+}
+
+
+function getTemporalPriority(
+    candidate: InspectedCandidate
+): number {
+
+    const temporal =
+        getTemporalEvidence(
+            candidate
+        );
+
+    switch (
+        temporal.status
+    ) {
+
+        case "current":
+            return 4;
+
+        case "dated":
+            return 3;
+
+        case "undated":
+            return 2;
+
+        case "historical":
+            return 1;
+
+        case "future":
+            return 0;
+
+        default:
+            return 0;
+    }
+}
+
+/**
+ * Return the most useful year associated with a temporal result.
+ *
+ * Temporal evidence can represent:
+ *
+ *     year
+ *     startYear/endYear
+ *
+ * For ranking boundary vintages, the END of a closed range is the most
+ * important year because it represents the latest boundary vintage covered
+ * by that dataset.
+ *
+ * Examples:
+ *
+ *     2015              -> 2015
+ *     2015-2023         -> 2023
+ *     2023-present      -> 2023
+ */
+function getTemporalVintageYear(
+    candidate: InspectedCandidate
+): number | undefined {
+
+    const temporal =
+        validateTemporal(
+            candidate.inspection
+        );
+
+    if (
+        temporal.endYear !== undefined
+    ) {
+        return temporal.endYear;
+    }
+
+    if (
+        temporal.year !== undefined
+    ) {
+        return temporal.year;
+    }
+
+    if (
+        temporal.startYear !== undefined
+    ) {
+        return temporal.startYear;
+    }
+
+    return undefined;
 }
 
 // -----------------------------------------------------------------------------
@@ -41,18 +164,23 @@ function getGeographyScore(
     score: number;
     reason?: string;
 } {
+
     const geography =
         candidate.municipalityGeographyValidation;
 
     if (!geography) {
+
         return {
             score: 0
         };
     }
 
-    switch (geography.status) {
+    switch (
+        geography.status
+    ) {
 
         case "strong-match":
+
             return {
                 score: 30,
                 reason:
@@ -60,6 +188,7 @@ function getGeographyScore(
             };
 
         case "probable-match":
+
             return {
                 score: 20,
                 reason:
@@ -67,6 +196,7 @@ function getGeographyScore(
             };
 
         case "weak-match":
+
             return {
                 score: 5,
                 reason:
@@ -74,6 +204,7 @@ function getGeographyScore(
             };
 
         case "no-match":
+
             return {
                 score: -15,
                 reason:
@@ -81,6 +212,7 @@ function getGeographyScore(
             };
 
         case "invalid":
+
             return {
                 score: 0,
                 reason:
@@ -88,11 +220,13 @@ function getGeographyScore(
             };
 
         default:
+
             return {
                 score: 0
             };
     }
 }
+
 
 // -----------------------------------------------------------------------------
 // Candidate scoring
@@ -109,9 +243,6 @@ function getGeographyScore(
  * candidate is eligible.
  *
  * rank.ts is responsible for determining how strong an eligible candidate is.
- *
- * This function therefore assumes that the candidate has already passed
- * candidate eligibility evaluation.
  */
 export function scoreCandidate(
     candidate: InspectedCandidate
@@ -122,7 +253,10 @@ export function scoreCandidate(
             candidate
         );
 
-    if (!eligibility.eligible) {
+    if (
+        !eligibility.eligible
+    ) {
+
         throw new Error(
             `Cannot score ineligible candidate: ${
                 candidate.inspection.title
@@ -141,6 +275,7 @@ export function scoreCandidate(
     const validation =
         candidate.validation;
 
+
     // -------------------------------------------------------------------------
     // Base score
     // -------------------------------------------------------------------------
@@ -153,6 +288,7 @@ export function scoreCandidate(
         "+40 validated political boundary"
     );
 
+
     // -------------------------------------------------------------------------
     // Official municipal source
     // -------------------------------------------------------------------------
@@ -160,12 +296,14 @@ export function scoreCandidate(
     if (
         classification.officialMunicipalSource
     ) {
+
         score += 35;
 
         reasons.push(
             "+35 official municipal source"
         );
     }
+
 
     // -------------------------------------------------------------------------
     // District type
@@ -174,6 +312,7 @@ export function scoreCandidate(
     if (
         classification.districtType
     ) {
+
         score += 15;
 
         reasons.push(
@@ -181,20 +320,27 @@ export function scoreCandidate(
         );
     }
 
+
     // -------------------------------------------------------------------------
     // District field
     // -------------------------------------------------------------------------
 
     const districtField =
-        getDistrictField(candidate);
+        getDistrictField(
+            candidate
+        );
 
-    if (districtField) {
+    if (
+        districtField
+    ) {
+
         score += 15;
 
         reasons.push(
             `+15 district field: ${districtField}`
         );
     }
+
 
     // -------------------------------------------------------------------------
     // Polygon geometry
@@ -209,17 +355,21 @@ export function scoreCandidate(
      * This score therefore represents the quality contribution associated
      * with satisfying that requirement.
      */
+
     score += 10;
 
     reasons.push(
         "+10 polygon geometry"
     );
 
+
     // -------------------------------------------------------------------------
     // Attribute validation
     // -------------------------------------------------------------------------
 
-    if (validation) {
+    if (
+        validation
+    ) {
 
         score += 25;
 
@@ -227,15 +377,11 @@ export function scoreCandidate(
             "+25 candidate validation available"
         );
 
+
         // ---------------------------------------------------------------------
         // Validation confidence
         // ---------------------------------------------------------------------
 
-        /*
-         * Eligibility establishes the minimum acceptable confidence.
-         *
-         * Ranking differentiates candidates above that minimum.
-         */
         if (
             validation.confidence >= 90
         ) {
@@ -266,6 +412,7 @@ export function scoreCandidate(
                 "+8 validation confidence >= 70"
             );
         }
+
 
         // ---------------------------------------------------------------------
         // Distinct district values
@@ -302,6 +449,7 @@ export function scoreCandidate(
             );
         }
 
+
         // ---------------------------------------------------------------------
         // District value pattern
         // ---------------------------------------------------------------------
@@ -320,6 +468,7 @@ export function scoreCandidate(
 
                 break;
 
+
             case "district-number":
 
                 score += 12;
@@ -329,6 +478,7 @@ export function scoreCandidate(
                 );
 
                 break;
+
 
             case "numeric":
 
@@ -340,6 +490,7 @@ export function scoreCandidate(
 
                 break;
 
+
             case "named":
 
                 score += 4;
@@ -350,6 +501,7 @@ export function scoreCandidate(
 
                 break;
         }
+
 
         // ---------------------------------------------------------------------
         // Validation sample
@@ -366,6 +518,7 @@ export function scoreCandidate(
             );
         }
     }
+
 
     // -------------------------------------------------------------------------
     // Municipality geography validation
@@ -387,6 +540,7 @@ export function scoreCandidate(
             geographyScore.reason
         );
     }
+
 
     // -------------------------------------------------------------------------
     // District name field
@@ -413,6 +567,7 @@ export function scoreCandidate(
         );
     }
 
+
     // -------------------------------------------------------------------------
     // Temporal evidence
     // -------------------------------------------------------------------------
@@ -435,6 +590,22 @@ export function scoreCandidate(
         }`
     );
 
+
+    const temporalVintageYear =
+        getTemporalVintageYear(
+            candidate
+        );
+
+    if (
+        temporalVintageYear !== undefined
+    ) {
+
+        reasons.push(
+            `temporal vintage year: ${temporalVintageYear}`
+        );
+    }
+
+
     for (
         const reason of
         temporal.reasons
@@ -444,6 +615,7 @@ export function scoreCandidate(
             `temporal evidence: ${reason}`
         );
     }
+
 
     // -------------------------------------------------------------------------
     // Review penalty
@@ -461,6 +633,7 @@ export function scoreCandidate(
         );
     }
 
+
     // -------------------------------------------------------------------------
     // Result
     // -------------------------------------------------------------------------
@@ -472,6 +645,7 @@ export function scoreCandidate(
     };
 }
 
+
 // -----------------------------------------------------------------------------
 // Candidate comparison
 // -----------------------------------------------------------------------------
@@ -479,9 +653,27 @@ export function scoreCandidate(
 /**
  * Deterministically compares two already-scored candidates.
  *
- * Primary ordering is total score.
+ * Ordering:
  *
- * Remaining comparisons are deterministic tie-breakers.
+ *     1. Total score
+ *     2. Temporal status
+ *     3. Temporal vintage year
+ *     4. Validation confidence
+ *     5. Review status
+ *     6. Official municipal source
+ *     7. Municipal FeatureServer
+ *     8. Known district field
+ *     9. URL
+ *
+ * The explicit temporal comparison is important because temporal score alone
+ * should not determine which boundary vintage is canonical.
+ *
+ * For example:
+ *
+ *     Chicago Wards 2015-2023
+ *     Chicago Wards 2023
+ *
+ * should not be treated as equivalent merely because both are valid.
  */
 export function compareCandidateScores(
     a: CandidateScore,
@@ -493,7 +685,8 @@ export function compareCandidateScores(
     // -------------------------------------------------------------------------
 
     if (
-        b.score !== a.score
+        b.score !==
+        a.score
     ) {
 
         return (
@@ -502,8 +695,61 @@ export function compareCandidateScores(
         );
     }
 
+
     // -------------------------------------------------------------------------
-    // 2. Validation confidence
+    // 2. Temporal priority
+    // -------------------------------------------------------------------------
+
+    const aTemporalPriority =
+        getTemporalPriority(
+            a.candidate
+        );
+
+    const bTemporalPriority =
+        getTemporalPriority(
+            b.candidate
+        );
+
+    if (
+        aTemporalPriority !==
+        bTemporalPriority
+    ) {
+
+        return (
+            bTemporalPriority -
+            aTemporalPriority
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // 3. Temporal vintage
+    // -------------------------------------------------------------------------
+
+    const aTemporalYear =
+        getTemporalYear(
+            a.candidate
+        );
+
+    const bTemporalYear =
+        getTemporalYear(
+            b.candidate
+        );
+
+    if (
+        aTemporalYear !==
+        bTemporalYear
+    ) {
+
+        return (
+            bTemporalYear -
+            aTemporalYear
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // 4. Validation confidence
     // -------------------------------------------------------------------------
 
     const aConfidence =
@@ -525,8 +771,9 @@ export function compareCandidateScores(
         );
     }
 
+
     // -------------------------------------------------------------------------
-    // 3. Review status
+    // 5. Review status
     // -------------------------------------------------------------------------
 
     const aRequiresReview =
@@ -549,8 +796,9 @@ export function compareCandidateScores(
         );
     }
 
+
     // -------------------------------------------------------------------------
-    // 4. Official municipal source
+    // 6. Official municipal source
     // -------------------------------------------------------------------------
 
     const aOfficial =
@@ -573,17 +821,16 @@ export function compareCandidateScores(
         );
     }
 
+
     // -------------------------------------------------------------------------
-    // 5. Municipal service priority
+    // 7. Municipal service priority
     // -------------------------------------------------------------------------
 
     /*
-     * When all meaningful scoring signals are tied, prefer a candidate
+     * When meaningful signals are otherwise tied, prefer a candidate
      * published through the municipality's FeatureServer representation.
-     *
-     * This remains a deterministic tie-breaker rather than a major
-     * quality signal.
      */
+
     const aService =
         a.candidate.inspection.serviceType;
 
@@ -603,8 +850,9 @@ export function compareCandidateScores(
         );
     }
 
+
     // -------------------------------------------------------------------------
-    // 6. Known district field
+    // 8. Known district field
     // -------------------------------------------------------------------------
 
     const aField =
@@ -629,8 +877,9 @@ export function compareCandidateScores(
         );
     }
 
+
     // -------------------------------------------------------------------------
-    // 7. Deterministic URL tie-breaker
+    // 9. Deterministic URL tie-breaker
     // -------------------------------------------------------------------------
 
     return (
@@ -641,6 +890,7 @@ export function compareCandidateScores(
     );
 }
 
+
 // -----------------------------------------------------------------------------
 // Ranking
 // -----------------------------------------------------------------------------
@@ -649,45 +899,37 @@ export function compareCandidateScores(
  * Evaluates eligibility, removes ineligible candidates, scores eligible
  * candidates, and orders them from highest to lowest quality.
  *
- * IMPORTANT:
- *
  * Eligibility and ranking are intentionally separate concepts.
- *
- * candidateEligibility.ts:
- *
- *     "Can this candidate be considered?"
- *
- * rank.ts:
- *
- *     "How good is this eligible candidate relative to the others?"
- *
- * Rejected candidates are not included in the returned ranking.
- *
- * If rejection reporting is required, callers should invoke
- * evaluateCandidateEligibility() separately.
  */
 export function rankCandidates(
     candidates: InspectedCandidate[]
 ): CandidateScore[] {
 
     return candidates
-        .map(candidate => ({
-            candidate,
-            eligibility:
-                evaluateCandidateEligibility(
-                    candidate
-                )
-        }))
+
+        .map(
+            candidate => ({
+                candidate,
+
+                eligibility:
+                    evaluateCandidateEligibility(
+                        candidate
+                    )
+            })
+        )
+
         .filter(
             result =>
                 result.eligibility.eligible
         )
+
         .map(
             result =>
                 scoreCandidate(
                     result.candidate
                 )
         )
+
         .sort(
             compareCandidateScores
         );

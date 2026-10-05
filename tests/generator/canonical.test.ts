@@ -23,9 +23,21 @@ import {
 // Test fixtures
 // =============================================================================
 
+const PHOENIX_COUNCIL_DISTRICTS_URL =
+    "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0";
+
+const PHOENIX_COUNCIL_DISTRICTS_HASH_URL =
+    "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/1";
+
+const PHOENIX_EVICTION_FILINGS_URL =
+    "https://maps.phoenix.gov/pub/rest/services/Public/Eviction_Filings_HSD/MapServer/1";
+
+const TUCSON_WARDS_2022_URL =
+    "https://services1.arcgis.com/Ezk9fcjSUkeadg6u/arcgis/rest/services/TucsonWards2022/FeatureServer/156";
+
+
 function createDiscoveryCandidate(
-    url =
-        "https://example.com/FeatureServer/0"
+    url = "https://example.com/FeatureServer/0"
 ): DiscoveryCandidate {
 
     return {
@@ -57,11 +69,9 @@ function createDiscoveryCandidate(
 
 
 function createArcGISInspection(
-    url =
-        "https://example.com/FeatureServer/0",
+    url = "https://example.com/FeatureServer/0",
 
-    title =
-        "Tucson Ward Boundaries"
+    title = "Tucson Ward Boundaries"
 ): ArcGISInspection {
 
     return {
@@ -101,7 +111,12 @@ function createClassification(
     options: {
         officialMunicipalSource?: boolean;
         requiresReview?: boolean;
-        temporalStatus?: CandidateClassification["temporalStatus"];
+        sourceRole?: CandidateClassification["sourceRole"];
+        districtType?: CandidateClassification["districtType"];
+        isThematicDataset?: boolean;
+        isCensusDataset?: boolean;
+        isParcelDataset?: boolean;
+        isHousingDataset?: boolean;
     } = {}
 ): CandidateClassification {
 
@@ -113,22 +128,26 @@ function createClassification(
         isPoliticalBoundary:
             true,
 
-        isMunicipalPoliticalBoundary: 
+        isMunicipalPoliticalBoundary:
             true,
 
-        publisherLevel: 
+        publisherLevel:
             "municipal",
 
         isThematicDataset:
+            options.isThematicDataset ??
             false,
 
         isCensusDataset:
+            options.isCensusDataset ??
             false,
 
         isParcelDataset:
+            options.isParcelDataset ??
             false,
 
         isHousingDataset:
+            options.isHousingDataset ??
             false,
 
         officialMunicipalSource:
@@ -136,19 +155,21 @@ function createClassification(
             false,
 
         districtType:
+            options.districtType ??
             "ward",
 
         temporalStatus:
-            options.temporalStatus ??
             "undated",
 
         sourceRole:
+            options.sourceRole ??
             "unknown",
 
         rejected:
             false,
 
-        rejectionReasons: [],
+        rejectionReasons:
+            [],
 
         requiresReview:
             options.requiresReview ??
@@ -156,22 +177,28 @@ function createClassification(
 
         matches: {
 
-            thematic: [],
+            thematic:
+                [],
 
-            census: [],
+            census:
+                [],
 
-            parcel: [],
+            parcel:
+                [],
 
-            housing: [],
+            housing:
+                [],
 
-            political: [
-                "ward",
-                "city council"
-            ],
+            political:
+                [
+                    "ward",
+                    "city council"
+                ],
 
-            boundary: [
-                "boundary"
-            ],
+            boundary:
+                [
+                    "boundary"
+                ],
 
             official:
                 options.officialMunicipalSource
@@ -240,14 +267,17 @@ function createCandidate(
     title =
         "Tucson Ward Boundaries",
 
-    temporalStatus?:
-        CandidateClassification["temporalStatus"],
-
-    sourceRole?:
-        CandidateClassification["sourceRole"],
-
-    officialMunicipalSource =
-        false
+    options: {
+        officialMunicipalSource?: boolean;
+        sourceRole?: CandidateClassification["sourceRole"];
+        districtType?: CandidateClassification["districtType"];
+        validationConfidence?: number;
+        requiresReview?: boolean;
+        isThematicDataset?: boolean;
+        isCensusDataset?: boolean;
+        isParcelDataset?: boolean;
+        isHousingDataset?: boolean;
+    } = {}
 ): InspectedCandidate {
 
     const candidate:
@@ -266,17 +296,38 @@ function createCandidate(
 
         classification:
             createClassification({
-                temporalStatus,
-                officialMunicipalSource
+                officialMunicipalSource:
+                    options.officialMunicipalSource,
+
+                sourceRole:
+                    options.sourceRole,
+
+                districtType:
+                    options.districtType,
+
+                requiresReview:
+                    options.requiresReview,
+
+                isThematicDataset:
+                    options.isThematicDataset,
+
+                isCensusDataset:
+                    options.isCensusDataset,
+
+                isParcelDataset:
+                    options.isParcelDataset,
+
+                isHousingDataset:
+                    options.isHousingDataset
             }),
 
         validation:
-            createValidation()
+            createValidation(
+                options.validationConfidence ??
+                90
+            )
     };
 
-    candidate.classification.sourceRole =
-        sourceRole ??
-        "unknown";
 
     if (
         geographyStatus !==
@@ -295,7 +346,6 @@ function createCandidate(
                         ? 40
                         : 0;
 
-
         const coverage =
             geographyStatus ===
                 "strong-match"
@@ -307,7 +357,6 @@ function createCandidate(
                         "weak-match"
                         ? 0.40
                         : 0;
-
 
         candidate.municipalityGeographyValidation = {
 
@@ -359,8 +408,6 @@ function createCandidate(
         };
     }
 
-    
-
 
     return candidate;
 }
@@ -388,17 +435,40 @@ function createGroup(
     };
 }
 
+
 function createPhoenixCandidate(
     url: string,
-    title: string
+    title: string,
+    options: {
+        officialMunicipalSource?: boolean;
+        sourceRole?: CandidateClassification["sourceRole"];
+        validationConfidence?: number;
+    } = {}
 ): InspectedCandidate {
 
     const candidate =
         createCandidate(
             undefined,
             url,
-            title
+            title,
+            {
+                officialMunicipalSource:
+                    options.officialMunicipalSource ??
+                    true,
+
+                sourceRole:
+                    options.sourceRole ??
+                    "unknown",
+
+                districtType:
+                    "council-district",
+
+                validationConfidence:
+                    options.validationConfidence ??
+                    100
+            }
         );
+
 
     candidate.candidate.city =
         "Phoenix";
@@ -415,9 +485,6 @@ function createPhoenixCandidate(
     candidate.classification.districtType =
         "council-district";
 
-    candidate.classification.officialMunicipalSource =
-        true;
-
     candidate.inspection.districtFields =
         [
             "DISTRICT"
@@ -427,7 +494,10 @@ function createPhoenixCandidate(
         "DISTRICT";
 
     candidate.validation =
-        createValidation();
+        createValidation(
+            options.validationConfidence ??
+            100
+        );
 
     candidate.validation.districtField =
         "DISTRICT";
@@ -444,15 +514,81 @@ function createPhoenixCandidate(
             "8"
         ];
 
-    candidate.validation.confidence =
-        100;
+    candidate.validation.districtValuePattern =
+        "district-number";
+
+    return candidate;
+}
+
+
+function createTucsonWardsCandidate(
+    title = "TucsonWards2022",
+    url = TUCSON_WARDS_2022_URL,
+    confidence = 98
+): InspectedCandidate {
+
+    const candidate =
+        createCandidate(
+            undefined,
+            url,
+            title,
+            {
+                officialMunicipalSource:
+                    true,
+
+                districtType:
+                    "ward",
+
+                validationConfidence:
+                    confidence
+            }
+        );
+
+
+    candidate.candidate.title =
+        title;
+
+    candidate.classification.districtType =
+        "ward";
+
+    candidate.classification.officialMunicipalSource =
+        true;
+
+    candidate.inspection.districtFields =
+        [
+            "WARD"
+        ];
+
+    candidate.inspection.districtField =
+        "WARD";
+
+    candidate.validation =
+        createValidation(
+            confidence
+        );
+
+    candidate.validation.districtField =
+        "WARD";
+
+    candidate.validation.distinctDistrictValues =
+        [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+        ];
+
+    candidate.validation.districtValuePattern =
+        "ward-number";
 
     return candidate;
 }
 
 
 // =============================================================================
-// Canonical selection tests
+// Basic canonical selection
 // =============================================================================
 
 test(
@@ -499,17 +635,19 @@ test(
 
 
 test(
-    "selectCanonicalSource allows a strong geographic match to overcome a modest review penalty",
+    "selectCanonicalSource allows a strong geographic match to overcome a review penalty",
     () => {
 
         const reviewCandidate =
             createCandidate(
                 undefined,
-                "https://example.com/review/FeatureServer/0"
+                "https://example.com/review/FeatureServer/0",
+                "Tucson Ward Boundaries",
+                {
+                    requiresReview:
+                        true
+                }
             );
-
-        reviewCandidate.candidate.requiresReview =
-            true;
 
 
         const strongGeographyCandidate =
@@ -518,16 +656,6 @@ test(
                 "https://example.com/geographic/FeatureServer/0"
             );
 
-
-        /*
-         * The review candidate receives -10 from rank.ts.
-         *
-         * The geographically matched candidate receives +30.
-         *
-         * This verifies that the geographic score can materially affect
-         * canonical selection without incorrectly assuming that
-         * DiscoveryCandidate.score is part of the ranking calculation.
-         */
 
         const result =
             selectCanonicalSource(
@@ -547,11 +675,6 @@ test(
             strongGeographyCandidate.inspection.url
         );
 
-        assert.ok(
-            result.score >
-            0
-        );
-
         assert.match(
             result.selectionReasons.join(" "),
             /\+30 strong municipality geography match/
@@ -561,7 +684,7 @@ test(
 
 
 test(
-    "selectCanonicalSource demotes a candidate with a geographic no-match",
+    "selectCanonicalSource rejects a candidate with a geographic no-match",
     () => {
 
         const noMatch =
@@ -657,7 +780,7 @@ test(
 
 
 test(
-    "selectCanonicalSource propagates geographic ranking reasons into selectionReasons",
+    "selectCanonicalSource propagates ranking reasons into selectionReasons",
     () => {
 
         const candidate =
@@ -722,33 +845,37 @@ test(
 // =============================================================================
 
 test(
-    "selectCanonicalSource prefers a current candidate over a historical candidate",
+    "selectCanonicalSource prefers a current candidate over an undated candidate",
     () => {
-        const historical =
+
+        const undated =
             createCandidate(
                 undefined,
-                "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries (2015)",
-                "historical"
+                "https://example.com/undated/FeatureServer/0",
+                "Tucson Ward Boundaries"
             );
+
 
         const current =
             createCandidate(
                 undefined,
                 "https://example.com/current/FeatureServer/0",
-                "Current Tucson Ward Boundaries",
-                "current"
+                "Tucson Ward Boundaries 2026"
             );
+
 
         const result =
             selectCanonicalSource(
                 createGroup([
-                    historical,
+                    undated,
                     current
                 ])
             );
 
-        assert.ok(result);
+
+        assert.ok(
+            result
+        );
 
         assert.equal(
             result.url,
@@ -757,11 +884,7 @@ test(
 
         assert.equal(
             result.title,
-            "Current Tucson Ward Boundaries"
-        );
-
-        assert.ok(
-            result.score > 0
+            "Tucson Ward Boundaries 2026"
         );
 
         assert.ok(
@@ -774,68 +897,26 @@ test(
     }
 );
 
+
 test(
-    "selectCanonicalSource demotes a historical candidate in canonical selection",
+    "selectCanonicalSource prefers an undated candidate over a historical candidate",
     () => {
+
         const historical =
             createCandidate(
                 undefined,
                 "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries (2015)",
-                "historical"
+                "Tucson Ward Boundaries 2015-2023"
             );
 
-        const result =
-            selectCanonicalSource(
-                createGroup([
-                    historical
-                ])
-            );
-
-        assert.ok(result);
-
-        assert.equal(
-            result.url,
-            historical.inspection.url
-        );
-
-        assert.equal(
-            result.title,
-            "Tucson Ward Boundaries (2015)"
-        );
-
-        assert.ok(
-            result.score > Number.NEGATIVE_INFINITY
-        );
-
-        assert.ok(
-            result.selectionReasons.some(
-                reason =>
-                    reason ===
-                    "-60 temporal status: historical"
-            )
-        );
-    }
-);
-
-test(
-    "selectCanonicalSource prefers a historical candidate over an undated candidate",
-    () => {
-        const historical =
-            createCandidate(
-                undefined,
-                "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries (2015)",
-                "historical"
-            );
 
         const undated =
             createCandidate(
                 undefined,
                 "https://example.com/undated/FeatureServer/0",
-                "Tucson Ward Boundaries",
-                "undated"
+                "Tucson Ward Boundaries"
             );
+
 
         const result =
             selectCanonicalSource(
@@ -845,28 +926,73 @@ test(
                 ])
             );
 
-        assert.ok(result);
+
+        assert.ok(
+            result
+        );
 
         assert.equal(
             result.url,
-            historical.inspection.url
+            undated.inspection.url
         );
 
         assert.equal(
             result.title,
-            "Tucson Ward Boundaries (2015)"
+            "Tucson Ward Boundaries"
         );
+    }
+);
+
+
+test(
+    "selectCanonicalSource demotes a historical candidate relative to an undated candidate",
+    () => {
+
+        const historical =
+            createCandidate(
+                undefined,
+                "https://example.com/historical/FeatureServer/0",
+                "Tucson Ward Boundaries 2015-2023"
+            );
+
+
+        const undated =
+            createCandidate(
+                undefined,
+                "https://example.com/undated/FeatureServer/0",
+                "Tucson Ward Boundaries"
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    historical,
+                    undated
+                ])
+            );
+
 
         assert.ok(
-            result.score >
-                Number.NEGATIVE_INFINITY
+            result
         );
 
+        assert.equal(
+            result.url,
+            undated.inspection.url
+        );
+
+        assert.equal(
+            result.title,
+            "Tucson Ward Boundaries"
+        );
+
+
         assert.ok(
-            result.selectionReasons.some(
-                reason =>
-                    reason ===
-                    "-60 temporal status: historical"
+            result.alternatives.some(
+                alternative =>
+                    alternative.url ===
+                    historical.inspection.url
             )
         );
     }
@@ -874,23 +1000,68 @@ test(
 
 
 test(
-    "selectCanonicalSource preserves the historical candidate as an alternative",
+    "selectCanonicalSource prefers a current candidate over a historical candidate",
     () => {
 
         const historical =
             createCandidate(
                 undefined,
                 "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries (2015)",
-                "historical"
+                "Tucson Ward Boundaries 2015-2023"
             );
+
 
         const current =
             createCandidate(
                 undefined,
                 "https://example.com/current/FeatureServer/0",
-                "Current Tucson Ward Boundaries",
-                "current"
+                "Tucson Ward Boundaries 2026"
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    historical,
+                    current
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            current.inspection.url
+        );
+
+        assert.equal(
+            result.title,
+            "Tucson Ward Boundaries 2026"
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource preserves a historical candidate as an alternative",
+    () => {
+
+        const historical =
+            createCandidate(
+                undefined,
+                "https://example.com/historical/FeatureServer/0",
+                "Tucson Ward Boundaries 2015-2023"
+            );
+
+
+        const current =
+            createCandidate(
+                undefined,
+                "https://example.com/current/FeatureServer/0",
+                "Tucson Ward Boundaries 2026"
             );
 
 
@@ -924,44 +1095,307 @@ test(
 
         assert.equal(
             result.alternatives[0]?.title,
-            "Tucson Ward Boundaries (2015)"
+            "Tucson Ward Boundaries 2015-2023"
         );
     }
 );
 
+
 // =============================================================================
-// Phoenix canonical source selection
+// Source-role selection
 // =============================================================================
 
 test(
-    "selectCanonicalSource prefers a native municipal GIS service over an official hosted representation",
+    "selectCanonicalSource rejects derived analytical datasets",
+    () => {
+
+        const derived =
+            createCandidate(
+                undefined,
+                "https://example.com/derived/FeatureServer/0",
+                "Ward Analysis",
+                {
+                    sourceRole:
+                        "derived"
+                }
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    derived
+                ])
+            );
+
+
+        assert.equal(
+            result,
+            undefined
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource rejects duplicate datasets",
+    () => {
+
+        const duplicate =
+            createCandidate(
+                undefined,
+                "https://example.com/duplicate/FeatureServer/0",
+                "Ward Boundaries Duplicate",
+                {
+                    sourceRole:
+                        "duplicate"
+                }
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    duplicate
+                ])
+            );
+
+
+        assert.equal(
+            result,
+            undefined
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource prefers an authoritative source role",
+    () => {
+
+        const unknown =
+            createCandidate(
+                undefined,
+                "https://example.com/unknown/FeatureServer/0",
+                "Tucson Ward Boundaries",
+                {
+                    sourceRole:
+                        "unknown"
+                }
+            );
+
+
+        const authoritative =
+            createCandidate(
+                undefined,
+                "https://example.com/authoritative/FeatureServer/0",
+                "Tucson Ward Boundaries",
+                {
+                    sourceRole:
+                        "authoritative"
+                }
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    unknown,
+                    authoritative
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            authoritative.inspection.url
+        );
+    }
+);
+
+
+// =============================================================================
+// Validation eligibility
+// =============================================================================
+
+test(
+    "selectCanonicalSource rejects a candidate without validation",
+    () => {
+
+        const candidate =
+            createCandidate();
+
+
+        candidate.validation =
+            undefined;
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    candidate
+                ])
+            );
+
+
+        assert.equal(
+            result,
+            undefined
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource rejects a candidate below validation confidence threshold",
+    () => {
+
+        const candidate =
+            createCandidate(
+                undefined,
+                "https://example.com/low-confidence/FeatureServer/0",
+                "Tucson Ward Boundaries",
+                {
+                    validationConfidence:
+                        59
+                }
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    candidate
+                ])
+            );
+
+
+        assert.equal(
+            result,
+            undefined
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource accepts a candidate at the validation confidence threshold",
+    () => {
+
+        const candidate =
+            createCandidate(
+                undefined,
+                "https://example.com/threshold/FeatureServer/0",
+                "Tucson Ward Boundaries",
+                {
+                    validationConfidence:
+                        60
+                }
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    candidate
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            candidate.inspection.url
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource rejects a candidate with incomplete district coverage",
+    () => {
+
+        const candidate =
+            createCandidate();
+
+
+        candidate.validation!.expectedDistrictCount =
+            6;
+
+        candidate.validation!.completeDistrictCoverage =
+            false;
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    candidate
+                ])
+            );
+
+
+        assert.equal(
+            result,
+            undefined
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource rejects an explicit municipality geography no-match",
+    () => {
+
+        const candidate =
+            createCandidate(
+                "no-match"
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    candidate
+                ])
+            );
+
+
+        assert.equal(
+            result,
+            undefined
+        );
+    }
+);
+
+
+// =============================================================================
+// Municipal-source preference
+// =============================================================================
+
+test(
+    "selectCanonicalSource prefers a native municipal GIS service over an ArcGIS Online representation",
     () => {
 
         const hosted =
-            createCandidate(
-                "strong-match",
+            createPhoenixCandidate(
                 "https://services.arcgis.com/cfKakmeHE95cgeEK/arcgis/rest/services/Council_Districts/FeatureServer/0",
-                "Council Districts and Members",
-                "undated",
-                "authoritative",
-                true
+                "Council Districts and Members"
             );
+
 
         const native =
-            createCandidate(
-                "strong-match",
-                "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0",
-                "Council Districts and Members",
-                "undated",
-                "authoritative",
-                true
+            createPhoenixCandidate(
+                PHOENIX_COUNCIL_DISTRICTS_URL,
+                "Council Districts and Members"
             );
 
-        hosted.candidate.city = "Phoenix";
-        hosted.candidate.state = "AZ";
-
-        native.candidate.city = "Phoenix";
-        native.candidate.state = "AZ";
 
         const result =
             selectCanonicalSource(
@@ -971,7 +1405,11 @@ test(
                 ])
             );
 
-        assert.ok(result);
+
+        assert.ok(
+            result
+        );
+
         assert.equal(
             result.url,
             native.inspection.url
@@ -985,23 +1423,16 @@ test(
     () => {
 
         const hash =
-            createCandidate(
-                "strong-match",
-                "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/1",
-                "Council Districts and Members Hash",
-                "undated",
-                "authoritative",
-                true
+            createPhoenixCandidate(
+                PHOENIX_COUNCIL_DISTRICTS_HASH_URL,
+                "Council Districts and Members Hash"
             );
 
+
         const primary =
-            createCandidate(
-                "strong-match",
-                "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0",
-                "Council Districts and Members",
-                "undated",
-                "authoritative",
-                true
+            createPhoenixCandidate(
+                PHOENIX_COUNCIL_DISTRICTS_URL,
+                "Council Districts and Members"
             );
 
 
@@ -1032,7 +1463,7 @@ test(
 
 
 // =============================================================================
-// Phoenix municipality-wide canonical selection regression
+// Phoenix municipality-wide canonical selection
 // =============================================================================
 
 test(
@@ -1041,34 +1472,31 @@ test(
 
         const councilDistricts =
             createPhoenixCandidate(
-                "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0",
-                "Council Districts and Members"
+                PHOENIX_COUNCIL_DISTRICTS_URL,
+                "Council Districts and Members",
+                {
+                    officialMunicipalSource:
+                        true,
+
+                    sourceRole:
+                        "authoritative"
+                }
             );
+
 
         const evictionFilings =
             createPhoenixCandidate(
-                "https://maps.phoenix.gov/pub/rest/services/Public/Eviction_Filings_HSD/MapServer/1",
-                "Eviction Filings by Council Districts"
+                PHOENIX_EVICTION_FILINGS_URL,
+                "Eviction Filings by Council Districts",
+                {
+                    officialMunicipalSource:
+                        true,
+
+                    sourceRole:
+                        "derived"
+                }
             );
 
-
-        /*
-         * These candidates intentionally belong to separate equivalence
-         * groups.
-         *
-         * This reproduces the real Phoenix situation where:
-         *
-         *     Council Districts
-         *         ↓
-         *     equivalence group 1
-         *
-         *     Eviction Filings by Council Districts
-         *         ↓
-         *     equivalence group 2
-         *
-         * The municipality-wide selector must still choose the
-         * boundary-native source.
-         */
 
         const councilGroup =
             createGroup(
@@ -1077,6 +1505,7 @@ test(
                 ],
                 "phoenix-council-districts"
             );
+
 
         const evictionGroup =
             createGroup(
@@ -1103,7 +1532,7 @@ test(
 
         assert.equal(
             result.url,
-            "https://maps.phoenix.gov/pub/rest/services/Public/Council_Districts/MapServer/0"
+            PHOENIX_COUNCIL_DISTRICTS_URL
         );
 
 
@@ -1146,6 +1575,357 @@ test(
         assert.equal(
             result.officialMunicipalSource,
             true
+        );
+    }
+);
+
+
+// =============================================================================
+// Phoenix canonical selection must not depend on discovery order
+// =============================================================================
+
+test(
+    "Phoenix canonical selection is independent of discovery order",
+    () => {
+
+        const councilDistricts =
+            createPhoenixCandidate(
+                PHOENIX_COUNCIL_DISTRICTS_URL,
+                "Council Districts and Members",
+                {
+                    sourceRole:
+                        "authoritative"
+                }
+            );
+
+
+        const evictionFilings =
+            createPhoenixCandidate(
+                PHOENIX_EVICTION_FILINGS_URL,
+                "Eviction Filings by Council Districts",
+                {
+                    sourceRole:
+                        "derived"
+                }
+            );
+
+
+        const firstOrder =
+            selectMunicipalityCanonicalSource([
+                createGroup(
+                    [
+                        councilDistricts
+                    ],
+                    "phoenix-council"
+                ),
+
+                createGroup(
+                    [
+                        evictionFilings
+                    ],
+                    "phoenix-eviction"
+                )
+            ]);
+
+
+        const secondOrder =
+            selectMunicipalityCanonicalSource([
+                createGroup(
+                    [
+                        evictionFilings
+                    ],
+                    "phoenix-eviction"
+                ),
+
+                createGroup(
+                    [
+                        councilDistricts
+                    ],
+                    "phoenix-council"
+                )
+            ]);
+
+
+        assert.ok(
+            firstOrder
+        );
+
+        assert.ok(
+            secondOrder
+        );
+
+
+        assert.equal(
+            firstOrder.url,
+            PHOENIX_COUNCIL_DISTRICTS_URL
+        );
+
+
+        assert.equal(
+            secondOrder.url,
+            PHOENIX_COUNCIL_DISTRICTS_URL
+        );
+    }
+);
+
+
+// =============================================================================
+// Tucson canonical source
+// =============================================================================
+
+test(
+    "selectCanonicalSource selects TucsonWards2022 when it is the only eligible candidate",
+    () => {
+
+        const candidate =
+            createTucsonWardsCandidate();
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    candidate
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            TUCSON_WARDS_2022_URL
+        );
+
+        assert.equal(
+            result.title,
+            "TucsonWards2022"
+        );
+
+        assert.equal(
+            result.city,
+            "Tucson"
+        );
+
+        assert.equal(
+            result.state,
+            "AZ"
+        );
+
+        assert.equal(
+            result.placeFips,
+            "0477000"
+        );
+
+        assert.equal(
+            result.districtType,
+            "ward"
+        );
+
+        assert.equal(
+            result.districtField,
+            "WARD"
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource prefers an official Tucson ward source over an equivalent non-official source",
+    () => {
+
+        const nonOfficial =
+            createTucsonWardsCandidate(
+                "Tucson Ward Boundaries Alternative",
+                "https://example.com/tucson/FeatureServer/0",
+                98
+            );
+
+
+        nonOfficial.classification
+            .officialMunicipalSource =
+            false;
+
+
+        const official =
+            createTucsonWardsCandidate();
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    nonOfficial,
+                    official
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            TUCSON_WARDS_2022_URL
+        );
+
+        assert.equal(
+            result.officialMunicipalSource,
+            true
+        );
+    }
+);
+
+
+test(
+    "selectCanonicalSource prefers a higher-confidence Tucson candidate when canonical preferences are otherwise equivalent",
+    () => {
+
+        const lowerConfidence =
+            createTucsonWardsCandidate(
+                "Tucson Ward Boundaries Alternative",
+                "https://example.com/tucson/FeatureServer/0",
+                75
+            );
+
+
+        const higherConfidence =
+            createTucsonWardsCandidate(
+                "TucsonWards2022",
+                TUCSON_WARDS_2022_URL,
+                98
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    lowerConfidence,
+                    higherConfidence
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.url,
+            TUCSON_WARDS_2022_URL
+        );
+    }
+);
+
+
+// =============================================================================
+// Alternatives
+// =============================================================================
+
+test(
+    "selectCanonicalSource includes losing eligible candidates as alternatives",
+    () => {
+
+        const first =
+            createCandidate(
+                undefined,
+                "https://example.com/first/FeatureServer/0",
+                "Tucson Ward Boundaries 2026"
+            );
+
+
+        const second =
+            createCandidate(
+                undefined,
+                "https://example.com/second/FeatureServer/0",
+                "Tucson Ward Boundaries"
+            );
+
+
+        const result =
+            selectCanonicalSource(
+                createGroup([
+                    first,
+                    second
+                ])
+            );
+
+
+        assert.ok(
+            result
+        );
+
+        assert.equal(
+            result.alternatives.length,
+            1
+        );
+
+        assert.ok(
+            result.alternatives.some(
+                alternative =>
+                    alternative.url ===
+                    second.inspection.url
+            )
+        );
+    }
+);
+
+
+// =============================================================================
+// Deterministic selection
+// =============================================================================
+
+test(
+    "selectCanonicalSource is deterministic when candidates have equivalent ranking",
+    () => {
+
+        const first =
+            createCandidate(
+                undefined,
+                "https://example.com/a/FeatureServer/0",
+                "Tucson Ward Boundaries"
+            );
+
+
+        const second =
+            createCandidate(
+                undefined,
+                "https://example.com/b/FeatureServer/0",
+                "Tucson Ward Boundaries"
+            );
+
+
+        const resultA =
+            selectCanonicalSource(
+                createGroup([
+                    first,
+                    second
+                ])
+            );
+
+
+        const resultB =
+            selectCanonicalSource(
+                createGroup([
+                    second,
+                    first
+                ])
+            );
+
+
+        assert.ok(
+            resultA
+        );
+
+        assert.ok(
+            resultB
+        );
+
+
+        assert.equal(
+            resultA.url,
+            resultB.url
         );
     }
 );
