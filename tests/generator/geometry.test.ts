@@ -765,6 +765,7 @@ test(
     }
 );
 
+
 test(
     "optimizeGeometry preserves geometry when simplification is disabled",
     () => {
@@ -789,11 +790,11 @@ test(
 
                         coordinates: [
                             [
-                                [-110.98, 32.22],
-                                [-110.97, 32.22],
-                                [-110.97, 32.23],
-                                [-110.98, 32.23],
-                                [-110.98, 32.22]
+                                [0, 0],
+                                [1, 0],
+                                [1, 1],
+                                [0, 1],
+                                [0, 0]
                             ]
                         ]
                     }
@@ -848,6 +849,7 @@ test(
         );
     }
 );
+
 
 test(
     "optimizeGeometry falls back to original geometry when optimization changes area excessively",
@@ -936,6 +938,7 @@ test(
     }
 );
 
+
 test(
     "optimizeGeometry allows optimization within the area-change threshold",
     () => {
@@ -1002,6 +1005,7 @@ test(
         );
     }
 );
+
 
 test(
     "optimizeGeometry counts Polygon and MultiPolygon vertices",
@@ -1096,6 +1100,7 @@ test(
     }
 );
 
+
 test(
     "optimizeGeometry simplifies geometry when enabled",
     () => {
@@ -1168,6 +1173,7 @@ test(
         );
     }
 );
+
 
 test(
     "optimizeGeometry reports valid geometry integrity",
@@ -1245,9 +1251,11 @@ test(
     }
 );
 
+
 test(
     "validateGeometryIntegrity detects changed properties",
     () => {
+
         const original = {
             type: "FeatureCollection" as const,
             features: [
@@ -1302,6 +1310,7 @@ test(
     }
 );
 
+
 test(
     "geometry integrity detects invalid geometry",
     () => {
@@ -1355,6 +1364,7 @@ test(
         );
     }
 );
+
 
 test(
     "geometry optimization preserves geometry when simplification is disabled",
@@ -1441,6 +1451,7 @@ test(
         );
     }
 );
+
 
 test(
     "geometry optimization reduces vertices when simplification is enabled",
@@ -1531,6 +1542,7 @@ test(
     }
 );
 
+
 test(
     "geometry optimization preserves district properties",
     () => {
@@ -1595,6 +1607,7 @@ test(
         );
     }
 );
+
 
 test(
     "geometry optimization preserves polygon holes",
@@ -1690,6 +1703,7 @@ test(
     }
 );
 
+
 test(
     "geometry optimization rounds coordinate precision",
     () => {
@@ -1769,9 +1783,11 @@ test(
     }
 );
 
+
 test(
     "optimizeGeometry produces deterministic output",
     () => {
+
         const geometry = {
             type: "FeatureCollection" as const,
             features: [
@@ -1834,9 +1850,11 @@ test(
     }
 );
 
+
 test(
     "optimizeGeometry never increases vertex or byte counts",
     () => {
+
         const geometry = {
             type: "FeatureCollection" as const,
             features: [
