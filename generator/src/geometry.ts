@@ -90,7 +90,8 @@ export async function generateGeometry(
                 roundCoordinates: true,
                 coordinatePrecision: 6,
                 simplify: true,
-                tolerance: 0.00001
+                tolerance: 0.00001,
+                maxAreaChangeRatio: 0.01
             }
         );
 

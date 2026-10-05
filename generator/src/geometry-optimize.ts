@@ -973,7 +973,7 @@ export function optimizeGeometry(
 
     const maxAreaChangeRatio =
         options.maxAreaChangeRatio ??
-        0.001;
+        0.01;
 
     const excessiveAreaChange =
         hasExcessiveAreaChange(
