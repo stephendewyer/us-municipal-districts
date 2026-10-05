@@ -105,6 +105,9 @@ function temporalPriority(
     switch (temporal.status) {
 
         case "current":
+            return 4;
+
+        case "dated":
             return 3;
 
         case "undated":
@@ -112,6 +115,9 @@ function temporalPriority(
 
         case "historical":
             return 1;
+
+        case "future":
+            return 0;
 
         default:
             return 0;
@@ -1210,34 +1216,18 @@ export function selectCanonicalSources(
         const group of groups
     ) {
         console.log(
-            "\nCANONICAL GROUP:",
+            "CANONICAL GROUP",
             {
-                id:
-                    group.id,
-
-                confidence:
-                    group.confidence,
-
-                reasons:
-                    group.reasons,
-
                 candidates:
                     group.candidates.map(
                         candidate => ({
                             title:
-                                candidate
-                                    .inspection
-                                    .title,
-
-                            url:
-                                candidate
-                                    .inspection
-                                    .url,
+                                candidate.inspection.title,
 
                             temporalStatus:
-                                candidate
-                                    .classification
-                                    .temporalStatus,
+                                validateTemporal(
+                                    candidate.inspection
+                                ).status,
 
                             temporalPriority:
                                 temporalPriority(
@@ -1254,35 +1244,15 @@ export function selectCanonicalSources(
                                     .classification
                                     .sourceRole,
 
-                            districtType:
+                            official:
                                 candidate
                                     .classification
-                                    .districtType,
+                                    .officialMunicipalSource,
 
-                            confidence:
-                                candidate
-                                    .validation
-                                    ?.confidence,
-
-                            districtField:
-                                candidate
-                                    .validation
-                                    ?.districtField,
-
-                            expectedDistrictCount:
-                                candidate
-                                    .validation
-                                    ?.expectedDistrictCount,
-
-                            completeDistrictCoverage:
-                                candidate
-                                    .validation
-                                    ?.completeDistrictCoverage,
-
-                            geography:
-                                candidate
-                                    .municipalityGeographyValidation
-                                    ?.status
+                            candidateScore:
+                                scoreCandidate(
+                                    candidate
+                                ).score
                         })
                     )
             }

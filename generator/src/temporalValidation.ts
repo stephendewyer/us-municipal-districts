@@ -1,11 +1,4 @@
-import type { ArcGISInspection } from "./types.js";
-
-export type TemporalStatus =
-    | "current"
-    | "dated"
-    | "historical"
-    | "undated"
-    | "future";
+import type { ArcGISInspection, TemporalStatus } from "./types.js";
 
 export interface TemporalEvidence {
     status: TemporalStatus;

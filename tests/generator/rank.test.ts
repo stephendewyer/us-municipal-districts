@@ -4,6 +4,10 @@ import {
 
 import assert from "node:assert/strict";
 
+import {
+    validateTemporal
+} from "../../generator/src/temporalValidation.js";
+
 import type {
     ArcGISInspection,
     ArcGISCandidateValidation,
@@ -232,6 +236,13 @@ function createCandidate(
                 title
             ),
 
+        /*
+         * Deliberately leave this as "undated" by default.
+         *
+         * Temporal ranking should use the authoritative inspection
+         * evidence through validateTemporal(), rather than relying
+         * on potentially stale classification metadata.
+         */
         classification:
             createClassification(),
 
@@ -560,9 +571,19 @@ test(
                 )
             );
 
+        const temporal =
+            validateTemporal(
+                result.candidate.inspection
+            );
+
         assert.equal(
-            result.candidate.classification.temporalStatus,
+            temporal.status,
             "undated"
+        );
+
+        assert.equal(
+            temporal.score,
+            0
         );
 
         assert.ok(
@@ -587,9 +608,19 @@ test(
                 )
             );
 
+        const temporal =
+            validateTemporal(
+                result.candidate.inspection
+            );
+
         assert.equal(
-            result.candidate.classification.temporalStatus,
+            temporal.status,
             "current"
+        );
+
+        assert.equal(
+            temporal.score,
+            20
         );
 
         assert.ok(
@@ -614,9 +645,24 @@ test(
                 )
             );
 
+        const temporal =
+            validateTemporal(
+                result.candidate.inspection
+            );
+
         assert.equal(
-            result.candidate.classification.temporalStatus,
+            temporal.status,
             "dated"
+        );
+
+        assert.equal(
+            temporal.year,
+            2022
+        );
+
+        assert.equal(
+            temporal.score,
+            5
         );
 
         assert.ok(
@@ -647,9 +693,29 @@ test(
                 )
             );
 
+        const temporal =
+            validateTemporal(
+                result.candidate.inspection
+            );
+
         assert.equal(
-            result.candidate.classification.temporalStatus,
+            temporal.status,
             "dated"
+        );
+
+        assert.equal(
+            temporal.startYear,
+            2015
+        );
+
+        assert.equal(
+            temporal.endYear,
+            2023
+        );
+
+        assert.equal(
+            temporal.score,
+            5
         );
 
         assert.ok(
@@ -658,10 +724,6 @@ test(
             )
         );
 
-        /*
-         * The latest year in a closed range is the temporal
-         * vintage used by ranking.
-         */
         assert.ok(
             result.reasons.includes(
                 "temporal vintage year: 2023"
@@ -684,9 +746,29 @@ test(
                 )
             );
 
+        const temporal =
+            validateTemporal(
+                result.candidate.inspection
+            );
+
         assert.equal(
-            result.candidate.classification.temporalStatus,
+            temporal.status,
             "historical"
+        );
+
+        assert.equal(
+            temporal.startYear,
+            2015
+        );
+
+        assert.equal(
+            temporal.endYear,
+            2023
+        );
+
+        assert.equal(
+            temporal.score,
+            -60
         );
 
         assert.ok(
@@ -720,9 +802,24 @@ test(
                 )
             );
 
+        const temporal =
+            validateTemporal(
+                result.candidate.inspection
+            );
+
         assert.equal(
-            result.candidate.classification.temporalStatus,
+            temporal.status,
             "future"
+        );
+
+        assert.equal(
+            temporal.year,
+            futureYear
+        );
+
+        assert.equal(
+            temporal.score,
+            -10
         );
 
         assert.ok(
@@ -769,19 +866,17 @@ test(
             ]);
 
         assert.equal(
-            ranked[0]
-                .candidate
-                .inspection
-                .title,
-            "Current Tucson Ward Boundaries"
+            validateTemporal(
+                ranked[0].candidate.inspection
+            ).status,
+            "current"
         );
 
         assert.equal(
-            ranked[1]
-                .candidate
-                .inspection
-                .title,
-            "Tucson Ward Boundaries 2022"
+            validateTemporal(
+                ranked[1].candidate.inspection
+            ).status,
+            "dated"
         );
     }
 );
@@ -812,19 +907,17 @@ test(
             ]);
 
         assert.equal(
-            ranked[0]
-                .candidate
-                .inspection
-                .title,
-            "Tucson Ward Boundaries 2022"
+            validateTemporal(
+                ranked[0].candidate.inspection
+            ).status,
+            "dated"
         );
 
         assert.equal(
-            ranked[1]
-                .candidate
-                .inspection
-                .title,
-            "Tucson Ward Boundaries"
+            validateTemporal(
+                ranked[1].candidate.inspection
+            ).status,
+            "undated"
         );
     }
 );
@@ -855,19 +948,17 @@ test(
             ]);
 
         assert.equal(
-            ranked[0]
-                .candidate
-                .inspection
-                .title,
-            "Tucson Ward Boundaries"
+            validateTemporal(
+                ranked[0].candidate.inspection
+            ).status,
+            "undated"
         );
 
         assert.equal(
-            ranked[1]
-                .candidate
-                .inspection
-                .title,
-            "Historical Tucson Ward Boundaries 2015-2023"
+            validateTemporal(
+                ranked[1].candidate.inspection
+            ).status,
+            "historical"
         );
     }
 );
@@ -901,19 +992,17 @@ test(
             ]);
 
         assert.equal(
-            ranked[0]
-                .candidate
-                .inspection
-                .title,
-            "Historical Tucson Ward Boundaries 2015-2023"
+            validateTemporal(
+                ranked[0].candidate.inspection
+            ).status,
+            "historical"
         );
 
         assert.equal(
-            ranked[1]
-                .candidate
-                .inspection
-                .title,
-            `Tucson Ward Boundaries ${futureYear}`
+            validateTemporal(
+                ranked[1].candidate.inspection
+            ).status,
+            "future"
         );
     }
 );
@@ -946,12 +1035,16 @@ test(
             );
 
         assert.equal(
-            older.candidate.classification.temporalStatus,
+            validateTemporal(
+                older.candidate.inspection
+            ).status,
             "dated"
         );
 
         assert.equal(
-            newer.candidate.classification.temporalStatus,
+            validateTemporal(
+                newer.candidate.inspection
+            ).status,
             "dated"
         );
 
@@ -1005,12 +1098,16 @@ test(
             );
 
         assert.equal(
-            older.candidate.classification.temporalStatus,
+            validateTemporal(
+                older.candidate.inspection
+            ).status,
             "dated"
         );
 
         assert.equal(
-            newer.candidate.classification.temporalStatus,
+            validateTemporal(
+                newer.candidate.inspection
+            ).status,
             "dated"
         );
 
@@ -1028,6 +1125,14 @@ test(
                 .inspection
                 .title,
             "Tucson Ward Boundaries 2015-2023"
+        );
+
+        assert.equal(
+            ranked[1]
+                .candidate
+                .inspection
+                .title,
+            "Tucson Ward Boundaries 2010-2018"
         );
     }
 );
@@ -1050,14 +1155,19 @@ test(
                 )
             );
 
+        const temporal =
+            validateTemporal(
+                result.candidate.inspection
+            );
+
         assert.equal(
-            result.candidate.classification.temporalStatus,
+            temporal.status,
             "historical"
         );
 
         assert.equal(
-            result.candidate.classification.temporalStatus,
-            "historical"
+            temporal.year,
+            2015
         );
 
         assert.ok(
@@ -1089,9 +1199,19 @@ test(
                 )
             );
 
+        const temporal =
+            validateTemporal(
+                result.candidate.inspection
+            );
+
         assert.equal(
-            result.candidate.classification.temporalStatus,
+            temporal.status,
             "current"
+        );
+
+        assert.equal(
+            temporal.year,
+            currentYear
         );
 
         assert.ok(
@@ -1128,9 +1248,19 @@ test(
                 )
             );
 
+        const temporal =
+            validateTemporal(
+                result.candidate.inspection
+            );
+
         assert.equal(
-            result.candidate.classification.temporalStatus,
+            temporal.status,
             "current"
+        );
+
+        assert.equal(
+            temporal.startYear,
+            startYear
         );
 
         assert.ok(
@@ -1142,6 +1272,55 @@ test(
         assert.ok(
             result.reasons.includes(
                 `temporal vintage year: ${startYear}`
+            )
+        );
+    }
+);
+
+
+// =============================================================================
+// Temporal ranking must use inspection evidence
+// =============================================================================
+
+test(
+    "temporal ranking uses inspection evidence rather than classification temporal status",
+    () => {
+
+        const candidate =
+            createCandidate(
+                undefined,
+                "https://example.com/a/FeatureServer/0",
+                "Current Tucson Ward Boundaries"
+            );
+
+        /*
+         * The fixture deliberately leaves classification.temporalStatus
+         * as "undated". This verifies that ranking does not depend on
+         * stale classification metadata.
+         */
+        assert.equal(
+            candidate.classification.temporalStatus,
+            "undated"
+        );
+
+        const temporal =
+            validateTemporal(
+                candidate.inspection
+            );
+
+        assert.equal(
+            temporal.status,
+            "current"
+        );
+
+        const result =
+            scoreCandidate(
+                candidate
+            );
+
+        assert.ok(
+            result.reasons.includes(
+                "+20 temporal status: current"
             )
         );
     }

@@ -13,6 +13,10 @@ import {
     MUNICIPAL_ARCGIS_AUTHORITIES
 } from "./municipalArcGISAuthorities.js";
 
+import {
+    validateTemporal
+} from "./temporalValidation.js";
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -1508,9 +1512,9 @@ export function classifyCandidate(
     // =========================================================================
 
     const temporalStatus =
-        detectTemporalStatus(
-            identityText
-        );
+        validateTemporal(
+            inspection
+        ).status;
 
     // =========================================================================
     // Acceptance rules

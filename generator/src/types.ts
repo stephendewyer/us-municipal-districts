@@ -1134,8 +1134,10 @@ export type SourceRole =
 
 export type TemporalStatus =
     | "current"
+    | "dated"
+    | "undated"
     | "historical"
-    | "undated";
+    | "future";
 
 // =============================================================================
 // Generator options
