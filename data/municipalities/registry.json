@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-10-01T20:19:45.166Z",
+  "generatedAt": "2026-10-05T14:24:38.258Z",
   "entries": [
     {
       "placeFips": "0455000",
@@ -144,6 +144,43 @@
             "serviceType": "FeatureServer",
             "official": false,
             "score": 168
+          }
+        ],
+        "requiresReview": true
+      }
+    },
+    {
+      "placeFips": "2622000",
+      "city": "Detroit",
+      "state": "MI",
+      "boundaryType": "council-district",
+      "source": {
+        "sourceType": "arcgis",
+        "url": "https://services2.arcgis.com/FOAjZu7OcdPEtbC0/arcgis/rest/services/DRAFT_DET_CaseStudy_WFL1/FeatureServer/0",
+        "itemId": "a1acc9eb9ec2461fb785a72a8351d154",
+        "organizationId": "FOAjZu7OcdPEtbC0",
+        "serviceType": "FeatureServer",
+        "title": "Detroit_City_Council_Districts_2026",
+        "official": false,
+        "verified": true,
+        "fieldMapping": {
+          "district": "district_n",
+          "name": "district_n"
+        }
+      },
+      "generatedFile": "geometry/2622000/council-district.geojson",
+      "metadata": {
+        "generatedAt": "2026-10-05T14:24:38.258Z",
+        "generatorVersion": "0.1.0",
+        "alternatives": [
+          {
+            "url": "https://services2.arcgis.com/HsXtOCMp1Nis1Ogr/arcgis/rest/services/Council_Districts_Detroit/FeatureServer/0",
+            "itemId": "2f07ac7dccf54dedbc84b3d51277bad3",
+            "organizationId": "HsXtOCMp1Nis1Ogr",
+            "title": "Council Districts",
+            "serviceType": "FeatureServer",
+            "official": false,
+            "score": 155
           }
         ],
         "requiresReview": true

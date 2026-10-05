@@ -4,6 +4,7 @@ import type {
 } from "./geometry.js";
 
 import {
+    area,
     booleanValid,
     feature,
     simplify
@@ -35,6 +36,13 @@ export interface GeometryOptimizationOptions {
      * of the normalized GeoJSON geometry.
      */
     tolerance?: number;
+
+    /**
+     * Maximum allowed relative area change caused by optimization.
+     *
+     * For example, 0.01 permits up to a 1% area change.
+     */
+    maxAreaChangeRatio?: number;
 }
 
 
@@ -307,6 +315,96 @@ function roundCollectionCoordinates(
 // =============================================================================
 // Geometry metrics
 // =============================================================================
+
+/**
+ * Calculates the total Turf area of all polygonal features
+ * in a FeatureCollection.
+ *
+ * Turf area is returned in square meters.
+ */
+function calculateCollectionArea(
+    geometry: GeoJSONFeatureCollection
+): number {
+
+    return geometry.features.reduce(
+        (
+            total: number,
+            featureItem
+        ) => {
+
+            if (
+                featureItem.geometry === null
+            ) {
+                return total;
+            }
+
+            if (
+                featureItem.geometry.type !== "Polygon" &&
+                featureItem.geometry.type !== "MultiPolygon"
+            ) {
+                return total;
+            }
+
+            return (
+                total +
+                area(
+                    feature(
+                        featureItem.geometry as any
+                    )
+                )
+            );
+        },
+        0
+    );
+}
+
+/**
+ * Determines whether optimization changed the total polygon
+ * area beyond the permitted relative threshold.
+ */
+function hasExcessiveAreaChange(
+    original: GeoJSONFeatureCollection,
+    optimized: GeoJSONFeatureCollection,
+    maxAreaChangeRatio: number
+): boolean {
+
+    const originalArea =
+        calculateCollectionArea(
+            original
+        );
+
+    const optimizedArea =
+        calculateCollectionArea(
+            optimized
+        );
+
+
+    /*
+     * An empty-area geometry cannot provide a meaningful
+     * relative area comparison.
+     */
+    if (
+        originalArea === 0
+    ) {
+        return (
+            optimizedArea !== 0
+        );
+    }
+
+
+    const areaChangeRatio =
+        Math.abs(
+            optimizedArea -
+            originalArea
+        ) /
+        originalArea;
+
+
+    return (
+        areaChangeRatio >
+        maxAreaChangeRatio
+    );
+}
 
 /**
  * Recursively counts coordinate positions in Polygon and
@@ -664,7 +762,7 @@ function geometryHasSelfIntersection(
 }
 
 
-function validateGeometryIntegrity(
+export function validateGeometryIntegrity(
     original: GeoJSONFeatureCollection,
     optimized: GeoJSONFeatureCollection
 ): GeometryIntegrityReport {
@@ -873,6 +971,16 @@ export function optimizeGeometry(
             optimizedGeometry
         );
 
+    const maxAreaChangeRatio =
+        options.maxAreaChangeRatio ??
+        0.001;
+
+    const excessiveAreaChange =
+        hasExcessiveAreaChange(
+            geometry,
+            optimizedGeometry,
+            maxAreaChangeRatio
+        );
 
     /*
      * Never return invalid geometry.
@@ -882,7 +990,8 @@ export function optimizeGeometry(
      */
 
     if (
-        !integrity.valid
+        !integrity.valid ||
+        excessiveAreaChange
     ) {
 
         optimizedGeometry =
