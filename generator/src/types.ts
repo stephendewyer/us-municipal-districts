@@ -29,6 +29,30 @@ export type DistrictType =
     | "municipal-district";
 
 // =============================================================================
+// Municipality types
+// =============================================================================
+
+export interface Municipality {
+    placeFips: string;
+    name: string;
+    state: string;
+    stateFips: string;
+    placeType: string;
+    incorporated: boolean;
+    latitude: number;
+    longitude: number;
+}
+
+interface MunicipalDistrictSystem {
+    placeFips: string;
+    boundaryType: string;
+    canonicalSource?: string;
+    generatedFile?: string;
+    districtField?: string;
+    nameField?: string;
+}
+
+// =============================================================================
 // Census place
 // =============================================================================
 
