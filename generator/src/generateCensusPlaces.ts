@@ -11,7 +11,7 @@ import type { CensusPlace } from "./types.js";
 // Configuration
 // =============================================================================
 
-const CENSUS_YEAR = 2025;
+const CENSUS_YEAR = 2026;
 
 const CENSUS_URL =
     `https://www2.census.gov/geo/docs/maps-data/data/gazetteer/${CENSUS_YEAR}_Gazetteer/${CENSUS_YEAR}_Gaz_place_national.zip`;
