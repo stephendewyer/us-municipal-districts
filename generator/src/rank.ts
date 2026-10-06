@@ -681,23 +681,7 @@ export function compareCandidateScores(
 ): number {
 
     // -------------------------------------------------------------------------
-    // 1. Primary ordering: total score
-    // -------------------------------------------------------------------------
-
-    if (
-        b.score !==
-        a.score
-    ) {
-
-        return (
-            b.score -
-            a.score
-        );
-    }
-
-
-    // -------------------------------------------------------------------------
-    // 2. Temporal priority
+    // 1. Primary ordering: temporal priority
     // -------------------------------------------------------------------------
 
     const aTemporalPriority =
@@ -723,7 +707,7 @@ export function compareCandidateScores(
 
 
     // -------------------------------------------------------------------------
-    // 3. Temporal vintage
+    // 2. Temporal vintage
     // -------------------------------------------------------------------------
 
     const aTemporalYear =
@@ -744,6 +728,22 @@ export function compareCandidateScores(
         return (
             bTemporalYear -
             aTemporalYear
+        );
+    }
+
+
+    // -------------------------------------------------------------------------
+    // 3. Secondary ordering: total candidate score
+    // -------------------------------------------------------------------------
+
+    if (
+        b.score !==
+        a.score
+    ) {
+
+        return (
+            b.score -
+            a.score
         );
     }
 

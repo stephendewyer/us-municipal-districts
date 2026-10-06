@@ -729,8 +729,12 @@ test(
         );
 
         assert.ok(
-            currentRanked.score >
-            historicalRanked.score
+            result.rankedCandidates.indexOf(
+                currentRanked
+            ) <
+            result.rankedCandidates.indexOf(
+                historicalRanked
+            )
         );
 
         assert.ok(
@@ -738,15 +742,6 @@ test(
                 reason =>
                     reason.includes(
                         "temporal status: current"
-                    )
-            )
-        );
-
-        assert.ok(
-            historicalRanked.reasons.some(
-                reason =>
-                    reason.includes(
-                        "temporal status: historical"
                     )
             )
         );

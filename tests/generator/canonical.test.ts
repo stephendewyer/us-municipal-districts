@@ -906,7 +906,7 @@ test(
             createCandidate(
                 undefined,
                 "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries 2015-2023"
+                "Historical Tucson Ward Boundaries 2015-2023"
             );
 
 
@@ -952,7 +952,7 @@ test(
             createCandidate(
                 undefined,
                 "https://example.com/historical/FeatureServer/0",
-                "Tucson Ward Boundaries 2015-2023"
+                "Historical Tucson Ward Boundaries 2015-2023"
             );
 
 

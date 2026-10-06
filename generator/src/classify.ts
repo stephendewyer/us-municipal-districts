@@ -1068,47 +1068,6 @@ function isOfficialMunicipalSource(
 }
 
 // =============================================================================
-// Temporal status
-// =============================================================================
-
-function detectTemporalStatus(
-    identityText: string
-): TemporalStatus {
-
-    const currentYear =
-        new Date().getFullYear();
-
-    const years = [
-        ...identityText.matchAll(
-            /\b(?:19|20)\d{2}\b/g
-        )
-    ].map(
-        match =>
-            Number(match[0])
-    );
-
-    if (
-        years.some(
-            year =>
-                year < currentYear
-        )
-    ) {
-        return "historical";
-    }
-
-    if (
-        years.some(
-            year =>
-                year === currentYear
-        )
-    ) {
-        return "current";
-    }
-
-    return "undated";
-}
-
-// =============================================================================
 // Source role
 // =============================================================================
 
